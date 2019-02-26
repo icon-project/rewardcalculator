@@ -5,7 +5,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/icon-project/goloop/common/ipc"
+	"github.com/icon-project/rewardcalculator/common/ipc"
 	"github.com/pkg/errors"
 )
 

@@ -4,8 +4,8 @@ import (
 	"log"
 	"sync"
 
-	"github.com/icon-project/goloop/common/codec"
-	"github.com/icon-project/goloop/common/ipc"
+	"github.com/icon-project/rewardcalculator/common/codec"
+	"github.com/icon-project/rewardcalculator/common/ipc"
 	"github.com/pkg/errors"
 )
 

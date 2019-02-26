@@ -1,8 +1,8 @@
 package rewardcalculator
 
 import (
-	"github.com/icon-project/goloop/common/db"
-	"github.com/icon-project/goloop/common/ipc"
+	"github.com/icon-project/rewardcalculator/common/db"
+	"github.com/icon-project/rewardcalculator/common/ipc"
 	"log"
 )
 

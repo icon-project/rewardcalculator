@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/icon-project/goloop/common"
-	"github.com/icon-project/goloop/common/db"
+	"github.com/icon-project/rewardcalculator/common"
+	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/rewardcalculator"
 )
 
