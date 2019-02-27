@@ -126,7 +126,6 @@ func queryData(bucket db.Bucket, key string) string {
 	return ia.String()
 }
 
-//func calculateIScore(ia *rewardcalculator.IScoreAccount, opts *rewardcalculator.GlobalOptions) {
 func calculateIScore(ia *rewardcalculator.IScoreData, opts *rewardcalculator.GlobalOptions) bool {
 	// IScore = old + period * G.V * sum(valid delegations)
 	if opts.BlockHeight.Value == 0 {
@@ -177,7 +176,7 @@ func calculate(db db.Database, bucket db.Bucket, start []byte, limit []byte,
 	iter.New(start, limit)
 	for entries = 0; iter.Next(); entries++ {
 		// read
-		key := iter.Key()[1:]
+		key := iter.Key()[len(rewardcalculator.PrefixIScore):]
 		ia, err := rewardcalculator.NewIScoreAccountFromBytes(iter.Value())
 		if err != nil {
 			fmt.Printf("Can't read data with iterator\n")
