@@ -17,6 +17,13 @@ const (
 )
 
 const (
+	KeyDBInfo                = "INFO"
+	KeyGlobalOption          = "GO"
+
+
+)
+
+const (
 	NumDelegate              = 10
 	NumPRep                  = 22
 )
@@ -26,6 +33,43 @@ type IconDB interface {
 	Bytes() []byte
 	String() string
 	SetBytes([]byte) error
+}
+
+type DBInfo struct {
+	BlockHeight  common.HexUint64
+	DbCount      int
+	EntryCount   int
+}
+
+func (db *DBInfo) ID() []byte {
+	return []byte(KeyDBInfo)
+}
+
+func (db *DBInfo) Bytes() ([]byte, error) {
+	var bytes []byte
+	if bs, err := codec.MarshalToBytes(db); err != nil {
+		return nil, err
+	} else {
+		bytes = bs
+	}
+	return bytes, nil
+}
+
+func (db *DBInfo) String() string {
+	b, err := json.Marshal(db)
+	if err != nil {
+		return "Can't covert Message to json"
+	}
+	return string(b)
+}
+
+
+func (db *DBInfo) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, db)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type GovernanceVariable struct {
