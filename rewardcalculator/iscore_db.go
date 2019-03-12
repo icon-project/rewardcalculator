@@ -1,26 +1,16 @@
 package rewardcalculator
 
 import (
-	"encoding/json"
+	"log"
 	"strconv"
 
-	"github.com/icon-project/rewardcalculator/common"
-	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 )
 
-const (
-	PrefixIScore             = ""
-	PrefixGovernanceVariable = "G"
-	PrefixPrepCandidate      = "P"
-	PrefixLastCalculation    = "L"
-)
 
 const (
 	KeyDBInfo                = "INFO"
 	KeyGlobalOption          = "GO"
-
-
 )
 
 const (
@@ -35,166 +25,44 @@ type IconDB interface {
 	SetBytes([]byte) error
 }
 
-type DBInfo struct {
-	BlockHeight  common.HexUint64
-	DbCount      int
-	EntryCount   int
-}
-
-func (db *DBInfo) ID() []byte {
-	return []byte(KeyDBInfo)
-}
-
-func (db *DBInfo) Bytes() ([]byte, error) {
-	var bytes []byte
-	if bs, err := codec.MarshalToBytes(db); err != nil {
-		return nil, err
-	} else {
-		bytes = bs
-	}
-	return bytes, nil
-}
-
-func (db *DBInfo) String() string {
-	b, err := json.Marshal(db)
-	if err != nil {
-		return "Can't covert Message to json"
-	}
-	return string(b)
-}
-
-
-func (db *DBInfo) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, db)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type GovernanceVariable struct {
-	IcxPrice      common.HexUint64
-	IncentiveRep  common.HexUint64
-	IncentiveDapp common.HexUint64
-	IncentiveEEP  common.HexUint64
-	RewardRep     common.HexUint64
-	RewardDapp    common.HexUint64
-	RewardEEP     common.HexUint64
-}
-
-type GlobalOptions struct {
-	BlockHeight   common.HexUint64
-	Validators    [NumPRep]common.Address
-
-	GV GovernanceVariable
-}
-
-func (opts *GlobalOptions) ID() []byte {
-	return nil
-}
-
-func (opts *GlobalOptions) Bytes() ([]byte, error) {
-	var bytes []byte
-	if bs, err := codec.MarshalToBytes(opts); err != nil {
-		return nil, err
-	} else {
-		bytes = bs
-	}
-	return bytes, nil
-}
-
-func (opts *GlobalOptions) String() string {
-	b, err := json.Marshal(opts)
-	if err != nil {
-		return "Can't covert Message to json"
-	}
-	return string(b)
-}
-
-func (opts *GlobalOptions) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, &opts)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type DelegateData struct {
-	Address     common.Address
-	Delegate    common.HexInt
-}
-
-type IScoreData struct {
-	IScore      common.HexInt
-	BlockHeight common.HexUint64
-	Stake       common.HexInt
-	Delegations [NumDelegate]DelegateData
-}
-
-type IScoreAccount struct {
-	IScoreData
-	Address common.Address
-}
-
-func (ia *IScoreAccount) ID() []byte {
-	return ia.Address.ID()
-}
-
-func (ia *IScoreAccount) Bytes() ([]byte, error) {
-	var bytes []byte
-	if bs, err := codec.MarshalToBytes(&ia.IScoreData); err != nil {
-		return nil, err
-	} else {
-		bytes = bs
-	}
-	return bytes, nil
-}
-
-func (ia *IScoreAccount) String() string {
-	b, err := json.Marshal(ia)
-	if err != nil {
-		return "Can't covert Message to json"
-	}
-	return string(b)
-}
-
-func (ia *IScoreAccount) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, &ia.IScoreData)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func NewIScoreAccountFromBytes(bs []byte) (*IScoreAccount, error) {
-	ia := new(IScoreAccount)
-	if err:= ia.SetBytes(bs); err != nil {
-		return nil, err
-	} else {
-		return ia, nil
-	}
-}
-
-type prepList struct {
-	Address   common.Address
-	start     common.HexUint64
-	end       common.HexUint64
-}
-
 type iscoreDB struct {
 	db db.Database
 }
 
 func writeGovernanceVariable(lvlDB db.Database, gv []byte, blockHeight uint) {
-	bucket, _ := lvlDB.GetBucket(PrefixGovernanceVariable)
+	bucket, _ := lvlDB.GetBucket(db.PrefixGovernanceVariable)
 
 	bucket.Set([]byte(strconv.FormatUint(uint64(blockHeight), 10)), gv)
 }
 
 func writeIscoreDBBytes(data []byte) {
-
 }
 
-func InitDB(dbPath string, dbType string, dbName string) db.Database {
-	return db.Open(dbPath, dbType, dbName)
+func InitIscoreDB(dbPath string, dbType string, dbName string, worker int) (db.Database, error) {
+	dbi := db.Open(dbPath, dbType, dbName)
+
+	bucket, err := dbi.GetBucket(db.PrefixInfo)
+	if err != nil {
+		log.Panicf("Failed to get DB Infomation bucket\n")
+	}
+
+	dbInfo := new(DBInfo)
+	data, err := bucket.Get([]byte(KeyDBInfo))
+	if data != nil {
+		err = dbInfo.SetBytes(data)
+		if err != nil {
+			log.Printf("Failed to set DB Infomation structure\n")
+		}
+	}
+
+	// write DB count if necessary
+	if dbInfo.DbCount == 0 {
+		dbInfo.DbCount = worker
+	} else {
+		log.Panicf("Can't run Reward Calculator with %d worker. DB created with %d wokers\n", worker, dbInfo.DbCount)
+	}
+
+	log.Printf("Initialize DB. path: %s, type: %s, name: %s, DBInfo: %s\n", dbPath, dbType, dbName, dbInfo.String())
+
+	return dbi, err
 }

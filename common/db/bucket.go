@@ -12,26 +12,20 @@ type BucketID string
 
 //	Bucket ID
 const (
-	// MerkleTrie maps RLP encoded data from sha3(data)
-	MerkleTrie BucketID = ""
+	// For I-Score DB
+	// I-Score
+	PrefixIScore BucketID             = ""
 
-	// BytesByHash maps data except merkle trie nodes from sha3(data)
-	BytesByHash BucketID = "S"
+	// For global DB
 
-	// TransactionLocatorByHash maps transaction locator from transaction hash.
-	TransactionLocatorByHash BucketID = "T"
+	// DB infomation for management
+	PrefixInfo BucketID               = "I"
 
-	// BlockHeaderHashByHeight maps hash of encoded block header from height.
-	BlockHeaderHashByHeight BucketID = "H"
+	// IISS governance variable
+	PrefixGovernanceVariable BucketID = "G"
 
-	// BlockV1ByHash maps block V1 from block V1 hash.
-	BlockV1ByHash BucketID = "B"
-
-	// ReceiptV1ByHash maps receipt V1 from tx V3 hash.
-	ReceiptV1ByHash BucketID = "R"
-
-	// ChainProperty is general key value map for chain property.
-	ChainProperty BucketID = "C"
+	// P-Rep candidate list
+	PrefixPrepCandidate BucketID      = "P"
 )
 
 // internalKey returns key prefixed with the bucket's id.

@@ -1,6 +1,7 @@
 package rewardcalculator
 
 import (
+	"github.com/icon-project/rewardcalculator/common"
 	"log"
 	"sync"
 
@@ -21,7 +22,17 @@ type helloMessage struct {
 	BlockHeight uint
 }
 
-type RewardCalculate struct {
+type responseIScore struct {
+	address common.Address
+	iScore  common.HexInt
+}
+
+type caclulateMessage struct {
+	path        string
+	blockHeight uint64
+}
+
+type rewardCalculate struct {
 	lock sync.Mutex
 	mgr  *manager
 	conn ipc.Connection
@@ -29,7 +40,7 @@ type RewardCalculate struct {
 	commitBlock uint
 }
 
-func (rc *RewardCalculate) HandleMessage(c ipc.Connection, msg uint, data []byte) error {
+func (rc *rewardCalculate) HandleMessage(c ipc.Connection, msg uint, data []byte) error {
 	log.Printf("Get message: (%d), %X", msg, data)
 	switch msg {
 	case msgHELLO:
@@ -45,26 +56,55 @@ func (rc *RewardCalculate) HandleMessage(c ipc.Connection, msg uint, data []byte
 		m.BlockHeight = rc.commitBlock
 
 		return rc.conn.Send(msg, &m)
-	// TODO ADD message
 	case msgClaim:
-		return nil
+		var addr common.Address
+		if _, err := codec.MP.UnmarshalFromBytes(data, &addr); err != nil {
+			return err
+		}
+		var response responseIScore
+		response.address = addr
+		// TODO implement with goroutine
+		//response.iScore.Set(.frame.ctx.GetBalance(&addr))
+
+		return rc.conn.Send(msgClaim, &response)
 	case msgQuery:
-		return nil
+		var addr common.Address
+		if _, err := codec.MP.UnmarshalFromBytes(data, &addr); err != nil {
+			return err
+		}
+		var response responseIScore
+		response.address = addr
+		// TODO implement with goroutine
+		//response.iScore.Set(.frame.ctx.GetBalance(&addr))
+
+		return rc.conn.Send(msgQuery, &response)
 	case msgCalculate:
+		var msg caclulateMessage
+		if _, err := codec.MP.UnmarshalFromBytes(data, &msg); err != nil {
+			return err
+		}
+		// TODO implement with goroutine
+		//response.iScore.Set(.frame.ctx.GetBalance(&msg))
+
 		return nil
+
+	// TODO ADD message
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}
 }
 
-func newConnection(m *manager, c ipc.Connection) (*RewardCalculate, error) {
-	rc := &RewardCalculate{
+func newConnection(m *manager, c ipc.Connection) (*rewardCalculate, error) {
+	rc := &rewardCalculate{
 		mgr: m,
 		conn: c,
 		commitBlock: 0,
 	}
 
 	c.SetHandler(msgHELLO, rc)
+	c.SetHandler(msgClaim, rc)
+	c.SetHandler(msgQuery, rc)
+	c.SetHandler(msgCalculate, rc)
 	// TODO add message handlers
 
 	return rc, nil

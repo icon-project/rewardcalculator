@@ -15,6 +15,8 @@ type manager struct {
 	server ipc.Server
 	db     db.Database
 	//lock   sync.Mutex		//TODO need?
+
+	IISSDataPath  string
 }
 
 func (m *manager) Loop() error {
@@ -26,7 +28,7 @@ func (m *manager) Close() error {
 		log.Printf("Failed to close IPC server err=%+v", err)
 		return err
 	}
-	// TODO stop all RewardCalculate instance
+	// TODO stop all rewardCalculate instance
 	return nil
 }
 
@@ -44,8 +46,8 @@ func (m *manager) OnClose(c ipc.Connection) error {
 	return nil
 }
 
-func InitManager(net string, addr string, datapath string) (*manager, error) {
-	// IPC
+func InitManager(net string, addr string, IISSDataPath string, dbPath string, worker int) (*manager, error) {
+	// IPC Server
 	srv := ipc.NewServer()
 	err := srv.Listen(net, addr)
 	if err != nil {
@@ -56,8 +58,12 @@ func InitManager(net string, addr string, datapath string) (*manager, error) {
 	srv.SetHandler(m)
 	m.server = srv
 
-	// DB
-	m.db = InitDB(datapath, string(db.GoLevelDBBackend), "IScore")
+	// IISS datapath
+	m.IISSDataPath = IISSDataPath
 
-	return m, nil
+	// DB
+	m.db, err = InitIscoreDB(dbPath, string(db.GoLevelDBBackend), "IScore", worker)
+
+
+	return m, err
 }
