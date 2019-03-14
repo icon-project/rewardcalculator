@@ -26,6 +26,20 @@ const (
 
 	// P-Rep candidate list
 	PrefixPrepCandidate BucketID      = "P"
+
+	// FOR IISS data DB
+	// Header
+	PrefixIISSHeader BucketID         = "HD"
+
+	// Governance variable
+	PrefixIISSGV BucketID             = "gv"
+
+	// P-Rep list
+	PrefixIISSPRep BucketID           = "prep"
+
+	// TX
+	PrefixIISSTX BucketID             = "TX"
+
 )
 
 // internalKey returns key prefixed with the bucket's id.

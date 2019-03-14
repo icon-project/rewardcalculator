@@ -11,25 +11,31 @@ import (
 )
 
 const (
-	msgHELLO uint = 0
-	msgClaim      = 1
-	msgQuery      = 2
-	msgCalculate  = 3
+	msgVERSION   uint = 0
+	msgClaim          = 1
+	msgQuery          = 2
+	msgCalculate      = 3
 )
 
-type helloMessage struct {
+type VersionMessage struct {
 	Success     bool
 	BlockHeight uint
 }
 
-type responseIScore struct {
-	address common.Address
-	iScore  common.HexInt
+type ResponseIScore struct {
+	Address common.Address
+	IScore  common.HexInt
 }
 
-type caclulateMessage struct {
-	path        string
-	blockHeight uint64
+type CalculateRequest struct {
+	Path        string
+	BlockHeight uint64
+}
+
+type CalculateResponse struct {
+	Success     bool
+	BlockHeight uint64
+	StateHash   []byte
 }
 
 type rewardCalculate struct {
@@ -41,17 +47,10 @@ type rewardCalculate struct {
 }
 
 func (rc *rewardCalculate) HandleMessage(c ipc.Connection, msg uint, data []byte) error {
-	log.Printf("Get message: (%d), %X", msg, data)
+	log.Printf("Get message: (%d), %+v", msg, data)
 	switch msg {
-	case msgHELLO:
-		var buf []byte
-		_, err := codec.MP.UnmarshalFromBytes(data, &buf)
-		if err != nil {
-			log.Printf("Fail to unmarshal bytes:% X", data)
-			return nil
-		}
-
-		var m helloMessage
+	case msgVERSION:
+		var m VersionMessage
 		m.Success = true
 		m.BlockHeight = rc.commitBlock
 
@@ -61,32 +60,35 @@ func (rc *rewardCalculate) HandleMessage(c ipc.Connection, msg uint, data []byte
 		if _, err := codec.MP.UnmarshalFromBytes(data, &addr); err != nil {
 			return err
 		}
-		var response responseIScore
-		response.address = addr
-		// TODO implement with goroutine
-		//response.iScore.Set(.frame.ctx.GetBalance(&addr))
+		// TODO implement claim module with goroutine
+		var resp ResponseIScore
+		resp.Address = addr
+		resp.IScore.SetUint64(123)
 
-		return rc.conn.Send(msgClaim, &response)
+		return rc.conn.Send(msgClaim, &resp)
 	case msgQuery:
 		var addr common.Address
 		if _, err := codec.MP.UnmarshalFromBytes(data, &addr); err != nil {
 			return err
 		}
-		var response responseIScore
-		response.address = addr
-		// TODO implement with goroutine
-		//response.iScore.Set(.frame.ctx.GetBalance(&addr))
+		// TODO implement query module with goroutine
+		var resp ResponseIScore
+		resp.Address = addr
+		resp.IScore.SetUint64(123)
 
-		return rc.conn.Send(msgQuery, &response)
+		return rc.conn.Send(msgQuery, &resp)
 	case msgCalculate:
-		var msg caclulateMessage
-		if _, err := codec.MP.UnmarshalFromBytes(data, &msg); err != nil {
+		var req CalculateRequest
+		if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 			return err
 		}
-		// TODO implement with goroutine
-		//response.iScore.Set(.frame.ctx.GetBalance(&msg))
+		// TODO implement calculate module with goroutine
+		var resp CalculateResponse
+		resp.Success = true
+		resp.BlockHeight = req.BlockHeight
+		resp.StateHash = []byte(req.Path)
 
-		return nil
+		return rc.conn.Send(msgCalculate, &resp)
 
 	// TODO ADD message
 	default:
@@ -101,7 +103,7 @@ func newConnection(m *manager, c ipc.Connection) (*rewardCalculate, error) {
 		commitBlock: 0,
 	}
 
-	c.SetHandler(msgHELLO, rc)
+	c.SetHandler(msgVERSION, rc)
 	c.SetHandler(msgClaim, rc)
 	c.SetHandler(msgQuery, rc)
 	c.SetHandler(msgCalculate, rc)
