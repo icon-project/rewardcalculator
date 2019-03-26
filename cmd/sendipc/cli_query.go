@@ -12,7 +12,7 @@ import (
 
 func (cli *CLI) query(conn ipc.Connection, address string) {
 	var addr common.Address
-	var resp rewardcalculator.ResponseIScore
+	var resp rewardcalculator.ResponseQuery
 
 	addr.SetString(address)
 

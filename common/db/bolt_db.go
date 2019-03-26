@@ -55,6 +55,10 @@ func (db *BoltDB) GetBatch() (Batch, error) {
 	return nil, nil
 }
 
+func (db *BoltDB) GetSnapshot() (Snapshot, error) {
+	return nil, nil
+}
+
 func (db *BoltDB) Close() error {
 	err := db.db.Close()
 	return err

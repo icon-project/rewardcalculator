@@ -60,6 +60,12 @@ func (db *GoLevelDB) GetBatch() (Batch, error) {
 	}, nil
 }
 
+func (db *GoLevelDB) GetSnapshot() (Snapshot, error) {
+	return &goLevelSnapshot{
+		db: db.db,
+	}, nil
+}
+
 func (db *GoLevelDB) Close() error {
 	return db.db.Close()
 }
@@ -172,4 +178,36 @@ func (b *goLevelBatch) Write() error {
 
 func (b *goLevelBatch) Reset() {
 	b.batch.Reset()
+}
+
+//----------------------------------------
+// Snapshot
+
+var _ Snapshot = (*goLevelSnapshot)(nil)
+
+type goLevelSnapshot struct {
+	snapshot *leveldb.Snapshot
+	db *leveldb.DB
+}
+
+func (s *goLevelSnapshot) New() error {
+	var err error
+	s.snapshot, err = s.db.GetSnapshot()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *goLevelSnapshot) Get(key []byte) ([]byte, error) {
+	value, err := s.snapshot.Get(key, nil)
+	if err == leveldb.ErrNotFound {
+		return nil, nil
+	} else {
+		return value, err
+	}
+}
+
+func (s *goLevelSnapshot) Release() {
+	s.snapshot.Release()
 }

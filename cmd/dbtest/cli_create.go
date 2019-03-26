@@ -12,6 +12,8 @@ import (
 	"github.com/icon-project/rewardcalculator/rewardcalculator"
 )
 
+const LastBlock = 1000000000
+
 func createAddress(prefix []byte) (*common.Address, error) {
 	data := make([]byte, common.AddressIDBytes - len(prefix))
 	if _, err := rand.Read(data); err != nil {
@@ -22,12 +24,12 @@ func createAddress(prefix []byte) (*common.Address, error) {
 	copy(buf[len(prefix):], data)
 
 	addr := common.NewAccountAddress(buf)
-	//fmt.Printf("Created an address : %s", addr.String())
+	fmt.Printf("Created an address : %s\n", addr.String())
 
 	return addr, nil
 }
 
-func createIScoreData(prefix []byte) *rewardcalculator.IScoreAccount {
+func createIScoreData(prefix []byte, pRepList []*rewardcalculator.PRepCandidate) *rewardcalculator.IScoreAccount {
 	addr, err := createAddress(prefix)
 	if err != nil {
 		fmt.Printf("Failed to create Address err=%+v\n", err)
@@ -36,52 +38,50 @@ func createIScoreData(prefix []byte) *rewardcalculator.IScoreAccount {
 
 	ia := new(rewardcalculator.IScoreAccount)
 
-	stake := rand.Uint64()
-	delegate := stake / rewardcalculator.NumDelegate
-
-	ia.Stake.SetUint64(stake)
+	// set delegations
 	for i := 0; i < rewardcalculator.NumDelegate; i++ {
-		var daddr *common.Address
-
-		daddr = common.NewAccountAddress([]byte{byte(i+1)})
-		ia.Delegations[i].Address = *daddr
-		ia.Delegations[i].Delegate.SetUint64(delegate)
+		dg := new (rewardcalculator.DelegateData)
+		dg.Address = pRepList[i].Address
+		dg.Delegate.SetUint64(uint64(i))
+		ia.Delegations = append(ia.Delegations, dg)
 	}
 	ia.Address = *addr
 
-	//fmt.Printf("Result: %s", ia.String())
+	fmt.Printf("Result: %s\n", ia.String())
 
 	return ia
 }
 
-func createData(bucket db.Bucket, prefix []byte, count int) int {
-	// Governance Variable
-
-	// PRep list
+func createData(bucket db.Bucket, prefix []byte, count int, opts *rewardcalculator.GlobalOptions) int {
+	pRepList := make([]*rewardcalculator.PRepCandidate, rewardcalculator.NumDelegate)
+	i := 0
+	for _, v := range opts.PRepCandidates {
+		pRepList[i] = v
+		i++
+		if i == rewardcalculator.NumDelegate {
+			break
+		}
+	}
 
 	// Account
 	for i := 0; i < count; i++ {
-		data := createIScoreData(prefix)
+		data := createIScoreData(prefix, pRepList)
 		if data == nil {
 			return i
 		}
 
 		key := data.ID()
 		value, _ := data.Bytes()
-		//fmt.Printf("data: %s \n value: len: %d, bytes: %v\n", data.String(), len(value), value)
 
 		bucket.Set(key, value)
 	}
 
-
 	return count
 }
 
-func createDB(dbDir string, dbName string, dbCount int, totalEntryCount int) {
-	dbDir = fmt.Sprintf("%s/%s", dbDir, dbName)
-	os.MkdirAll(dbDir, os.ModePerm)
 
-	dbEntryCount := totalEntryCount / dbCount
+func createAccountDB(dbDir string, dbCount int, entryCount int, opts *rewardcalculator.GlobalOptions) {
+	dbEntryCount := entryCount / dbCount
 	totalCount := 0
 
 	var wait sync.WaitGroup
@@ -95,7 +95,7 @@ func createDB(dbDir string, dbName string, dbCount int, totalEntryCount int) {
 			defer wait.Done()
 
 			bucket, _ := lvlDB.GetBucket(db.PrefixIScore)
-			count := createData(bucket, []byte(strconv.FormatInt(int64(index), 16)), dbEntryCount)
+			count := createData(bucket, []byte(strconv.FormatInt(int64(index), 16)), dbEntryCount, opts)
 
 			fmt.Printf("Create DB %s with %d entries.\n", dbNameTemp, count)
 			totalCount += count
@@ -103,26 +103,77 @@ func createDB(dbDir string, dbName string, dbCount int, totalEntryCount int) {
 	}
 	wait.Wait()
 
-	fmt.Printf("Create %d DBs with total %d/%d entries.\n", dbCount, totalCount, totalEntryCount)
+	fmt.Printf("Create %d DBs with total %d/%d entries.\n", dbCount, totalCount, entryCount)
 }
 
 func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 	fmt.Printf("Start create DB. name: %s, DB count: %d, Account count: %d\n", dbName, dbCount, entryCount)
+	dbDir := fmt.Sprintf("%s/%s", DBDir, dbName)
+	os.MkdirAll(dbDir, os.ModePerm)
 
 	lvlDB := db.Open(DBDir, DBType, dbName)
 	defer lvlDB.Close()
 
-	bucket, _ := lvlDB.GetBucket(db.PrefixGovernanceVariable)
-
-	// Create I-Score DB
-	createDB(DBDir, dbName, dbCount, entryCount)
-
-	// Write I-Score DB Info. at global DB
+	// Write DB Info. at global DB
+	bucket, _ := lvlDB.GetBucket(db.PrefixDBInfo)
 	dbInfo := new(rewardcalculator.DBInfo)
-	dbInfo.DbCount = dbCount
-	dbInfo.AccountCount.Value = uint64(entryCount)
-
+	dbInfo.DBCount = dbCount
 	data, _ := dbInfo.Bytes()
-	//fmt.Printf("dbinfo: %s \n data: len: %d, bytes: %b\n", dbInfo.String(), len(data), data)
 	bucket.Set(dbInfo.ID(), data)
+
+	// make global options
+	gOpts := new(rewardcalculator.GlobalOptions)
+	gOpts.BlockHeight = 0
+
+	// make governance variable
+	gvList := make([]*rewardcalculator.GovernanceVariable, 0)
+	gv := new(rewardcalculator.GovernanceVariable)
+	gv.BlockHeight = 0
+	gv.IncentiveRep.Int.SetUint64(1)
+	gv.IcxPrice.Int.SetUint64(100)
+	gvList = append(gvList, gv)
+
+	gv = new(rewardcalculator.GovernanceVariable)
+	gv.BlockHeight = 500
+	gv.IncentiveRep.Int.SetUint64(2)
+	gv.IcxPrice.Int.SetUint64(200)
+	gvList = append(gvList, gv)
+
+	gv = new(rewardcalculator.GovernanceVariable)
+	gv.BlockHeight = LastBlock
+	gv.IncentiveRep.Int.SetUint64(3)
+	gv.IcxPrice.Int.SetUint64(300)
+	gvList = append(gvList, gv)
+
+	gOpts.GV = gvList
+
+	// make P-Rep candidate list
+	pRepMap := make(map[common.Address]*rewardcalculator.PRepCandidate)
+	for i := 0; i < 16; i++ {
+		pRep := new(rewardcalculator.PRepCandidate)
+		pRep.Address = *common.NewAccountAddress([]byte{byte(i+1)})
+		pRep.Start = 0
+		pRep.End = 0
+		pRepMap[pRep.Address] = pRep
+	}
+
+	gOpts.PRepCandidates = pRepMap
+
+	// write global options to DB
+	bucket, _ = lvlDB.GetBucket(db.PrefixGovernanceVariable)
+	for _, v := range gOpts.GV {
+		value, _ := v.Bytes()
+		bucket.Set(v.ID(), value)
+		fmt.Printf("Write Governance variables: %+v, %s\n", v.ID(), v.String())
+	}
+
+	bucket, _ = lvlDB.GetBucket(db.PrefixPrepCandidate)
+	for _, v := range gOpts.PRepCandidates {
+		value, _ := v.Bytes()
+		bucket.Set(v.ID(), value)
+		fmt.Printf("Write P-Rep candidate: %s\n", v.String())
+	}
+
+	// create account DB
+	createAccountDB(dbDir, dbCount, entryCount, gOpts)
 }

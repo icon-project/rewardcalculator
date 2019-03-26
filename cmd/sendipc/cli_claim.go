@@ -12,7 +12,7 @@ import (
 
 func (cli *CLI) claim(conn ipc.Connection, address string) {
 	var addr common.Address
-	var resp rewardcalculator.ResponseIScore
+	var resp rewardcalculator.ResponseClaim
 
 	addr.SetString(address)
 

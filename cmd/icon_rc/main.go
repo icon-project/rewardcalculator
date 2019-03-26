@@ -9,23 +9,39 @@ import (
 )
 
 type RcConfig struct {
-	IISSDataPath	string	`json:"IISSData"`
-	DBDir           string  `json:"IScoreDB"`
-	worker          *int     `json:"Worker"`
-	fileName        string
-	test			uint
+	IISSDataPath string `json:"IISSData"`
+	DBDir        string `json:"IScoreDB"`
+	IpcAddr      string `json:"IPCAddress"`
+	ClientMode   bool   `json:"ClientMode"`
+	Worker       int    `json:"Worker"`
+	fileName     string
+	test         uint
+}
+
+func (cfg *RcConfig) Print() {
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		log.Printf("Can't covert configuration to json")
+		return
+	}
+
+
+	log.Printf("Running config %s\n", string(b))
 }
 
 func main() {
 	var cfg RcConfig
 	var generate bool
 
-	flag.StringVar(&cfg.IISSDataPath, "iissdata", "./", "IISS Data path")
-	flag.StringVar(&cfg.DBDir, "iscore_db", ".db", "I-Score database directory")
+	flag.StringVar(&cfg.IISSDataPath, "iissdata", "./iissdata", "IISS Data directory")
+	flag.StringVar(&cfg.DBDir, "db", ".iscoredb", "I-Score database directory")
+	flag.StringVar(&cfg.IpcAddr, "ipc", "/tmp/icon-rc.sock", "IPC channel")
 	flag.StringVar(&cfg.fileName, "config", "rc_config.json", "Reward Calculator configuration file")
-	cfg.worker = flag.Int("worker", 2, "The number of I-Score calculation worker")
+	flag.BoolVar(&cfg.ClientMode, "client", false, "Generate configuration file")
+	cfg.Worker = *flag.Int("worker", 2, "The number of I-Score calculation Worker")
 	flag.BoolVar(&generate, "gen", false, "Generate configuration file")
 	flag.Parse()
+	cfg.Print()
 
 	if generate {
 		if len(cfg.fileName) == 0 {
@@ -46,8 +62,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	rcm, err := rewardcalculator.InitManager("unix", "/tmp/icon-rc.sock",
-		cfg.IISSDataPath, cfg.DBDir, *cfg.worker)
+	rcm, err := rewardcalculator.InitManager(cfg.ClientMode, "unix", cfg.IpcAddr, cfg.IISSDataPath, cfg.DBDir, cfg.Worker)
 	if err != nil {
 		log.Panicf("Failed to start RewardCalculator manager %+v", err)
 	}

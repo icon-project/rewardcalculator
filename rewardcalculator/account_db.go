@@ -13,18 +13,17 @@ type DelegateData struct {
 
 type IScoreData struct {
 	IScore      common.HexInt
-	BlockHeight common.HexUint64
-	Stake       common.HexInt
-	Delegations [NumDelegate]DelegateData
+	BlockHeight uint64
+	Delegations []*DelegateData
 }
 
 type IScoreAccount struct {
-	IScoreData
 	Address common.Address
+	IScoreData
 }
 
 func (ia *IScoreAccount) ID() []byte {
-	return ia.Address.ID()
+	return ia.Address.Bytes()
 }
 
 func (ia *IScoreAccount) Bytes() ([]byte, error) {
@@ -60,4 +59,43 @@ func NewIScoreAccountFromBytes(bs []byte) (*IScoreAccount, error) {
 	} else {
 		return ia, nil
 	}
+}
+
+func NewIScoreAccountFromIISS(iisstx *IISSTX) *IScoreAccount {
+	if iisstx.DataType != TXDataTypeDelegate {
+		return nil
+	}
+
+	ia := new(IScoreAccount)
+	ia.Address = iisstx.Address
+	ia.BlockHeight = iisstx.BlockHeight
+
+	data, _ := common.DecodeAny(iisstx.Data)
+	dList1, ok := data.([]interface{})
+	if ok {
+		ia.Delegations = make([]*DelegateData, len(dList1))
+		for i, v := range dList1 {
+			dg := new(DelegateData)
+			dList2, ok := v.([]interface{})
+			if ok {
+				if len(dList2) != 2 {
+					continue
+				}
+				for _, v2 := range dList2 {
+					switch v2.(type) {
+					case *common.Address:
+						dg.Address = *v2.(*common.Address)
+					case *common.HexInt:
+						dg.Delegate = *v2.(*common.HexInt)
+					}
+				}
+				ia.Delegations[i] = dg
+			} else {
+				return nil
+			}
+		}
+	} else {
+		return nil
+	}
+	return ia
 }

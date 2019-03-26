@@ -10,7 +10,6 @@ import (
 const (
 	DBDir     = "/Users/eunsoopark/test/rc_test"
 	DBType    = "goleveldb"
-	DBName    = "test"
 )
 
 type CLI struct{}
@@ -26,8 +25,6 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("\t calculate TO BATCH           Calculate I-Score of all account\n")
 	fmt.Printf("\t           TO                 Block height to calculate. Set 0 if you want current block+1\n")
 	fmt.Printf("\t           BATCH              The number of DB write batch count\n")
-	fmt.Printf("\t issdata PATH                 Read IISS data DB\n")
-	fmt.Printf("\t           PATH               Directory where the IISS data DB is located\n")
 }
 
 func (cli *CLI) validateArgs() {
@@ -48,14 +45,12 @@ func (cli *CLI) Run() {
 	deleteCmd := flag.NewFlagSet("delete", flag.ExitOnError)
 	queryCmd := flag.NewFlagSet("query", flag.ExitOnError)
 	calculateCmd := flag.NewFlagSet("calculate", flag.ExitOnError)
-	iissDataCmd := flag.NewFlagSet("iissdata", flag.ExitOnError)
 
-	createDBCount := createCmd.Int("db", 16, "The number of RC Account DB")
-	createAccountCount := createCmd.Int("account", 10000000, "The account number of RC Account DB")
+	createDBCount := createCmd.Int("db", 16, "The number of RC Account DB. (MAX:256)")
+	createAccountCount := createCmd.Int("account", 10000, "The account number of RC Account DB")
 	queryAddress := queryCmd.String("address", "", "Account address")
 	calculateBlockHeight := calculateCmd.Uint64("block", 0, "Block height to calculate, Set 0 if you want current block +1")
 	calculateWriteBatch := calculateCmd.Uint64("writebatch", 0, "The number of DB write batch count")
-	iissDataPath := iissDataCmd.String("path", "./", "Directory where the IISS data DB is located")
 
 	// Parse the CLI
 	switch cmd {
@@ -83,12 +78,6 @@ func (cli *CLI) Run() {
 			calculateCmd.Usage()
 			os.Exit(1)
 		}
-	case "iissdata":
-		err := iissDataCmd.Parse(os.Args[3:])
-		if err != nil {
-			iissDataCmd.Usage()
-			os.Exit(1)
-		}
 	default:
 		cli.printUsage()
 		os.Exit(1)
@@ -98,6 +87,10 @@ func (cli *CLI) Run() {
 	if createCmd.Parsed() {
 		if *createDBCount <= 0 || *createAccountCount <= 0 {
 			createCmd.Usage()
+			os.Exit(1)
+		}
+		if *createDBCount > 256 {
+			fmt.Printf("Maximum value of -db is 256\n")
 			os.Exit(1)
 		}
 
@@ -132,9 +125,5 @@ func (cli *CLI) Run() {
 		end := time.Now()
 		diff := end.Sub(start)
 		fmt.Printf("Duration : %v\n", diff)
-	}
-
-	if iissDataCmd.Parsed() {
-		cli.iissData(*iissDataPath, dbName)
 	}
 }

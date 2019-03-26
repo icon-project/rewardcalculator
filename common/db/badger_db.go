@@ -58,6 +58,10 @@ func (db *BadgerDB) GetBatch() (Batch, error) {
 	return nil, nil
 }
 
+func (db *BadgerDB) GetSnapshot() (Snapshot, error) {
+	return nil, nil
+}
+
 func (db *BadgerDB) Close() error {
 	err := db.db.Close()
 	return err

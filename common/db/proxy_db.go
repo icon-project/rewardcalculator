@@ -57,9 +57,9 @@ func (pdb *proxyDB) GetBucket(id BucketID) (Bucket, error) {
 	return bk, nil
 }
 
-func (pdb *proxyDB) GetIterator() (Iterator, error) {
-	return nil, nil
-}
+//func (pdb *proxyDB) GetIterator() (Iterator, error) {
+//	return nil, nil
+//}
 
 func (pdb *proxyDB) Close() error {
 	return nil

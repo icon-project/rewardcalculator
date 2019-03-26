@@ -264,6 +264,12 @@ func NewHexInt(v int64) *HexInt {
 	return i
 }
 
+func NewHexIntFromUint64(v uint64) *HexInt {
+	i := new(HexInt)
+	i.SetUint64(v)
+	return i
+}
+
 type HexInt16 struct {
 	Value int16
 }
@@ -443,6 +449,10 @@ type HexUint64 struct {
 
 func (i HexUint64) String() string {
 	return FormatUint(i.Value)
+}
+
+func (i HexUint64) Bytes() []byte {
+	return Uint64ToBytes(i.Value)
 }
 
 func (i HexUint64) MarshalJSON() ([]byte, error) {

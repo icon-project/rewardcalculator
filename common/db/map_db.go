@@ -60,6 +60,10 @@ func (db *mapDatabase) GetBatch() (Batch, error) {
 	return nil, nil
 }
 
+func (db *mapDatabase) GetSnapshot() (Snapshot, error) {
+	return nil, nil
+}
+
 func (t *mapDatabase) Close() error {
 	return nil
 }

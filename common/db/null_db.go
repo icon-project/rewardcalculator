@@ -7,9 +7,9 @@ func (*nullDB) GetBucket(id BucketID) (Bucket, error) {
 	return &nullBucket{}, nil
 }
 
-func (*nullDB) GetIterator() (Iterator, error) {
-	return nil, nil
-}
+//func (*nullDB) GetIterator() (Iterator, error) {
+//	return nil, nil
+//}
 
 func (*nullDB) Close() error {
 	return nil

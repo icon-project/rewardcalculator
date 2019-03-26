@@ -18,14 +18,17 @@ const (
 
 	// For global DB
 
-	// DB infomation for management
-	PrefixInfo BucketID               = "I"
+	// DB information for management
+	PrefixDBInfo BucketID             = "DI"
+
+	// Block information for management
+	PrefixBlockInfo BucketID          = "BI"
 
 	// IISS governance variable
-	PrefixGovernanceVariable BucketID = "G"
+	PrefixGovernanceVariable BucketID = "GV"
 
 	// P-Rep candidate list
-	PrefixPrepCandidate BucketID      = "P"
+	PrefixPrepCandidate BucketID      = "PC"
 
 	// FOR IISS data DB
 	// Header

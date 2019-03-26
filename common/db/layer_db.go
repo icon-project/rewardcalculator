@@ -125,6 +125,10 @@ func (db *layerDB) GetBatch() (Batch, error) {
 	return nil, nil
 }
 
+func (db *layerDB) GetSnapshot() (Snapshot, error) {
+	return nil, nil
+}
+
 func (ldb *layerDB) Flush(write bool) error {
 	ldb.lock.Lock()
 	defer ldb.lock.Unlock()

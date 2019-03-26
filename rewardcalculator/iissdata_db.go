@@ -3,13 +3,13 @@ package rewardcalculator
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"path/filepath"
+
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
-)
-
-const (
-	IISSKeyHeader      = "HD"
-	IISSKeyGV          = "gv"
+	"github.com/icon-project/rewardcalculator/common/db"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 type IISSHeader struct {
@@ -17,13 +17,13 @@ type IISSHeader struct {
 	BlockHeight uint64
 }
 
-func (db *IISSHeader) ID() []byte {
-	return []byte(IISSKeyHeader)
+func (ih *IISSHeader) ID() []byte {
+	return []byte(db.PrefixIISSHeader)
 }
 
-func (db *IISSHeader) Bytes() ([]byte, error) {
+func (ih *IISSHeader) Bytes() ([]byte, error) {
 	var bytes []byte
-	if bs, err := codec.MarshalToBytes(db); err != nil {
+	if bs, err := codec.MarshalToBytes(ih); err != nil {
 		return nil, err
 	} else {
 		bytes = bs
@@ -31,34 +31,42 @@ func (db *IISSHeader) Bytes() ([]byte, error) {
 	return bytes, nil
 }
 
-func (db *IISSHeader) String() string {
-	b, err := json.Marshal(db)
+func (ih *IISSHeader) String() string {
+	b, err := json.Marshal(ih)
 	if err != nil {
 		return "Can't covert Message to json"
 	}
 	return string(b)
 }
 
-func (db *IISSHeader) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, db)
+func (ih *IISSHeader) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, ih)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-type IISSGovernanceVariable struct {
+type IISSGVData struct {
 	IcxPrice      uint64
 	IncentiveRep  uint64
 }
 
-func (db *IISSGovernanceVariable) ID() []byte {
-	return []byte(IISSKeyGV)
+type IISSGovernanceVariable struct {
+	BlockHeight   uint64
+	IISSGVData
 }
 
-func (db *IISSGovernanceVariable) Bytes() ([]byte, error) {
+func (gv *IISSGovernanceVariable) ID() []byte {
+	bs := make([]byte, 8)
+	id := common.Uint64ToBytes(gv.BlockHeight)
+	copy(bs[len(bs)-len(id):], id)
+	return bs
+}
+
+func (gv *IISSGovernanceVariable) Bytes() ([]byte, error) {
 	var bytes []byte
-	if bs, err := codec.MarshalToBytes(db); err != nil {
+	if bs, err := codec.MarshalToBytes(&gv.IISSGVData); err != nil {
 		return nil, err
 	} else {
 		bytes = bs
@@ -66,39 +74,44 @@ func (db *IISSGovernanceVariable) Bytes() ([]byte, error) {
 	return bytes, nil
 }
 
-func (db *IISSGovernanceVariable) String() string {
-	b, err := json.Marshal(db)
+func (gv *IISSGovernanceVariable) String() string {
+	b, err := json.Marshal(gv)
 	if err != nil {
 		return "Can't covert Message to json"
 	}
 	return string(b)
 }
 
-func (db *IISSGovernanceVariable) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, db)
+func (gv *IISSGovernanceVariable) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, &gv.IISSGVData)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-type IISSPRepData struct {
-	BlockGenerateCount uint32
-	BlockValidateCount uint32
+const numPRep	= 22
+
+type IISSPRepStatData struct {
+	Generator common.Address
+	Validator []common.Address
 }
 
-type IISSPRep struct {
-	IISSPRepData
-	Address *common.Address
+type IISSPRepStat struct {
+	BlockHeight uint64
+	IISSPRepStatData
 }
 
-func (db *IISSPRep) ID() []byte {
-	return db.Address.ID()
+func (prep  *IISSPRepStat) ID() []byte {
+	bs := make([]byte, 8)
+	id := common.Uint64ToBytes(prep.BlockHeight)
+	copy(bs[len(bs)-len(id):], id)
+	return bs
 }
 
-func (db *IISSPRep) Bytes() ([]byte, error) {
+func (prep *IISSPRepStat) Bytes() ([]byte, error) {
 	var bytes []byte
-	if bs, err := codec.MarshalToBytes(&db.IISSPRepData); err != nil {
+	if bs, err := codec.MarshalToBytes(&prep.IISSPRepStatData); err != nil {
 		return nil, err
 	} else {
 		bytes = bs
@@ -106,58 +119,51 @@ func (db *IISSPRep) Bytes() ([]byte, error) {
 	return bytes, nil
 }
 
-func (db *IISSPRep) String() string {
-	b, err := json.Marshal(db)
+func (prep *IISSPRepStat) String() string {
+	b, err := json.Marshal(prep)
 	if err != nil {
 		return "Can't covert Message to json"
 	}
 	return string(b)
 }
 
-func (db *IISSPRep) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, &db.IISSPRepData)
+func (prep *IISSPRepStat) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, &prep.IISSPRepStatData)
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-func NewIISSPRepFromBytes(bs []byte) (*IISSPRep, error) {
-	data := new(IISSPRep)
-	if err:= data.SetBytes(bs); err != nil {
-		return nil, err
-	} else {
-		return data, nil
-	}
 }
 
 const (
-	TXDataTypeStake     = 0
-	TXDataTypeDelegate  = 1
-	TXDataTypeClaim     = 2
-	TXDataTypePrepReg   = 3
-	TXDataTypePrepUnReg = 4
+	TXDataTypeDelegate  = 0
+	TXDataTypeClaim     = 1
+	TXDataTypePrepReg   = 2
+	TXDataTypePrepUnReg = 3
 )
 
 type IISSTXData struct {
 	Address     common.Address
 	BlockHeight uint64
-	DataType    uint16
+	DataType    uint64
 	Data        *codec.TypedObj
 }
 
 type IISSTX struct {
+	Index uint64
 	IISSTXData
-	TXHash []byte
 }
 
-func (db *IISSTX) ID() []byte {
-	return db.TXHash
+func (tx *IISSTX) ID() []byte {
+	bs := make([]byte, 8)
+	id := common.Uint64ToBytes(tx.Index)
+	copy(bs[len(bs)-len(id):], id)
+	return bs
 }
 
-func (db *IISSTX) Bytes() ([]byte, error) {
+func (tx *IISSTX) Bytes() ([]byte, error) {
 	var bytes []byte
-	if bs, err := codec.MarshalToBytes(&db.IISSTXData); err != nil {
+	if bs, err := codec.MarshalToBytes(&tx.IISSTXData); err != nil {
 		return nil, err
 	} else {
 		bytes = bs
@@ -165,54 +171,124 @@ func (db *IISSTX) Bytes() ([]byte, error) {
 	return bytes, nil
 }
 
-func (db *IISSTX) String() string {
-	b, err := json.Marshal(db)
+func (tx *IISSTX) String() string {
+	b, err := json.Marshal(tx)
 	if err != nil {
 		return "Can't covert Message to json"
 	}
 
-	return fmt.Sprintf("%s, Data: %+v", string(b), common.MustDecodeAny(db.Data))
+	return fmt.Sprintf("%s\n\t Data: %+v", string(b), common.MustDecodeAny(tx.Data))
 }
 
-func (db *IISSTX) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, &db.IISSTXData)
+func (tx *IISSTX) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, &tx.IISSTXData)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-type IISSTXDataStake struct {
-	stake common.HexInt
-}
+func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVariable, []*IISSPRepStat, []*IISSTX) {
+	log.Printf("Start read IISS data DB. name: %s\n", dbPath)
 
-type IISSDelegationData struct {
-	Address common.Address
-	ratio   uint64
-}
+	dbPath = filepath.Clean(dbPath)
+	dbDir, dbName := filepath.Split(dbPath)
 
-type IISSTXDataDelegation struct {
-	Delegation [NumDelegate]IISSDelegationData
-}
+	iissDB := db.Open(dbDir, string(db.GoLevelDBBackend), dbName)
+	defer iissDB.Close()
 
-func (db *IISSTXDataDelegation) FromTypedObj(to *codec.TypedObj) {
-	data, _ := common.DecodeAny(to)
-	dgList, _ := data.([]interface{})
-
-	for i := 0; i < len(dgList); i++ {
-		dg, _ := dgList[i].([]interface{})
-		addr, _ := dg[0].(*common.Address)
-		ratio, _ := dg[1].(*common.HexInt)
-		db.Delegation[i].Address = *addr
-		db.Delegation[i].ratio = ratio.Uint64()
+	// Header
+	bucket, _ := iissDB.GetBucket(db.PrefixIISSHeader)
+	data, _ := bucket.Get([]byte(""))
+	if data == nil {
+		log.Printf("There is no header data\n")
+		return nil, nil, nil, nil
 	}
-}
-
-func (db *IISSTXDataDelegation) String() string {
-	b, err := json.Marshal(db)
+	header := new(IISSHeader)
+	err := header.SetBytes(data)
 	if err != nil {
-		return "Can't covert Message to json"
+		log.Printf("Failed to read header from IISS Data. err=%+v\n", err)
+		return nil, nil, nil, nil
+	}
+	if verbose {
+		log.Printf("Header: %s\n", header.String())
 	}
 
-	return string(b)
+	// Governance Variable
+	gvList := make([]*IISSGovernanceVariable, 0)
+	iter, _ := iissDB.GetIterator()
+	prefix := util.BytesPrefix([]byte(db.PrefixIISSGV))
+	iter.New(prefix.Start, prefix.Limit)
+	for entries := 0; iter.Next(); entries++ {
+		gv := new(IISSGovernanceVariable)
+		err = gv.SetBytes(iter.Value())
+		if err != nil {
+			log.Printf("Failed to read governance variable from IISS Data(%+v). err=%+v\n", iter.Value(), err)
+			return nil, nil, nil, nil
+		}
+		gv.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSGV):])
+		gvList = append(gvList, gv)
+	}
+	iter.Release()
+
+	if verbose {
+		if len(gvList) > 0 {
+			log.Printf("Governance variable:\n")
+			for i, gv := range gvList {
+				log.Printf("\t%d: %s", i, gv.String())
+			}
+		}
+	}
+
+	// P-Rep statistics list
+	prepStatList := make([]*IISSPRepStat, 0, numPRep)
+	iter, _ = iissDB.GetIterator()
+	prefix = util.BytesPrefix([]byte(db.PrefixIISSPRep))
+	iter.New(prefix.Start, prefix.Limit)
+	for entries := 0; iter.Next(); entries++ {
+		prepStat := new(IISSPRepStat)
+		err = prepStat.SetBytes(iter.Value())
+		if err != nil {
+			log.Printf("Failed to read P-Rep list from IISS Data. err=%+v\n", err)
+			return nil, nil, nil, nil
+		}
+		prepStat.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSPRep):])
+		prepStatList = append(prepStatList, prepStat)
+	}
+	iter.Release()
+	if verbose {
+		if len(prepStatList) > 0 {
+			log.Printf("P-Rep Stat:\n")
+			for i, prepStat := range prepStatList {
+				log.Printf("\t%d: %s\n", i, prepStat.String())
+			}
+		}
+	}
+
+	// TX list
+	txList := make([]*IISSTX, 0)
+	iter, _ = iissDB.GetIterator()
+	prefix = util.BytesPrefix([]byte(db.PrefixIISSTX))
+	iter.New(prefix.Start, prefix.Limit)
+	for entries := 0; iter.Next(); entries++ {
+		tx := new(IISSTX)
+		err = tx.SetBytes(iter.Value())
+		if err != nil {
+			log.Printf("Failed to read TX list from IISS Data. err=%+v\n", err)
+			return nil, nil, nil, nil
+		}
+		tx.Index = common.BytesToUint64(iter.Key()[len(db.PrefixIISSTX):])
+		txList = append(txList, tx)
+	}
+	iter.Release()
+	if verbose {
+		if len(txList) > 0 {
+			log.Printf("TX:\n")
+			for i, tx := range txList {
+				log.Printf("\t%d: %s\n", i, tx.String())
+			}
+		}
+	}
+
+	return header, gvList, prepStatList, txList
 }

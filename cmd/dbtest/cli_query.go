@@ -7,9 +7,34 @@ import (
 	"github.com/icon-project/rewardcalculator/rewardcalculator"
 )
 
+
+//func makePrefix(id db.BucketID, value uint8, last bool) []byte {
+//	buf := make([]byte, len(id) + 1)
+//	copy(buf, id)
+//	if last {
+//		buf[len(id)-1]++
+//	} else {
+//		buf[len(id)] = value
+//	}
+//
+//	return buf
+//}
+//
+//func getPrefix(id db.BucketID, index int, worker int) ([]byte, []byte) {
+//	if worker == 1 {
+//		return nil, nil
+//	}
+//
+//	unit := uint8(256 / worker)
+//	start := makePrefix(id, unit * uint8(index), false)
+//	limit := makePrefix(id, unit * uint8(index + 1), index == worker - 1)
+//
+//	return start, limit
+//}
+
 func queryData(bucket db.Bucket, key string) string {
 	addr := common.NewAddressFromString(key)
-	result, _ := bucket.Get(addr.ID())
+	result, _ := bucket.Get(addr.Bytes())
 	ia, err := rewardcalculator.NewIScoreAccountFromBytes(result)
 	if err != nil {
 		return "NODATA"

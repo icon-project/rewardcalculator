@@ -9,6 +9,7 @@ type Database interface {
 	GetBucket(id BucketID) (Bucket, error)
 	GetIterator() (Iterator, error)
 	GetBatch() (Batch, error)
+	GetSnapshot() (Snapshot, error)
 	Close() error
 }
 

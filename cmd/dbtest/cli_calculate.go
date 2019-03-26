@@ -5,99 +5,116 @@ import (
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/rewardcalculator"
-	"math/big"
+	"log"
 	"sync"
 )
 
-func calculateIScore(ia *rewardcalculator.IScoreData, opts *rewardcalculator.GlobalOptions) bool {
-	// IScore = old + period * G.V * sum(valid delegations)
-	if opts.BlockHeight.Value == 0 {
-		opts.BlockHeight.Value = ia.BlockHeight.Value + 1
-	}
-	period := opts.BlockHeight.Value - ia.BlockHeight.Value
-	gv := opts.GV.RewardRep.Value
-	if period == 0 || gv == 0 {
-		return false
+func calculatePRepReward(delegation *common.HexInt, start uint64, end uint64,
+	gvList []*rewardcalculator.GovernanceVariable, pRep *rewardcalculator.PRepCandidate) *common.HexInt {
+	// TODO implement calculation logic
+
+	// adjust start and end with P-Rep candidate
+	if start < pRep.Start {
+		start = pRep.Start
 	}
 
-	multiplier := big.NewInt(int64(period * gv))
+	if pRep.End != 0 && pRep.End < end {
+		end = pRep.End
+	}
 
-	var delegations common.HexInt
-	for i := 0; i < rewardcalculator.NumDelegate; i++ {
-		for j := 0; j < rewardcalculator.NumPRep; j++ {
-			if ia.Delegations[i].Address.Equal(&opts.Validators[j]) {
-				delegations.Add(&delegations.Int, &ia.Delegations[i].Delegate.Int)
-				continue
-			}
+	total := new(common.HexInt)
+
+	// period in gv
+	for i, gv := range gvList {
+		var s, e = start, end
+
+		if start < gv.BlockHeight {
+			s = gv.BlockHeight
 		}
+		if i+1 < len(gvList) && gvList[i+1].BlockHeight < end {
+			e = gvList[i+1].BlockHeight
+		}
+
+		if e - s <= 0 {
+			continue
+		}
+		period := common.NewHexIntFromUint64(e - s)
+
+		// reward = delegation amount * period * GV
+		var reward common.HexInt
+		reward.Mul(&delegation.Int, &period.Int)
+		reward.Mul(&reward.Int, &gv.RewardRep.Int)
+
+		//log.Printf("dg: %s, period: %s, Rep: %s. reward: %s\n",
+		//	delegation.String(), period.String(), gv.RewardRep.String(), reward.String())
+
+		// update total
+		total.Add(&total.Int, &reward.Int)
 	}
-	if delegations.Int.Sign() == 0 {
-		// there is no delegations
+
+	return total
+}
+
+func calculateIScore(ia *rewardcalculator.IScoreData,  gvList []*rewardcalculator.GovernanceVariable,
+	pRepCandidates map[common.Address]*rewardcalculator.PRepCandidate, blockHeight uint64) bool {
+	// IScore = old + period * G.V * sum(valid dgAmount)
+	if blockHeight == 0 {
+		blockHeight = ia.BlockHeight + 1
+	}
+
+	if (blockHeight - ia.BlockHeight) == 0 {
 		return false
 	}
-	delegations.Int.Mul(&delegations.Int, multiplier)
 
-	//fmt.Printf("period: %U, gv: %U, multiplier: %s, delegations: %s",
-	//	period, gv, multiplier.String(), delegations.Int.String())
+	// calculate I-Score
+	var totalReward common.HexInt
+	for _, dg := range ia.Delegations {
+		if dg.Delegate.Int.Sign() == 0 {
+			// there is no delegation
+			continue
+		}
+		reward := calculatePRepReward(&dg.Delegate, ia.BlockHeight, blockHeight, gvList, pRepCandidates[dg.Address])
+
+		// update totalReward
+		totalReward.Add(&totalReward.Int, &reward.Int)
+	}
 
 	// increase value
-	ia.IScore.Add(&ia.IScore.Int, &delegations.Int)
+	ia.IScore.Add(&ia.IScore.Int, &totalReward.Int)
 
-	// BlockHeight
-	ia.BlockHeight.Value = opts.BlockHeight.Value
+	// update BlockHeight
+	ia.BlockHeight = blockHeight
 
 	return true
 }
 
-func makePrefix(id db.BucketID, value uint8, last bool) []byte {
-	buf := make([]byte, len(id) + 1)
-	copy(buf, id)
-	if last {
-		buf[len(id)-1]++
-	} else {
-		buf[len(id)] = value
-	}
-
-	return buf
-}
-
-func getPrefix(id db.BucketID, index int, worker int) ([]byte, []byte) {
-	if worker == 1 {
-		return nil, nil
-	}
-
-	unit := uint8(256 / worker)
-	start := makePrefix(id, unit * uint8(index), false)
-	limit := makePrefix(id, unit * uint8(index + 1), index == worker - 1)
-
-	return start, limit
-}
-
-func calculateDB(dbi db.Database, bucket db.Bucket, start []byte, limit []byte,
-	opts *rewardcalculator.GlobalOptions, batchCount uint64) (count uint64, entries uint64) {
+func calculateDB(dbi db.Database, gvList []*rewardcalculator.GovernanceVariable,
+	pRepCandidates map[common.Address]*rewardcalculator.PRepCandidate,
+	blockHeight uint64, batchCount uint64) (count uint64, entries uint64) {
+	bucket, _ := dbi.GetBucket(db.PrefixIScore)
 	iter, _ := dbi.GetIterator()
 	batch, _ := dbi.GetBatch()
 	entries = 0; count = 0
 
 	batch.New()
-	iter.New(start, limit)
+	iter.New(nil, nil)
 	for entries = 0; iter.Next(); entries++ {
 		// read
 		key := iter.Key()[len(db.PrefixIScore):]
 		ia, err := rewardcalculator.NewIScoreAccountFromBytes(iter.Value())
 		if err != nil {
-			fmt.Printf("Can't read data with iterator\n")
+			log.Printf("Can't read data with iterator\n")
 			return 0, 0
 		}
 
-		//fmt.Printf("Read data: %s\n", ia.String())
+		//log.Printf("Read data: %s\n", ia.String())
 
 		// calculate
-		if calculateIScore(&ia.IScoreData, opts) == false {
+		if calculateIScore(&ia.IScoreData, gvList, pRepCandidates, blockHeight) == false {
 			continue
 		}
 
-		//fmt.Printf("Updated data: %s\n", ia.String())
+		//log.Printf("Updated data: %s\n", ia.String())
 
 		value, _ := ia.Bytes()
 
@@ -108,7 +125,7 @@ func calculateDB(dbi db.Database, bucket db.Bucket, start []byte, limit []byte,
 			if entries != 0 && (entries % batchCount) == 0 {
 				err = batch.Write()
 				if err != nil {
-					fmt.Printf("Failed to write batch\n")
+					log.Printf("Failed to write batch\n")
 				}
 				batch.Reset()
 			}
@@ -123,7 +140,7 @@ func calculateDB(dbi db.Database, bucket db.Bucket, start []byte, limit []byte,
 	if batchCount > 0 {
 		err := batch.Write()
 		if err != nil {
-			fmt.Printf("Failed to write batch\n")
+			log.Printf("Failed to write batch\n")
 		}
 		batch.Reset()
 	}
@@ -132,66 +149,93 @@ func calculateDB(dbi db.Database, bucket db.Bucket, start []byte, limit []byte,
 	iter.Release()
 	err := iter.Error()
 	if err != nil {
-		fmt.Printf("There is error while iteration. %+v", err)
+		log.Printf("There is error while iteration. %+v", err)
 	}
 
-	//fmt.Printf("Calculate %d entries for prefix %v-%v %d entries\n", count, start, limit, entries)
+	//log.Printf("Calculate %d entries for prefix %v-%v %d entries\n", count, start, limit, entries)
 
 	return count, entries
 }
 
 func (cli *CLI) calculate(dbName string, blockHeight uint64, batchCount uint64) {
-	fmt.Printf("Start calculate DB. name: %s, block height: %d, batch count: %d\n", dbName, blockHeight, batchCount)
+	//log.Printf("Start calculate DB. name: %s, block height: %d, batch count: %d\n", dbName, blockHeight, batchCount)
 
 	lvlDB := db.Open(DBDir, DBType, dbName)
 	defer lvlDB.Close()
 
-	bucket, _ := lvlDB.GetBucket(db.PrefixGovernanceVariable)
-
-	dbInfo := new(rewardcalculator.DBInfo)
-
-	data, _ := bucket.Get(dbInfo.ID())
-	err := dbInfo.SetBytes(data)
+	dbInfo, err := rewardcalculator.NewDBInfo(lvlDB, 0)
 	if err != nil {
-		fmt.Printf("Failed to read DB Info. err=%+v\n", err)
+		log.Printf("Failed to read DB Info. err=%+v\n", err)
 		return
 	}
+	//log.Printf("DBInfo %s\n", dbInfo.String())
 
-	fmt.Printf("DBInfo %s\n", dbInfo.String())
+	bInfo, err := rewardcalculator.NewBlockInfo(lvlDB)
+	if err != nil {
+		log.Printf("Failed to read Block Info. err=%+v\n", err)
+		return
+	}
+	//log.Printf("BlockInfo %s\n", bInfo.String())
 
-	// FIXME read from Global DB
 	// make global options
 	opts := new(rewardcalculator.GlobalOptions)
 
-	opts.BlockHeight.Value = dbInfo.BlockHeight.Value
-	for i := 0 ; i < rewardcalculator.NumDelegate; i++ {
-		daddr := common.NewAccountAddress([]byte{byte(i+1)})
-		opts.Validators[i] = *daddr
+	opts.BlockHeight = bInfo.BlockHeight
+	if blockHeight != 0 && blockHeight <= bInfo.BlockHeight {
+		log.Printf("I-Score was calculated to %d already\n", blockHeight)
+		return
 	}
-	opts.GV.RewardRep.Value = 1
+
+	// load Governance variable to GV list
+	opts.GV, err = rewardcalculator.LoadGovernanceVariable(lvlDB, opts.BlockHeight)
+	if err != nil {
+		log.Printf("Failed to load GV structure. err=%+v\n", err)
+		return
+	}
+
+	// load P-Rep candidate list to PRepCandidates map
+	opts.PRepCandidates, err = rewardcalculator.LoadPRepCandidate(lvlDB)
+	if err != nil {
+		log.Printf("Failed to load GV structure. err=%+v\n", err)
+		return
+	}
+
+	gvList := opts.GetGVList(opts.BlockHeight, blockHeight)
+	if len(gvList) == 0 {
+		log.Printf("Can't get Governance variables for block (%d, %d)\n", opts.BlockHeight, blockHeight)
+		return
+	}
 
 	var totalCount, totalEntry uint64
 	var wait sync.WaitGroup
-	wait.Add(dbInfo.DbCount)
+	wait.Add(dbInfo.DBCount)
 
 	dbDir := fmt.Sprintf("%s/%s", DBDir, dbName)
-	for i:= 0; i< dbInfo.DbCount; i++ {
+	for i:= 0; i< dbInfo.DBCount; i++ {
 		go func(index int) {
-			dbNameTemp := fmt.Sprintf("%d_%d", index + 1, dbInfo.DbCount)
+			dbNameTemp := fmt.Sprintf("%d_%d", index + 1, dbInfo.DBCount)
 			acctDB := db.Open(dbDir, DBType, dbNameTemp)
 			defer acctDB.Close()
 			defer wait.Done()
 
-			bucket, _ := acctDB.GetBucket(db.PrefixIScore)
-			c, e := calculateDB(acctDB, bucket, nil, nil, opts, batchCount)
+			c, e := calculateDB(acctDB, gvList, opts.PRepCandidates, blockHeight, batchCount)
 
-			fmt.Printf("Calculate DB %s with %d/%d entries.\n", dbNameTemp, c, e)
+			log.Printf("Calculate DB %s with %d/%d entries.\n", dbNameTemp, c, e)
 			totalCount += c
 			totalEntry += e
 		} (i)
 	}
 	wait.Wait()
-	fmt.Printf("Total>block height: %d, worker: %d, batch: %d, calculation %d for %d entries\n",
-		dbInfo.BlockHeight.Value, dbInfo.DbCount, batchCount, totalCount, totalEntry)
+	log.Printf("Total>block height: %d -> %d, worker: %d, batch: %d, calculation %d for %d entries\n",
+		bInfo.BlockHeight, blockHeight, dbInfo.DBCount, batchCount, totalCount, totalEntry)
 
+	// update blockInfo
+	if blockHeight == 0 {
+		bInfo.BlockHeight++
+	} else {
+		bInfo.BlockHeight = blockHeight
+	}
+	bucket, err := lvlDB.GetBucket(db.PrefixBlockInfo)
+	value, _ := bInfo.Bytes()
+	bucket.Set(bInfo.ID(), value)
 }
