@@ -69,7 +69,7 @@ func (cli *CLI) Run() {
 	txAddress := txCmd.String("address", "", "TX owner address")
 	txBlockHeight := txCmd.Uint64("blockheight", 0, "Block height of TX")
 	txType := txCmd.Uint64("type", 0, "Type of TX. " +
-		"(0:delegation, 1:claim, 2:P-Rep register, 3:P-Rep unregister")
+		"(0:delegation, 1:P-Rep register, 2:P-Rep unregister")
 	txDelegateAddress := txCmd.String("dg-address", "", "Delegation address")
 	txDelegateAmount:= txCmd.Uint64("dg-amount", 10, "Delegation amount")
 

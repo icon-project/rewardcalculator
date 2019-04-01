@@ -10,7 +10,7 @@ func (cli *CLI) header(version uint64, blockHeight uint64) {
 	bucket, _ := cli.DB.GetBucket(db.PrefixIISSHeader)
 
 	header := new(rewardcalculator.IISSHeader)
-	header.Version = uint16(version)
+	header.Version = version
 	header.BlockHeight = blockHeight
 
 	key := []byte("")

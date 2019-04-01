@@ -18,11 +18,8 @@ const (
 
 	// For global DB
 
-	// DB information for management
-	PrefixDBInfo BucketID             = "DI"
-
-	// Block information for management
-	PrefixBlockInfo BucketID          = "BI"
+	// Information for management
+	PrefixManagement BucketID         = "MI"
 
 	// IISS governance variable
 	PrefixGovernanceVariable BucketID = "GV"

@@ -91,7 +91,7 @@ func InitManager(clientMode bool, net string, addr string, IISSDataPath string, 
 		m.server = srv
 	}
 
-	// Load IISS Data
+	// set IISS Data path
 	m.IISSDataPath = IISSDataPath
 
 	// Initialize DB and load global options

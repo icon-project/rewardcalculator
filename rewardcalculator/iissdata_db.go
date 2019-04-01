@@ -13,7 +13,7 @@ import (
 )
 
 type IISSHeader struct {
-	Version     uint16
+	Version     uint64
 	BlockHeight uint64
 }
 
@@ -137,9 +137,8 @@ func (prep *IISSPRepStat) SetBytes(bs []byte) error {
 
 const (
 	TXDataTypeDelegate  = 0
-	TXDataTypeClaim     = 1
-	TXDataTypePrepReg   = 2
-	TXDataTypePrepUnReg = 3
+	TXDataTypePrepReg   = 1
+	TXDataTypePrepUnReg = 2
 )
 
 type IISSTXData struct {
@@ -189,8 +188,6 @@ func (tx *IISSTX) SetBytes(bs []byte) error {
 }
 
 func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVariable, []*IISSPRepStat, []*IISSTX) {
-	log.Printf("Start read IISS data DB. name: %s\n", dbPath)
-
 	dbPath = filepath.Clean(dbPath)
 	dbDir, dbName := filepath.Split(dbPath)
 
@@ -212,6 +209,7 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 	}
 	if verbose {
 		log.Printf("Header: %s\n", header.String())
+		log.Printf("data : %x, %v, %b", data, data, data)
 	}
 
 	// Governance Variable

@@ -3,6 +3,7 @@ package rewardcalculator
 import (
 	"fmt"
 	"log"
+	"os"
 	"sync"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -27,102 +28,232 @@ type IScoreDB struct {
 
 	// DB instance
 	Global db.Database
-	Account []db.Database
-	AccountSnapshot []db.Snapshot
-	snapshotLock sync.RWMutex
+
+	accountLock   sync.RWMutex
+	claim         db.Database
+	claimSnapshot db.Snapshot
+	Account0      []db.Database
+	Account1      []db.Database
+}
+
+func (idb *IScoreDB) getQueryDBList() []db.Database {
+	idb.accountLock.RLock()
+	defer idb.accountLock.RUnlock()
+	if idb.info.QueryDBIsZero {
+		return idb.Account0
+	} else {
+		return idb.Account1
+	}
+}
+
+func (idb *IScoreDB) getCalcDBList() []db.Database {
+	idb.accountLock.RLock()
+	defer idb.accountLock.RUnlock()
+	return idb._getCalcDBList()
+}
+
+func (idb *IScoreDB) _getCalcDBList() []db.Database {
+	if idb.info.QueryDBIsZero {
+		return idb.Account1
+	} else {
+		return idb.Account0
+	}
+}
+
+func (idb *IScoreDB) toggleAccountDB() {
+	idb.accountLock.Lock()
+	idb.info.QueryDBIsZero = !idb.info.QueryDBIsZero
+	idb.accountLock.Unlock()
+
+	// write to DB
+	idb.writeToDB()
+}
+
+func (idb *IScoreDB) getAccountDBIndex(address common.Address) int {
+	prefix := int(address.ID()[0])
+	return prefix % idb.info.DBCount
+}
+
+func (idb *IScoreDB) GetCalculateDB(address common.Address) db.Database {
+	aDB := idb.getCalcDBList()
+	return aDB[idb.getAccountDBIndex(address)]
+}
+
+func (idb *IScoreDB) GetQueryDB(address common.Address) db.Database {
+	aDB := idb.getQueryDBList()
+	return aDB[idb.getAccountDBIndex(address)]
+}
+
+func (idb *IScoreDB) GetClaimDB() db.Database {
+	return idb.claim
+}
+
+func (idb *IScoreDB) SetClaimDBSnapshot() {
+	snapshot, err := idb.claim.GetSnapshot()
+	if err != nil {
+		log.Printf("Failed to get snapshot of claim DB. err=%+v\n", err)
+		return
+	}
+
+	snapshot.New()
+	idb.claimSnapshot = snapshot
+}
+
+func (idb *IScoreDB) listClaimDBSnapshot(head string) {
+	log.Printf("%s : list up claim db snapshot entries\n", head)
+	// get iterator of claim DB snapshot
+	idb.claimSnapshot.NewIterator(nil, nil)
+	for idb.claimSnapshot.IterNext() {
+		// read
+		key := idb.claimSnapshot.IterKey()[len(db.PrefixIScore):]
+		claim, err := NewClaimFromBytes(idb.claimSnapshot.IterValue())
+		if err != nil {
+			log.Printf("Can't read data with claim snapshot iterator\n")
+			continue
+		}
+		claim.Address = *common.NewAddress(key)
+		log.Printf("Claim Snapshot : %s\n", claim.String())
+	}
+	idb.claimSnapshot.ReleaseIterator()
+}
+
+func (idb *IScoreDB) GetClaimDBSnapshot() db.Snapshot {
+	return idb.claimSnapshot
+}
+
+func (idb *IScoreDB) resetCalcDB() {
+	idb.accountLock.Lock()
+	defer idb.accountLock.Unlock()
+
+	calcDBList := idb._getCalcDBList()
+	var calcDBPostFix = 0
+	if idb.info.QueryDBIsZero {
+		calcDBPostFix = 1
+	}
+
+	newDBList := make([]db.Database, len(calcDBList))
+	for i, calcDB := range calcDBList {
+		calcDB.Close()
+		dbName := fmt.Sprintf("%d_%d_%d", i+1, idb.info.DBCount, calcDBPostFix)
+		os.RemoveAll(idb.info.DBRoot + "/" + dbName)
+		newDBList[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbName)
+	}
+
+	if idb.info.QueryDBIsZero {
+		idb.Account1 = newDBList
+	} else {
+		idb.Account0 = newDBList
+	}
+}
+
+func (idb *IScoreDB) SetBlockHeight(blockHeight uint64) {
+	idb.info.BlockHeight = blockHeight
+	idb.writeToDB()
+}
+func (idb *IScoreDB) writeToDB() {
+	bucket, _ := idb.Global.GetBucket(db.PrefixManagement)
+	value, _ := idb.info.Bytes()
+	bucket.Set(idb.info.ID(), value)
 }
 
 type GlobalOptions struct {
-	BlockHeight     uint64	// BlockHeight of confirmed calculate message
+	BlockHeight     uint64
 
 	db              *IScoreDB
 	PRepCandidates  map[common.Address]*PRepCandidate
 	GV              []*GovernanceVariable
 }
 
-func (opts *GlobalOptions) GetGVList(start uint64, end uint64) []*GovernanceVariable {
-	if len(opts.GV) == 0 {
-		return nil
-	}
+// Update Governance variable with IISS data
+func (opts *GlobalOptions) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
+	bucket, _ := opts.db.Global.GetBucket(db.PrefixGovernanceVariable)
 
-	gvList := make([]*GovernanceVariable, 1, len(opts.GV))
+	// Update GV
+	for _, gvIISS := range gvList {
+		// there is new GV
+		if  len(opts.GV) == 0 || opts.GV[len(opts.GV)-1].BlockHeight < gvIISS.BlockHeight {
+			gv :=  NewGVFromIISS(gvIISS)
 
-	log.Printf("GV count %d", len(opts.GV))
+			// write to memory
+			opts.GV = append(opts.GV, gv)
 
-	for _, v := range opts.GV {
-		log.Printf("READ: %s\n", v.String())
-		if v.BlockHeight <= start {
-			gvList[0] = v
-			log.Printf("overwrite\n")
-		} else if start <= v.BlockHeight && v.BlockHeight <= end {
-			gvList = append(gvList, v)
-			log.Printf("append\n")
-		} else if v.BlockHeight > end {
-			break
+			// write to global DB
+			value, _ := gv.Bytes()
+			bucket.Set(gv.ID(), value)
 		}
 	}
 
-	return gvList
+	// delete old value
+	gvLen := len(opts.GV)
+	for i, gv := range opts.GV {
+		if i != (gvLen - 1) &&gv.BlockHeight < opts.db.info.BlockHeight {
+			// delete from global DB
+			bucket.Delete(gv.ID())
+
+			// delete from memory
+			opts.GV = opts.GV[i:]
+			break
+		}
+	}
+}
+
+// Update P-Rep candidate with IISS TX(P-Rep register/unregister)
+func (opts *GlobalOptions) UpdatePRepCandidate(txList []*IISSTX) {
+	for _, tx := range txList {
+		switch tx.DataType {
+		case TXDataTypeDelegate:
+		case TXDataTypePrepReg:
+			pRep := opts.PRepCandidates[tx.Address]
+			if pRep == nil {
+				p := new(PRepCandidate)
+				p.Address = tx.Address
+				p.Start = tx.BlockHeight
+				p.End = 0
+
+				// write to memory
+				opts.PRepCandidates[tx.Address] = p
+
+				// write to global DB
+				bucket, _ := opts.db.Global.GetBucket(db.PrefixPrepCandidate)
+				data, _ := p.Bytes()
+				bucket.Set(p.ID(), data)
+			} else {
+				log.Printf("P-Rep : '%s' was registered already\n", tx.Address.String())
+				continue
+			}
+		case TXDataTypePrepUnReg:
+			pRep := opts.PRepCandidates[tx.Address]
+			if pRep != nil {
+				if pRep.End != 0 {
+					log.Printf("P-Rep : %s was unregistered already\n", tx.Address.String())
+					continue
+				}
+
+				// write to memory
+				pRep.End = tx.BlockHeight
+
+				// write to global DB
+				bucket, _ := opts.db.Global.GetBucket(db.PrefixPrepCandidate)
+				data, _ := pRep.Bytes()
+				bucket.Set(pRep.ID(), data)
+			} else {
+				log.Printf("P-Rep :  %s was not registered\n", tx.Address.String())
+				continue
+			}
+		}
+	}
 }
 
 func (opts *GlobalOptions) Print() {
 	log.Printf("============================================================================")
 	log.Printf("Global Option\n")
-	log.Printf("Block height: %d\n", opts.BlockHeight)
-	log.Printf("DB Info.: %s\n", opts.db.info.String())
+	log.Printf("Management Info.: %s\n", opts.db.info.String())
 	log.Printf("Governance Variable: %d\n", len(opts.GV))
 	for i, v := range opts.GV {
 		log.Printf("\t%d: %s\n", i, v.String())
 	}
 	log.Printf("P-Rep candidate count : %d\n", len(opts.PRepCandidates))
 	log.Printf("============================================================================")
-}
-
-func (opts *GlobalOptions) getAccountDBIndex(address common.Address) int {
-	prefix := int(address.ID()[0])
-	return prefix % opts.db.info.DBCount
-}
-
-func (opts *GlobalOptions) GetAccountDB(address common.Address) db.Database {
-	return opts.db.Account[opts.getAccountDBIndex(address)]
-}
-
-func (opts *GlobalOptions) GetAccountDBSnapshot(address common.Address) db.Snapshot {
-	return opts.db.AccountSnapshot[opts.getAccountDBIndex(address)]
-}
-
-func (opts *GlobalOptions) SetAccountDBSnapshot() error {
-	isDB := opts.db
-
-	isDB.snapshotLock.Lock()
-	defer isDB.snapshotLock.Unlock()
-
-	// Init snapshot list
-	if isDB.AccountSnapshot == nil {
-		isDB.AccountSnapshot = make([]db.Snapshot, 0, len(isDB.Account))
-	}
-
-	// make new snapshot list
-	snapList := make([]db.Snapshot, len(isDB.Account))
-	for i, accountDB := range isDB.Account {
-		// get new snapshot
-		snapshot, err := accountDB.GetSnapshot()
-		if err != nil {
-			return err
-		}
-		snapshot.New()
-		snapList[i] = snapshot
-	}
-
-	// release snapshot
-	for _, snapshot := range isDB.AccountSnapshot {
-		snapshot.Release()
-	}
-
-	// set snapshot list
-	isDB.AccountSnapshot = snapList
-
-	return nil
 }
 
 func InitIScoreDB(dbPath string, dbType string, dbName string, worker int) (*GlobalOptions, error) {
@@ -135,23 +266,15 @@ func InitIScoreDB(dbPath string, dbType string, dbName string, worker int) (*Glo
 	globalDB := db.Open(dbPath, dbType, dbName)
 	isDB.Global = globalDB
 
-	// read DB Info.
-	isDB.info, err = NewDBInfo(globalDB, worker)
+	// read management Info.
+	isDB.info, err = NewDBInfo(globalDB, dbPath, dbType, dbName, worker)
 	if err != nil {
-		log.Panicf("Failed to load DB Information\n")
+		log.Panicf("Failed to load management Information\n")
 		return nil, err
 	}
-
-	// read Block Info.
-	bInfo, err := NewBlockInfo(globalDB)
-	if err != nil {
-		log.Panicf("Failed to load Block Information\n")
-		return nil, err
-	}
-	gOpts.BlockHeight = bInfo.BlockHeight
 
 	// read Governance variable
-	gOpts.GV, err = LoadGovernanceVariable(globalDB, gOpts.BlockHeight)
+	gOpts.GV, err = LoadGovernanceVariable(globalDB, gOpts.db.info.BlockHeight)
 	if err != nil {
 		log.Printf("Failed to load GV structure\n")
 		return nil, err
@@ -160,24 +283,24 @@ func InitIScoreDB(dbPath string, dbType string, dbName string, worker int) (*Glo
 	// read P-Rep candidate list
 	gOpts.PRepCandidates, err = LoadPRepCandidate(globalDB)
 	if err != nil {
-		log.Printf("Failed to load GV structure\n")
+		log.Printf("Failed to load P-Rep candidate structure\n")
 		return nil, err
 	}
 
-	// Open account DBs
-	isDB.Account = make([]db.Database, isDB.info.DBCount)
+	// Open account DBs for Query and Calculate
+	isDB.Account0 = make([]db.Database, isDB.info.DBCount)
 	for i := 0; i < isDB.info.DBCount; i++ {
-		dbNameTemp := fmt.Sprintf("%d_%d", i + 1, isDB.info.DBCount)
-		isDB.Account[i] = db.Open(dbPath + "/" + dbName, dbType, dbNameTemp)
+		dbNameTemp := fmt.Sprintf("%d_%d_0", i + 1, isDB.info.DBCount)
+		isDB.Account0[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
+	}
+	isDB.Account1 = make([]db.Database, isDB.info.DBCount)
+	for i := 0; i < isDB.info.DBCount; i++ {
+		dbNameTemp := fmt.Sprintf("%d_%d_1", i + 1, isDB.info.DBCount)
+		isDB.Account1[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
 	}
 
-	// make snapshot for query and claim message
-	// TODO make snapshot with query message. Do not response with query and claim message until get calculate message
-	err = gOpts.SetAccountDBSnapshot()
-	if err != nil {
-		log.Printf("Failed to get snapshot of account DB. err=%+v\n", err)
-		return nil, err
-	}
+	// Open claim DB
+	isDB.claim = db.Open(isDB.info.DBRoot, isDB.info.DBType, "claim")
 
 	// TODO find IISS data and load
 
@@ -185,12 +308,18 @@ func InitIScoreDB(dbPath string, dbType string, dbName string, worker int) (*Glo
 }
 
 func CloseIScoreDB(isDB *IScoreDB) {
+	log.Printf("Close 1 global DB and %d account DBs\n", len(isDB.Account0) + len(isDB.Account1))
+
 	// close global DB
 	isDB.Global.Close()
 
 	// close account DBs
-	for _, aDB := range isDB.Account {
+	for _, aDB := range isDB.Account0 {
 		aDB.Close()
 	}
-	log.Printf("Close 1 global DB and %d account DBs\n", len(isDB.Account))
+	isDB.Account0 = nil
+	for _, aDB := range isDB.Account1 {
+		aDB.Close()
+	}
+	isDB.Account1 = nil
 }

@@ -2,6 +2,8 @@ package rewardcalculator
 
 import (
 	"bytes"
+	"log"
+
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
@@ -22,35 +24,54 @@ type ResponseClaim struct {
 func (rc *rewardCalculate) claim(c ipc.Connection, data []byte) error {
 	var req ClaimMessage
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
+		log.Printf("Failed to deserialize CLAIM message. err=%+v", err)
 		return err
 	}
 
-	opts := rc.mgr.gOpts
-	isDB := opts.db
+	claim := rc.queryPreCommit(req.BlockHeight, req.BlockHash, req.Address)
 
-	ia := new(IScoreAccount)
-	rc.claimLock.RLock()
-	blockHeight := rc.claimMap[req.Address]
-	rc.claimLock.RUnlock()
-	if blockHeight != 0 {
+	var ia = new(IScoreAccount)
+
+	if claim != nil {
 		ia.Address = req.Address
-		ia.BlockHeight = blockHeight
+		ia.BlockHeight = claim.BlockHeight
 	} else {
-		// read from account DB snapshot
-		isDB.snapshotLock.RLock()
-		snapshot := opts.GetAccountDBSnapshot(req.Address)
-		bs, _ := snapshot.Get(req.Address.Bytes())
-		isDB.snapshotLock.RUnlock()
+		// read from claim DB
+		cDB := rc.mgr.gOpts.db.GetClaimDB()
+		bucket, err := cDB.GetBucket(db.PrefixIScore)
+		if err != nil {
+			return err
+		}
+		bs, err := bucket.Get(req.Address.Bytes())
+		if err != nil {
+			return err
+		}
+		if bs != nil {
+			claim.SetBytes(bs)
+		}
+
+		// read from Query DB
+		qDB := rc.mgr.gOpts.db.GetQueryDB(req.Address)
+		bucket, err = qDB.GetBucket(db.PrefixIScore)
+		if err != nil {
+			return err
+		}
+		bs, err = bucket.Get(req.Address.Bytes())
+		if err != nil {
+			return err
+		}
 		if bs != nil {
 			ia.SetBytes(bs)
-
-			// add to pre-commit list
-			rc.addPreCommit(req.BlockHeight, req.BlockHash, ia.Address)
+			ia.Address = req.Address
 		}
+
+		// add to pre commit list
+		rc.addPreCommit(req.BlockHeight, req.BlockHash, ia)
 	}
 
 	var resp ResponseClaim
 	resp.ClaimMessage = req
+	resp.BlockHeight = ia.BlockHeight
 	resp.IScore = ia.IScore
 
 	return c.Send(msgClaim, &resp)
@@ -64,7 +85,7 @@ type CommitBlock struct {
 
 func (rc *rewardCalculate) commitBlock(c ipc.Connection, data []byte) error {
 	var req CommitBlock
-	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
+	if _, err := codec.MP.UnmarshalFromBytes(data, &req); nil != err {
 		return err
 	}
 
@@ -82,51 +103,77 @@ func (rc *rewardCalculate) commitBlock(c ipc.Connection, data []byte) error {
 	return c.Send(msgCommitBlock, &resp)
 }
 
-func (rc *rewardCalculate) addPreCommit(blockHeight uint64, blockHash []byte, address common.Address) {
+func (rc *rewardCalculate) addPreCommit(blockHeight uint64, blockHash []byte, ia *IScoreAccount) {
+	var claim = new(Claim)
+	claim.BlockHeight = ia.BlockHeight
+	claim.IScore = ia.IScore
+	claim.Address = ia.Address
+
 	rc.claimLock.Lock()
 	defer rc.claimLock.Unlock()
 	// initialize preCommitMap list
-	if rc.preCommitMapList == nil {
+	if nil == rc.preCommitMapList {
 		rc.preCommitMapList = make([]*preCommitMap, 0)
 	}
 
-	// find preCommitMap and insert address
+	// find preCommitMap and insert ClaimData
 	for _, pcMap := range rc.preCommitMapList {
 		if pcMap.BlockHeight == blockHeight && bytes.Compare(pcMap.BlockHash, blockHash) == 0 {
-			pcMap.claimMap[address] = blockHeight
+			pcMap.claimMap[claim.Address] = claim
+			log.Printf("Insert claim preCommit %s\n", claim.String())
 			return
 		}
 	}
 
 	// there is no preCommitMap. make new preCommitMap and insert address.
-	pcMap := new(preCommitMap)
+	var pcMap = new(preCommitMap)
 	pcMap.BlockHash = blockHash
 	pcMap.BlockHeight = blockHeight
-	pcMap.claimMap = make(map[common.Address]uint64)
-	pcMap.claimMap[address] = blockHeight
+	pcMap.claimMap = make(map[common.Address]*Claim)
+	pcMap.claimMap[claim.Address] = claim
+	log.Printf("Insert claim preCommit %s\n", claim.String())
 
 	// append new preCommitMap to preCommitMapList
 	rc.preCommitMapList = append(rc.preCommitMapList, pcMap)
 }
 
-func (rc *rewardCalculate) deletePreCommit(blockHeight uint64, blockHash []byte) {
-	newList := make([]*preCommitMap, 0, len(rc.preCommitMapList))
-	index := 0
+func (rc *rewardCalculate) queryPreCommit(blockHeight uint64, blockHash []byte, address common.Address) *Claim {
+	rc.claimLock.RLock()
+	defer rc.claimLock.RUnlock()
 
-	rc.claimLock.Lock()
-	defer rc.claimLock.Unlock()
-
-	// find preCommit and delete
+	// find preCommitMap and insert address
 	for _, pcMap := range rc.preCommitMapList {
 		if pcMap.BlockHeight == blockHeight && bytes.Compare(pcMap.BlockHash, blockHash) == 0 {
-		} else {
-			newList[index] = pcMap
-			index++
+			return pcMap.claimMap[address]
 		}
 	}
 
-	if len(newList) < cap(newList) {
-		rc.preCommitMapList = newList
+	// there is no preCommit
+	return nil
+}
+
+func (rc *rewardCalculate) deletePreCommit(blockHeight uint64, blockHash []byte) {
+	rc.claimLock.Lock()
+	defer rc.claimLock.Unlock()
+
+	listLen := len(rc.preCommitMapList)
+	if listLen == 0 {
+		return
+	}
+
+	// find preCommit and delete
+	for i, pcMap := range rc.preCommitMapList {
+		if pcMap.BlockHeight == blockHeight && bytes.Compare(pcMap.BlockHash, blockHash) == 0 {
+			if listLen == 1 {
+				log.Printf("Clear claim preCommits (%d, %v)\n", blockHeight, blockHash)
+				rc.preCommitMapList = nil
+			} else {
+				log.Printf("Delete claim preCommits (%d, %v)\n", blockHeight, blockHash)
+				rc.preCommitMapList[i] = rc.preCommitMapList[listLen-1]
+				rc.preCommitMapList = rc.preCommitMapList[:listLen-1]
+			}
+			break
+		}
 	}
 }
 
@@ -137,8 +184,13 @@ func (rc *rewardCalculate) writePreCommit(blockHeight uint64, blockHash []byte) 
 	// find preCommit and write preCommit to claimMap
 	for _, pcMap := range rc.preCommitMapList {
 		if pcMap.BlockHeight == blockHeight && bytes.Compare(pcMap.BlockHash, blockHash) == 0 {
-			for k, v := range pcMap.claimMap {
-				rc.claimMap[k] = v
+			for _, claim := range pcMap.claimMap {
+				log.Printf("Insert claim(%s) to claim DB\n", claim.String())
+				// write to claim DB
+				cDB := rc.mgr.gOpts.db.GetClaimDB()
+				bucket, _ := cDB.GetBucket(db.PrefixIScore)
+				value, _ := claim.Bytes()
+				bucket.Set(claim.ID(), value)
 			}
 
 			// delete all preCommit
@@ -150,24 +202,47 @@ func (rc *rewardCalculate) writePreCommit(blockHeight uint64, blockHash []byte) 
 	return false
 }
 
-func (rc *rewardCalculate) modifyClaimMap() {
-	opts := rc.mgr.gOpts
+func (rc *rewardCalculate) setClaimToGC(key []byte) {
+	cDB := rc.mgr.gOpts.db.GetClaimDB()
+
+	bucket, _ := cDB.GetBucket(db.PrefixIScore)
 
 	rc.claimLock.Lock()
 	defer rc.claimLock.Unlock()
 
-	for addr, blockHeight := range rc.claimMap {
-		adb := opts.GetAccountDB(addr)
-		bucket, _ := adb.GetBucket(db.PrefixIScore)
-		data, _ := bucket.Get(addr.Bytes())
-		ia := new(IScoreAccount)
-		if data != nil {
-			ia.SetBytes(data)
-
-			if blockHeight <= ia.BlockHeight {
-				// remove from claimMap
-				delete(rc.claimMap, addr)
-			}
+	bs, _ := bucket.Get(key)
+	if bs != nil {
+		claim, _ := NewClaimFromBytes(bs)
+		if claim != nil {
+			claim.applyGC = true
+			value, _ := claim.Bytes()
+			bucket.Set(key, value)
 		}
 	}
+}
+
+func (rc *rewardCalculate) garbageCollectClaim() {
+	cDB := rc.mgr.gOpts.db.GetClaimDB()
+
+	bucket, _ := cDB.GetBucket(db.PrefixIScore)
+	iter, _ := cDB.GetIterator()
+
+	rc.claimLock.Lock()
+	defer rc.claimLock.Unlock()
+
+	iter.New(nil, nil)
+	for iter.Next() {
+		// read
+		key := iter.Key()[len(db.PrefixIScore):]
+		claim, err := NewClaimFromBytes(iter.Value())
+		if err != nil {
+			log.Printf("Can't read data with iterator\n")
+			continue
+		}
+
+		if claim.applyGC {
+			bucket.Delete(key)
+		}
+	}
+	iter.Release()
 }

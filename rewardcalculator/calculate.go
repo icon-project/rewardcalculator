@@ -1,8 +1,10 @@
 package rewardcalculator
 
 import (
+	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
@@ -47,7 +49,7 @@ func calculateDelegationReward(delegation *common.HexInt, start uint64, end uint
 			e = gvList[i+1].BlockHeight
 		}
 
-		if e - s <= 0 {
+		if e  <= s {
 			continue
 		}
 		period := common.NewHexIntFromUint64(e - s)
@@ -104,12 +106,12 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 	return true
 }
 
-func calculateDB(dbi db.Database, gvList []*GovernanceVariable,
-	pRepCandidates map[common.Address]*PRepCandidate,
-	blockHeight uint64, batchCount uint64) (count uint64, entries uint64) {
-	bucket, _ := dbi.GetBucket(db.PrefixIScore)
-	iter, _ := dbi.GetIterator()
-	batch, _ := dbi.GetBatch()
+func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVariable,
+	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (count uint64, entries uint64) {
+
+	iter, _ := readDB.GetIterator()
+	bucket, _ := writeDB.GetBucket(db.PrefixIScore)
+	batch, _ := writeDB.GetBatch()
 	entries = 0; count = 0
 
 	batch.New()
@@ -124,14 +126,12 @@ func calculateDB(dbi db.Database, gvList []*GovernanceVariable,
 		}
 		ia.Address = *common.NewAddress(key)
 
-		//log.Printf("Read data: %s\n", ia.String())
-
 		// calculate
 		if calculateIScore(ia, gvList, pRepCandidates, blockHeight) == false {
 			continue
 		}
 
-		log.Printf("Updated data: %s\n", ia.String())
+		//log.Printf("Updated data: %s. I-Score: %s\n", ia.String(), ia.IScore.String())
 
 		value, _ := ia.Bytes()
 
@@ -174,20 +174,20 @@ func calculateDB(dbi db.Database, gvList []*GovernanceVariable,
 	return count, entries
 }
 
-func (rc *rewardCalculate) preCalculate() error {
-	opts := rc.mgr.gOpts
+func (rc *rewardCalculate) preCalculate() {
+	iScoreDB := rc.mgr.gOpts.db
 
-	// change Account DB snapshot
-	err := opts.SetAccountDBSnapshot()
-	if err != nil {
-		log.Printf("Can't set snapshot of account DB. err=%+v\n", err)
-		return err
-	}
+	// make snapshot of claim DB
+	iScoreDB.SetClaimDBSnapshot()
 
-	// reset preCommit and claimMap for claim
-	rc.modifyClaimMap()
+	// do garbage collecting claim DB entries
+	rc.garbageCollectClaim()
 
-	return nil
+	// change calculate DB to query DB
+	iScoreDB.toggleAccountDB()
+
+	// close and delete old query DB and open new calculate DB
+	iScoreDB.resetCalcDB()
 }
 
 func (rc *rewardCalculate) calculate(c ipc.Connection, data []byte) error {
@@ -197,177 +197,63 @@ func (rc *rewardCalculate) calculate(c ipc.Connection, data []byte) error {
 	}
 
 	opts := rc.mgr.gOpts
-	mdb := opts.db
+	iScoreDB := opts.db
 	blockHeight := req.BlockHeight
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
+	startTime := time.Now()
 
-	error := rc.preCalculate()
-	if error != nil {
-		log.Printf("Failed to do precalculate process\n")
+	// Load IISS Data
+	header, gvList, prepStatList, txList := LoadIISSData(req.Path, false)
+	if header == nil {
+		return fmt.Errorf("Calculate: Failed to load IISS data\n")
 	}
 
-	// process IISS data TX, GV
-	rc.processIISSData(req.Path)
+	rc.preCalculate()
 
-	// get governance variable
-	gvList := opts.GetGVList(opts.BlockHeight, blockHeight)
-	if len(gvList) == 0 {
-		log.Printf("Can't get Governance variables for block (%d, %d)\n", opts.BlockHeight, blockHeight)
-		return nil
-	}
+	// Update GV
+	opts.UpdateGovernanceVariable(gvList)
+
+	// Update P-Rep candidate with IISS TX(P-Rep register/unregister)
+	opts.UpdatePRepCandidate(txList)
 
 	// calculate I-Score @ Account DB
 	var totalCount, totalEntry uint64
 	var wait sync.WaitGroup
-	wait.Add(mdb.info.DBCount)
+	wait.Add(iScoreDB.info.DBCount)
 
-	for _, adb := range mdb.Account {
-		go func(accountDB db.Database) {
+	queryDBList := iScoreDB.getQueryDBList()
+	calcDBList := iScoreDB.getCalcDBList()
+	for i, cDB := range calcDBList {
+		go func(read db.Database, write db.Database) {
 			defer wait.Done()
 
-			c, e := calculateDB(accountDB, gvList, opts.PRepCandidates, blockHeight, writeBatchCount)
+			c, e := calculateDB(read, write, opts.GV, opts.PRepCandidates, blockHeight, writeBatchCount)
 
 			totalCount += c
 			totalEntry += e
-		} (adb)
+		} (queryDBList[i], cDB)
 	}
 	wait.Wait()
 
-	log.Printf("Total>block height: %d -> %d, worker: %d, batch: %d, calculation %d for %d entries\n",
-		opts.BlockHeight, blockHeight, mdb.info.DBCount, writeBatchCount, totalCount, totalEntry)
+	// update calculate DB with claim DB snapshot
+	rc.calculateClaimDB()
 
-	opts.BlockHeight = blockHeight
+	// update calculate DB with delegate TX
+	rc.calculateIISSTX(txList, blockHeight)
 
-	// write blockInfo to DB
-	var bInfo BlockInfo
-	bInfo.BlockHeight = blockHeight
-	bucket, err := mdb.Global.GetBucket(db.PrefixBlockInfo)
-	if err != nil {
-		log.Printf("Can't get BlockInfo bucket. err %+v\n", err)
-		return nil
-	}
-	value, _ := bInfo.Bytes()
-	bucket.Set(bInfo.ID(), value)
+	// update P-Rep reward
+	rc.calculateIISSPRepStat(prepStatList)
 
+	elapsedTime := time.Since(startTime)
+	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d for %d entries\n",
+		elapsedTime, opts.db.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount, totalEntry)
+
+	// set blockHeight
+	opts.db.SetBlockHeight(blockHeight)
 
 	// TODO make stateHash and send response
 	return rc.sendCalcResponse(blockHeight, true, nil)
-}
-
-func (rc *rewardCalculate) processIISSData(dbPath string) {
-	opts := rc.mgr.gOpts
-
-	// Load IISS Data
-	header, gvList, prepStatList, txList := LoadIISSData(dbPath, false)
-	if header == nil {
-		return
-	}
-
-	// Update GV of Global options
-	for _, gvIISS := range gvList {
-		// there is new GV
-		if  len(opts.GV) == 0 || opts.GV[len(opts.GV)-1].BlockHeight < gvIISS.BlockHeight {
-			gv :=  NewGVFromIISS(gvIISS)
-
-			// write to memory
-			opts.GV = append(opts.GV, gv)
-
-			// write to global DB
-			bucket, _ := rc.mgr.gOpts.db.Global.GetBucket(db.PrefixGovernanceVariable)
-			value, _ := gv.Bytes()
-			bucket.Set(gv.ID(), value)
-		}
-	}
-
-	// Update I-Score of P-Rep
-	rc.updatePRepReward(prepStatList)
-
-	// Update I-Score of account in TX list and update P-Rep Info.
-	for _, tx := range txList {
-		switch tx.DataType {
-		case TXDataTypeDelegate:
-			// get Account DB for account
-			aDB := opts.GetAccountDB(tx.Address)
-			bucket, _ := aDB.GetBucket(db.PrefixIScore)
-
-			// update IScoreAccount
-			var ia *IScoreAccount
-			var err error
-			newIA := NewIScoreAccountFromIISS(tx)
-			data, _ := bucket.Get(tx.Address.Bytes())
-			if data != nil {
-				ia, err = NewIScoreAccountFromBytes(data)
-				if err != nil {
-					log.Printf("Failed to make Account Info. from IISS TX(%s). err=%+v", tx.String(), err)
-					break
-				}
-				// calculate I-Score to newIA.BlockHeight
-				calculateIScore(ia, opts.GV, opts.PRepCandidates, newIA.BlockHeight)
-
-				// update delegation Info.
-				ia.Delegations = newIA.Delegations
-			} else {
-				// there is no account in DB
-				ia = newIA
-			}
-			// write to account DB
-			value, _ := ia.Bytes()
-			bucket.Set(ia.ID(), value)
-
-		case TXDataTypeClaim:
-			// get Account DB for account
-			aDB := opts.GetAccountDB(tx.Address)
-			bucket, _ := aDB.GetBucket(db.PrefixIScore)
-
-			// update IScoreAccount
-			data, _ := bucket.Get(tx.Address.Bytes())
-			if data != nil {
-				ia, _ := NewIScoreAccountFromBytes(data)
-				// set I-Score to 0 and update block height
-				ia.IScore.SetUint64(0)
-				ia.BlockHeight = tx.BlockHeight
-
-				// write to account DB
-				value, _ := ia.Bytes()
-				bucket.Set(ia.ID(), value)
-			} else {
-				log.Printf("Failed to get Account Info for claim. IISS TX=%s\n", tx.String())
-			}
-
-		case TXDataTypePrepReg:
-			pRep := opts.PRepCandidates[tx.Address]
-			if pRep == nil {
-				p := new(PRepCandidate)
-				p.Address = tx.Address
-				p.Start = tx.BlockHeight
-				p.End = 0
-
-				// write to memory
-				opts.PRepCandidates[tx.Address] = p
-
-				// write to global DB
-				bucket, _ := opts.db.Global.GetBucket(db.PrefixPrepCandidate)
-				data, _ := p.Bytes()
-				bucket.Set(p.ID(), data)
-			} else {
-				log.Printf("Failed to register PRepCandidate. %s was registered already\n", tx.Address.String())
-			}
-		case TXDataTypePrepUnReg:
-			pRep := opts.PRepCandidates[tx.Address]
-			if pRep != nil {
-				// write to memory
-				pRep.End = tx.BlockHeight
-
-				// write to global DB
-				bucket, _ := opts.db.Global.GetBucket(db.PrefixPrepCandidate)
-				data, _ := pRep.Bytes()
-				bucket.Set(pRep.ID(), data)
-			} else {
-				log.Printf("Failed to unregister PRepCandidate. %s was not registered\n", tx.Address.String())
-			}
-		}
-	}
 }
 
 func (rc *rewardCalculate) sendCalcResponse(blockHeight uint64, success bool, stateHash []byte) error {
@@ -379,7 +265,105 @@ func (rc *rewardCalculate) sendCalcResponse(blockHeight uint64, success bool, st
 	return rc.conn.Send(msgCalculate, &resp)
 }
 
-func (rc *rewardCalculate) updatePRepReward(prepStatList []*IISSPRepStat) {
+// Update I-Score of account in Claim DB
+func (rc *rewardCalculate) calculateClaimDB() {
+	opts := rc.mgr.gOpts
+	iScoreDB := opts.db
+	snapshot := iScoreDB.GetClaimDBSnapshot()
+
+	// get iterator of claim DB snapshot
+	snapshot.NewIterator(nil, nil)
+	for snapshot.IterNext() {
+		// read
+		key := snapshot.IterKey()[len(db.PrefixIScore):]
+		claim, err := NewClaimFromBytes(snapshot.IterValue())
+		if err != nil {
+			log.Printf("Can't read data with claim snapshot iterator\n")
+			continue
+		}
+		claim.Address = *common.NewAddress(key)
+
+		//log.Printf("Calc Claim Snapshot : %s\n", claim.String())
+
+		// get Calculate DB for account
+		aDB := iScoreDB.GetCalculateDB(claim.Address)
+		bucket, _ := aDB.GetBucket(db.PrefixIScore)
+		data, _ := bucket.Get(claim.ID())
+		if data == nil {
+			log.Printf("Can't get data from calculate DB for claim snapshot(%s)\n", claim.Address.String())
+			continue
+		}
+		ia, _ := NewIScoreAccountFromBytes(data)
+
+		if ia.BlockHeight < claim.BlockHeight {
+			log.Printf("Invalid claim data. block height is too big. claim(%s), I-Score(%s)\n", claim.String(), ia.String())
+			continue
+		}
+		// decrease I-Score with claimed I-Score
+		ia.IScore.Sub(&ia.IScore.Int, &claim.IScore.Int)
+
+		// write to Calculate DB
+		value, _ := ia.Bytes()
+		bucket.Set(claim.ID(), value)
+	}
+
+	// release iterator and snapshot
+	snapshot.ReleaseIterator()
+	snapshot.Release()
+}
+
+// Update I-Score of account in TX list
+func (rc *rewardCalculate) calculateIISSTX(txList []*IISSTX, blockHeight uint64) {
+	opts := rc.mgr.gOpts
+	iDB := opts.db
+
+	for _, tx := range txList {
+		switch tx.DataType {
+		case TXDataTypeDelegate:
+			// get Calculate DB for account
+			aDB := iDB.GetCalculateDB(tx.Address)
+			bucket, _ := aDB.GetBucket(db.PrefixIScore)
+
+			// update I-Score
+			newIA := NewIScoreAccountFromIISS(tx)
+
+			data, _ := bucket.Get(tx.Address.Bytes())
+			if data != nil {
+				ia, err := NewIScoreAccountFromBytes(data)
+				if err != nil {
+					log.Printf("Failed to make Account Info. from IISS TX(%s). err=%+v", tx.String(), err)
+					break
+				}
+				if ia.BlockHeight != blockHeight {
+					log.Printf("Invalid account Info. from calculate DB(%s)", ia.String())
+					break
+				}
+
+				// backup original I-Score
+				newIA.IScore = ia.IScore
+
+				// get I-Score from tx.BlockHeight to blockHeight
+				ia.BlockHeight = tx.BlockHeight
+				ia.IScore.SetUint64(0)
+				calculateIScore(ia, opts.GV, opts.PRepCandidates, blockHeight)
+
+				// set newIA.IScore with I-Score value at tx.BlockHeight
+				newIA.IScore.Sub(&newIA.IScore.Int, &ia.IScore.Int)
+			}
+
+			// calculate I-Score with TX to blockHeight
+			calculateIScore(newIA, opts.GV, opts.PRepCandidates, blockHeight)
+
+			// write to account DB
+			value, _ := newIA.Bytes()
+			bucket.Set(newIA.ID(), value)
+		case TXDataTypePrepReg:
+		case TXDataTypePrepUnReg:
+		}
+	}
+}
+
+func (rc *rewardCalculate) calculateIISSPRepStat(prepStatList []*IISSPRepStat) {
 	prepMap := make(map[common.Address]common.HexInt)
 	var genReward common.HexInt
 	for _, pRepStat := range prepStatList {
@@ -396,10 +380,10 @@ func (rc *rewardCalculate) updatePRepReward(prepStatList []*IISSPRepStat) {
 	}
 
 	for addr, reward := range prepMap {
-		opts := rc.mgr.gOpts
+		iDB := rc.mgr.gOpts.db
 
 		// get Account DB for account
-		aDB := opts.GetAccountDB(addr)
+		aDB := iDB.GetCalculateDB(addr)
 		bucket, _ := aDB.GetBucket(db.PrefixIScore)
 
 		// update IScoreAccount

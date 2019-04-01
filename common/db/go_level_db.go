@@ -187,6 +187,7 @@ var _ Snapshot = (*goLevelSnapshot)(nil)
 
 type goLevelSnapshot struct {
 	snapshot *leveldb.Snapshot
+	iter iterator.Iterator
 	db *leveldb.DB
 }
 
@@ -206,6 +207,33 @@ func (s *goLevelSnapshot) Get(key []byte) ([]byte, error) {
 	} else {
 		return value, err
 	}
+}
+
+func (s *goLevelSnapshot) NewIterator(start []byte, limit []byte) {
+	if start == nil {
+		s.iter = s.snapshot.NewIterator(nil, nil)
+	} else {
+		slice := new(util.Range)
+		slice.Start = start
+		slice.Limit = limit
+		s.iter = s.snapshot.NewIterator(slice, nil)
+	}
+}
+
+func (s *goLevelSnapshot) IterNext() bool {
+	return s.iter.Next()
+}
+
+func (s *goLevelSnapshot) IterKey() []byte {
+	return s.iter.Key()
+}
+
+func (s *goLevelSnapshot) IterValue() []byte {
+	return s.iter.Value()
+}
+
+func (s *goLevelSnapshot) ReleaseIterator() {
+	s.iter.Release()
 }
 
 func (s *goLevelSnapshot) Release() {

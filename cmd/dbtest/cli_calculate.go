@@ -158,6 +158,7 @@ func calculateDB(dbi db.Database, gvList []*rewardcalculator.GovernanceVariable,
 }
 
 func (cli *CLI) calculate(dbName string, blockHeight uint64, batchCount uint64) {
+	// FIXME implement with rewardcalculator function
 	//log.Printf("Start calculate DB. name: %s, block height: %d, batch count: %d\n", dbName, blockHeight, batchCount)
 
 	lvlDB := db.Open(DBDir, DBType, dbName)
@@ -170,18 +171,11 @@ func (cli *CLI) calculate(dbName string, blockHeight uint64, batchCount uint64) 
 	}
 	//log.Printf("DBInfo %s\n", dbInfo.String())
 
-	bInfo, err := rewardcalculator.NewBlockInfo(lvlDB)
-	if err != nil {
-		log.Printf("Failed to read Block Info. err=%+v\n", err)
-		return
-	}
-	//log.Printf("BlockInfo %s\n", bInfo.String())
-
 	// make global options
 	opts := new(rewardcalculator.GlobalOptions)
 
-	opts.BlockHeight = bInfo.BlockHeight
-	if blockHeight != 0 && blockHeight <= bInfo.BlockHeight {
+	opts.BlockHeight = dbInfo.BlockHeight
+	if blockHeight != 0 && blockHeight <= dbInfo.BlockHeight {
 		log.Printf("I-Score was calculated to %d already\n", blockHeight)
 		return
 	}
@@ -213,7 +207,12 @@ func (cli *CLI) calculate(dbName string, blockHeight uint64, batchCount uint64) 
 	dbDir := fmt.Sprintf("%s/%s", DBDir, dbName)
 	for i:= 0; i< dbInfo.DBCount; i++ {
 		go func(index int) {
-			dbNameTemp := fmt.Sprintf("%d_%d", index + 1, dbInfo.DBCount)
+			var dbNameTemp string
+			if dbInfo.QueryDBIsZero {
+				dbNameTemp = fmt.Sprintf("%d_%d_0", index+1, dbInfo.DBCount)
+			} else {
+				dbNameTemp = fmt.Sprintf("%d_%d_1", index+1, dbInfo.DBCount)
+			}
 			acctDB := db.Open(dbDir, DBType, dbNameTemp)
 			defer acctDB.Close()
 			defer wait.Done()
@@ -227,15 +226,8 @@ func (cli *CLI) calculate(dbName string, blockHeight uint64, batchCount uint64) 
 	}
 	wait.Wait()
 	log.Printf("Total>block height: %d -> %d, worker: %d, batch: %d, calculation %d for %d entries\n",
-		bInfo.BlockHeight, blockHeight, dbInfo.DBCount, batchCount, totalCount, totalEntry)
+		dbInfo.BlockHeight, blockHeight, dbInfo.DBCount, batchCount, totalCount, totalEntry)
 
-	// update blockInfo
-	if blockHeight == 0 {
-		bInfo.BlockHeight++
-	} else {
-		bInfo.BlockHeight = blockHeight
-	}
-	bucket, err := lvlDB.GetBucket(db.PrefixBlockInfo)
-	value, _ := bInfo.Bytes()
-	bucket.Set(bInfo.ID(), value)
+	// TODO update management DB
+
 }

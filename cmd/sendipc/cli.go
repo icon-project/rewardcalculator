@@ -15,6 +15,7 @@ const (
 	msgClaim          = 1
 	msgQuery          = 2
 	msgCalculate      = 3
+	msgCommitBlock    = 4
 )
 
 type CLI struct { }
@@ -59,6 +60,7 @@ func (cli *CLI) Run() {
 	queryAddress := queryCmd.String("address", "", "Account address(Required)")
 	claimCmd := flag.NewFlagSet("claim", flag.ExitOnError)
 	claimAddress := claimCmd.String("address", "", "Account address(Required)")
+	claimBlockHeight := claimCmd.Uint64("blockheight", 0, "Block height(Required)")
 	calculateCmd := flag.NewFlagSet("calculate", flag.ExitOnError)
 	calculateIISSData := calculateCmd.String("iissdata", "", "IISS data DB path(Required)")
 	calculateBlockHeight := calculateCmd.Uint64("blockheight", 0, "Block height to calculate. Set 0 if you want current block+1")
@@ -111,14 +113,14 @@ func (cli *CLI) Run() {
 	}
 
 	if claimCmd.Parsed() {
-		if *claimAddress == "" {
+		if *claimAddress == "" || *claimBlockHeight == 0 {
 			claimCmd.PrintDefaults()
 			os.Exit(1)
 		}
 		start := time.Now()
 
 		// send claim message
-		cli.claim(conn, *claimAddress)
+		cli.claim(conn, *claimAddress, *claimBlockHeight)
 
 		end := time.Now()
 		diff := end.Sub(start)

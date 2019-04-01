@@ -12,7 +12,11 @@ import (
 
 
 type DBInfo struct {
-	DBCount int
+	DBRoot        string
+	DBType        string
+	DBCount       int
+	BlockHeight   uint64 // BlockHeight of finished calculate message
+	QueryDBIsZero bool
 }
 
 func (dbi *DBInfo) ID() []byte {
@@ -45,8 +49,8 @@ func (dbi *DBInfo) SetBytes(bs []byte) error {
 	return nil
 }
 
-func NewDBInfo(globalDB db.Database, worker int) (*DBInfo, error) {
-	bucket, err := globalDB.GetBucket(db.PrefixDBInfo)
+func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string, worker int) (*DBInfo, error) {
+	bucket, err := globalDB.GetBucket(db.PrefixManagement)
 	if err != nil {
 		log.Panicf("Failed to get DB Information bucket\n")
 		return nil, err
@@ -60,69 +64,14 @@ func NewDBInfo(globalDB db.Database, worker int) (*DBInfo, error) {
 			return nil, err
 		}
 	} else {
-		// write DB count if necessary
+		// write Initial values. DB path, type and count
+		dbInfo.DBRoot = dbPath + "/" + dbName
+		dbInfo.DBType = dbType
 		dbInfo.DBCount = worker
 		value, _ := dbInfo.Bytes()
 		bucket.Set(dbInfo.ID(), value)
 	}
 	return dbInfo, nil
-}
-
-type BlockInfo struct {
-	BlockHeight uint64
-}
-
-func (bi *BlockInfo) ID() []byte {
-	return []byte("")
-}
-
-func (bi *BlockInfo) Bytes() ([]byte, error) {
-	var bytes []byte
-	if bs, err := codec.MarshalToBytes(bi); err != nil {
-		return nil, err
-	} else {
-		bytes = bs
-	}
-	return bytes, nil
-}
-
-func (bi *BlockInfo) String() string {
-	b, err := json.Marshal(bi)
-	if err != nil {
-		return "Can't covert Message to json"
-	}
-	return string(b)
-}
-
-func (bi *BlockInfo) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, bi)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func NewBlockInfo(globalDB db.Database) (*BlockInfo, error) {
-	bucket, err := globalDB.GetBucket(db.PrefixBlockInfo)
-	if err != nil {
-		log.Panicf("Failed to get Block Information bucket\n")
-		return nil, err
-	}
-	blockInfo := new(BlockInfo)
-	data, err := bucket.Get(blockInfo.ID())
-	if data != nil {
-		err = blockInfo.SetBytes(data)
-		if err != nil {
-			log.Panicf("Failed to set Block Information structure\n")
-			return nil, err
-		}
-	} else {
-		// write block Info.
-		value, _ := blockInfo.Bytes()
-		bucket.Set(blockInfo.ID(), value)
-	}
-
-	return blockInfo, nil
 }
 
 type GVData struct {

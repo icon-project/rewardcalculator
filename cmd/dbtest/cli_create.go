@@ -115,7 +115,7 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 	defer lvlDB.Close()
 
 	// Write DB Info. at global DB
-	bucket, _ := lvlDB.GetBucket(db.PrefixDBInfo)
+	bucket, _ := lvlDB.GetBucket(db.PrefixManagement)
 	dbInfo := new(rewardcalculator.DBInfo)
 	dbInfo.DBCount = dbCount
 	data, _ := dbInfo.Bytes()

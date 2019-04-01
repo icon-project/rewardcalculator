@@ -35,9 +35,6 @@ func (cli *CLI) transaction(index uint64, address string, blockHeight uint64, da
 		if err != nil {
 			fmt.Printf("Can't encode stake %+v\n", err)
 		}
-	case rewardcalculator.TXDataTypeClaim:
-		tx.Data.Type = codec.TypeNil
-		tx.Data.Object = []byte("")
 	case rewardcalculator.TXDataTypePrepReg:
 		tx.Data.Type = codec.TypeNil
 		tx.Data.Object = []byte("")
