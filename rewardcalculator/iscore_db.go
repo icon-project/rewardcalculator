@@ -157,8 +157,6 @@ func (idb *IScoreDB) writeToDB() {
 }
 
 type GlobalOptions struct {
-	BlockHeight     uint64
-
 	db              *IScoreDB
 	PRepCandidates  map[common.Address]*PRepCandidate
 	GV              []*GovernanceVariable

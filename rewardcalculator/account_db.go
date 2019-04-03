@@ -2,6 +2,8 @@ package rewardcalculator
 
 import (
 	"encoding/json"
+	"log"
+
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 )
@@ -26,14 +28,15 @@ func (ia *IScoreAccount) ID() []byte {
 	return ia.Address.Bytes()
 }
 
-func (ia *IScoreAccount) Bytes() ([]byte, error) {
+func (ia *IScoreAccount) Bytes() []byte {
 	var bytes []byte
 	if bs, err := codec.MarshalToBytes(&ia.IScoreData); err != nil {
-		return nil, err
+		log.Panicf("Failed to marshal I-Score account=%+v. err=%+v", ia, err)
+		return nil
 	} else {
 		bytes = bs
 	}
-	return bytes, nil
+	return bytes
 }
 
 func (ia *IScoreAccount) String() string {

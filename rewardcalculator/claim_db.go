@@ -2,15 +2,15 @@ package rewardcalculator
 
 import (
 	"encoding/json"
+	"log"
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 )
 
 type ClaimData struct {
-	BlockHeight uint64
-	IScore      common.HexInt
-	applyGC     bool
+	BlockHeight   uint64
+	IScore        common.HexInt
 }
 
 type Claim struct {
@@ -22,14 +22,15 @@ func (c *Claim) ID() []byte {
 	return c.Address.Bytes()
 }
 
-func (c *Claim) Bytes() ([]byte, error) {
+func (c *Claim) Bytes() []byte {
 	var bytes []byte
 	if bs, err := codec.MarshalToBytes(&c.ClaimData); err != nil {
-		return nil, err
+		log.Panicf("Failed to marshal claim data=%+v. err=%+v", c, err)
+		return nil
 	} else {
 		bytes = bs
 	}
-	return bytes, nil
+	return bytes
 }
 
 func (c *Claim) String() string {

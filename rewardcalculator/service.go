@@ -95,39 +95,45 @@ func (rc *rewardCalculate) query(c ipc.Connection, data []byte) error {
 		return err
 	}
 
-	ia := new(IScoreAccount)
-	claim := new(Claim)
+	var claim *Claim = nil
+	var ia *IScoreAccount = nil
 	opts := rc.mgr.gOpts
 	isDB := opts.db
-
-	// read from claim DB
-	cDB := isDB.GetClaimDB()
-	bucket, err := cDB.GetBucket(db.PrefixIScore)
-	bs, err := bucket.Get(addr.Bytes())
-	if bs != nil {
-		claim.SetBytes(bs)
-	} else {
-		claim = nil
-	}
-
-	// read from account query DB
-	aDB := isDB.GetQueryDB(addr)
-	bucket, err = aDB.GetBucket(db.PrefixIScore)
-	bs, err = bucket.Get(addr.Bytes())
-	if err != nil {
-		return err
-	}
-	if bs != nil {
-		ia.SetBytes(bs)
-		if nil != claim && ia.BlockHeight >= claim.BlockHeight {
-			ia.IScore.Sub(&ia.IScore.Int, &claim.IScore.Int)
-		}
-	}
 
 	// make response
 	var resp ResponseQuery
 	resp.Address = addr
-	resp.BlockHeight = ia.BlockHeight
+
+	// read from claim DB
+	cDB := isDB.GetClaimDB()
+	bucket, _ := cDB.GetBucket(db.PrefixIScore)
+	bs, _ := bucket.Get(addr.Bytes())
+	if bs != nil {
+		claim, _ = NewClaimFromBytes(bs)
+	}
+
+	// read from account query DB
+	aDB := isDB.GetQueryDB(addr)
+	bucket, _ = aDB.GetBucket(db.PrefixIScore)
+	bs, _ = bucket.Get(addr.Bytes())
+	if bs != nil {
+		ia, _ = NewIScoreAccountFromBytes(bs)
+		resp.BlockHeight = ia.BlockHeight
+	} else {
+		// No Info. about account
+		return c.Send(msgQuery, &resp)
+	}
+
+	if claim != nil {
+		if ia.BlockHeight == claim.BlockHeight {
+			// already claimed in current period
+			return c.Send(msgQuery, &resp)
+		}
+		// subtract claimed I-Score
+		ia.IScore.Sub(&ia.IScore.Int, &claim.IScore.Int)
+	}
+
+	// set calculated I-Score to response
 	resp.IScore = ia.IScore
 
 	return c.Send(msgQuery, &resp)
