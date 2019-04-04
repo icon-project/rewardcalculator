@@ -10,6 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+const MaxDBCount  = 256
 
 type DBInfo struct {
 	DBRoot        string
@@ -49,7 +50,7 @@ func (dbi *DBInfo) SetBytes(bs []byte) error {
 	return nil
 }
 
-func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string, worker int) (*DBInfo, error) {
+func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string, dbCount int) (*DBInfo, error) {
 	bucket, err := globalDB.GetBucket(db.PrefixManagement)
 	if err != nil {
 		log.Panicf("Failed to get DB Information bucket\n")
@@ -67,7 +68,7 @@ func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string
 		// write Initial values. DB path, type and count
 		dbInfo.DBRoot = dbPath + "/" + dbName
 		dbInfo.DBType = dbType
-		dbInfo.DBCount = worker
+		dbInfo.DBCount = dbCount
 		value, _ := dbInfo.Bytes()
 		bucket.Set(dbInfo.ID(), value)
 	}

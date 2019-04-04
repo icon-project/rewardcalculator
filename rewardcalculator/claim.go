@@ -122,10 +122,10 @@ func (rc *rewardCalculate) updatePreCommit(blockHeight uint64, blockHash []byte,
 			claim, ok := pcMap.claimMap[ia.Address]
 			if false == ok {
 				log.Printf("Failed to update preCommit: preCommit is nil\n")
+				return
 			}
 			claim.BlockHeight = ia.BlockHeight
 			claim.IScore = ia.IScore
-			log.Printf("Update claim preCommit %s\n", claim.String())
 			return
 		}
 	}
@@ -221,10 +221,8 @@ func (rc *rewardCalculate) writePreCommit(blockHeight uint64, blockHash []byte) 
 					pc.IScore.Add(&pc.IScore.Int, &claim.IScore.Int)
 				}
 
-				log.Printf("Insert preCommit(%s) to claim DB\n", pc.String())
 				// write to claim DB
-				value := pc.Bytes()
-				bucket.Set(pc.ID(), value)
+				bucket.Set(pc.ID(), pc.Bytes())
 			}
 
 			// delete all preCommit

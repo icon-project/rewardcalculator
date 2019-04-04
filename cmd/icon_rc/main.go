@@ -13,7 +13,7 @@ type RcConfig struct {
 	DBDir        string `json:"IScoreDB"`
 	IpcAddr      string `json:"IPCAddress"`
 	ClientMode   bool   `json:"ClientMode"`
-	Worker       int    `json:"Worker"`
+	DBCount      int    `json:"DBCount"`
 	fileName     string
 	test         uint
 }
@@ -38,7 +38,7 @@ func main() {
 	flag.StringVar(&cfg.IpcAddr, "ipc", "/tmp/icon-rc.sock", "IPC channel")
 	flag.StringVar(&cfg.fileName, "config", "rc_config.json", "Reward Calculator configuration file")
 	flag.BoolVar(&cfg.ClientMode, "client", false, "Generate configuration file")
-	cfg.Worker = *flag.Int("worker", 2, "The number of I-Score calculation Worker")
+	cfg.DBCount = *flag.Int("db-count", 2, "The number of Account DB (MAX:256")
 	flag.BoolVar(&generate, "gen", false, "Generate configuration file")
 	flag.Parse()
 	cfg.Print()
@@ -62,7 +62,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	rcm, err := rewardcalculator.InitManager(cfg.ClientMode, "unix", cfg.IpcAddr, cfg.IISSDataPath, cfg.DBDir, cfg.Worker)
+	if cfg.DBCount > rewardcalculator.MaxDBCount {
+		log.Printf("Too large -db-count %d. MAX: %d", cfg.DBCount, rewardcalculator.MaxDBCount)
+	}
+
+	rcm, err := rewardcalculator.InitManager(cfg.ClientMode, "unix", cfg.IpcAddr, cfg.IISSDataPath, cfg.DBDir, cfg.DBCount)
 	if err != nil {
 		log.Panicf("Failed to start RewardCalculator manager %+v", err)
 	}

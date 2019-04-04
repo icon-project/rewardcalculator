@@ -68,7 +68,7 @@ func (m *manager) OnClose(c ipc.Connection) error {
 	return nil
 }
 
-func InitManager(clientMode bool, net string, addr string, IISSDataPath string, dbPath string, worker int) (*manager, error) {
+func InitManager(clientMode bool, net string, addr string, IISSDataPath string, dbPath string, dbCount int) (*manager, error) {
 	var err error
 	m := new(manager)
 	m.clientMode = clientMode
@@ -95,7 +95,7 @@ func InitManager(clientMode bool, net string, addr string, IISSDataPath string, 
 	m.IISSDataPath = IISSDataPath
 
 	// Initialize DB and load global options
-	m.gOpts, err = InitIScoreDB(dbPath, string(db.GoLevelDBBackend), "IScore", worker)
+	m.gOpts, err = InitIScoreDB(dbPath, string(db.GoLevelDBBackend), "IScore", dbCount)
 
 	// TODO send VERSION message
 

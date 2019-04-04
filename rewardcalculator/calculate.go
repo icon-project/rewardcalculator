@@ -9,6 +9,7 @@ import (
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
+	"golang.org/x/crypto/sha3"
 )
 
 const writeBatchCount = 10
@@ -97,7 +98,9 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 	}
 
 	// increase value
-	ia.IScore.Add(&ia.IScore.Int, &totalReward.Int)
+	if totalReward.Sign() != 0 {
+		ia.IScore.Add(&ia.IScore.Int, &totalReward.Int)
+	}
 
 	// update BlockHeight
 	ia.BlockHeight = blockHeight
@@ -106,12 +109,13 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 }
 
 func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVariable,
-	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (count uint64, entries uint64) {
+	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (uint64, uint64, []byte) {
 
 	iter, _ := readDB.GetIterator()
 	bucket, _ := writeDB.GetBucket(db.PrefixIScore)
 	batch, _ := writeDB.GetBatch()
-	entries = 0; count = 0
+	var entries, count uint64 = 0, 0
+	stateHash := make([]byte, 64)
 
 	batch.New()
 	iter.New(nil, nil)
@@ -121,7 +125,7 @@ func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVa
 		ia, err := NewIScoreAccountFromBytes(iter.Value())
 		if err != nil {
 			log.Printf("Can't read data with iterator\n")
-			return 0, 0
+			return 0, 0, nil
 		}
 		ia.Address = *common.NewAddress(key)
 
@@ -147,6 +151,9 @@ func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVa
 			bucket.Set(key, ia.Bytes())
 		}
 
+		// update stateHash
+		sha3.ShakeSum256(stateHash, ia.BytesForHash())
+
 		count++
 	}
 
@@ -166,9 +173,9 @@ func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVa
 		log.Printf("There is error while iteration. %+v", err)
 	}
 
-	//log.Printf("Calculate %d entries for prefix %v-%v %d entries\n", count, start, limit, entries)
+	//log.Printf("Calculate %d/%d. stateHash:%v\n", count, entries, stateHash)
 
-	return count, entries
+	return count, entries, stateHash
 }
 
 func (rc *rewardCalculate) preCalculate() {
@@ -238,28 +245,37 @@ func (rc *rewardCalculate) calculate(c ipc.Connection, data []byte) error {
 
 	queryDBList := iScoreDB.getQueryDBList()
 	calcDBList := iScoreDB.getCalcDBList()
+	stateHashList := make([][]byte, iScoreDB.info.DBCount)
 	for i, cDB := range calcDBList {
 		go func(read db.Database, write db.Database) {
 			defer wait.Done()
 
-			// Update all accounts in the calculate DB
-			c, e := calculateDB(read, write, opts.GV, opts.PRepCandidates, blockHeight, writeBatchCount)
+			var count, entry uint64
 
-			totalCount += c
-			totalEntry += e
+			// Update all accounts in the calculate DB
+			count, entry, stateHashList[i] = calculateDB(read, write, opts.GV, opts.PRepCandidates, blockHeight, writeBatchCount)
+
+			totalCount += count
+			totalEntry += entry
 		} (queryDBList[i], cDB)
 	}
 	wait.Wait()
 
+	// make stateHash
+	stateHash := make([]byte, 64)
+	for _, hash := range stateHashList {
+		sha3.ShakeSum256(stateHash, hash)
+	}
+
 	elapsedTime := time.Since(startTime)
-	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d for %d entries\n",
+	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d for %d entries",
 		elapsedTime, opts.db.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount, totalEntry)
 
 	// set blockHeight
 	opts.db.SetBlockHeight(blockHeight)
 
-	// TODO make stateHash and send response
-	return rc.sendCalcResponse(blockHeight, true, nil)
+	// send response
+	return rc.sendCalcResponse(blockHeight, true, stateHash)
 }
 
 func (rc *rewardCalculate) sendCalcResponse(blockHeight uint64, success bool, stateHash []byte) error {

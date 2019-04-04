@@ -254,7 +254,7 @@ func (opts *GlobalOptions) Print() {
 	log.Printf("============================================================================")
 }
 
-func InitIScoreDB(dbPath string, dbType string, dbName string, worker int) (*GlobalOptions, error) {
+func InitIScoreDB(dbPath string, dbType string, dbName string, dbCount int) (*GlobalOptions, error) {
 	gOpts := new(GlobalOptions)
 	isDB := new(IScoreDB)
 	gOpts.db = isDB
@@ -265,7 +265,7 @@ func InitIScoreDB(dbPath string, dbType string, dbName string, worker int) (*Glo
 	isDB.Global = globalDB
 
 	// read management Info.
-	isDB.info, err = NewDBInfo(globalDB, dbPath, dbType, dbName, worker)
+	isDB.info, err = NewDBInfo(globalDB, dbPath, dbType, dbName, dbCount)
 	if err != nil {
 		log.Panicf("Failed to load management Information\n")
 		return nil, err

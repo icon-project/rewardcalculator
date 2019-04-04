@@ -39,6 +39,17 @@ func (ia *IScoreAccount) Bytes() []byte {
 	return bytes
 }
 
+func (ia *IScoreAccount) BytesForHash() []byte {
+	addr := ia.ID()
+	iScore := ia.IScore.Bytes()
+	blockHeight := common.Uint64ToBytes(ia.BlockHeight)
+	buf := make([]byte, len(addr) + len(iScore) + len(blockHeight))
+	copy(buf, addr)
+	copy(buf[len(addr):], iScore)
+	copy(buf[len(addr)+len(iScore):], blockHeight)
+	return buf
+}
+
 func (ia *IScoreAccount) String() string {
 	b, err := json.Marshal(ia)
 	if err != nil {
