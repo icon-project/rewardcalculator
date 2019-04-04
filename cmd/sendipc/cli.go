@@ -18,7 +18,9 @@ const (
 	msgCommitBlock    = 4
 )
 
-type CLI struct { }
+type CLI struct {
+	id uint32
+}
 
 func Display(data interface{}) string {
 	b, err := json.Marshal(data)

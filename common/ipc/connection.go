@@ -10,12 +10,12 @@ import (
 )
 
 type MessageHandler interface {
-	HandleMessage(c Connection, msg uint, data []byte) error
+	HandleMessage(c Connection, msg uint, id uint32, data []byte) error
 }
 
 type Connection interface {
-	Send(msg uint, data interface{}) error
-	SendAndReceive(msg uint, data interface{}, buf interface{}) error
+	Send(msg uint, id uint32, data interface{}) error
+	SendAndReceive(msg uint, id uint32, data interface{}, buf interface{}) error
 	SetHandler(msg uint, handler MessageHandler)
 	HandleMessage() error
 	Close() error
@@ -34,6 +34,7 @@ type connection struct {
 
 type messageToSend struct {
 	Msg  uint
+	Id   uint32
 	Data interface{}
 }
 
@@ -45,9 +46,10 @@ func connectionFromConn(conn net.Conn) *connection {
 	return c
 }
 
-func (c *connection) Send(msg uint, data interface{}) error {
+func (c *connection) Send(msg uint, id uint32, data interface{}) error {
 	var m = messageToSend{
 		Msg:  msg,
+		Id:   id,
 		Data: data,
 	}
 	c.lock.Lock()
@@ -58,15 +60,17 @@ func (c *connection) Send(msg uint, data interface{}) error {
 
 type messageToReceive struct {
 	Msg  uint
+	Id   uint32
 	Data codec2.Raw
 }
 
-func (c *connection) SendAndReceive(msg uint, data interface{}, buffer interface{}) error {
+func (c *connection) SendAndReceive(msg uint, id uint32, data interface{}, buffer interface{}) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	var m = messageToSend{
 		Msg:  msg,
+		Id:   id,
 		Data: data,
 	}
 
@@ -100,7 +104,7 @@ func (c *connection) HandleMessage() error {
 		return nil
 	}
 
-	return handler.HandleMessage(c, m.Msg, m.Data)
+	return handler.HandleMessage(c, m.Msg, m.Id, m.Data)
 }
 
 func (c *connection) SetHandler(msg uint, handler MessageHandler) {

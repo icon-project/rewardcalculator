@@ -16,6 +16,6 @@ func (cli *CLI) calculate(conn ipc.Connection, iissData string, blockHeight uint
 	req.Path = iissData
 	req.BlockHeight = blockHeight
 
-	conn.SendAndReceive(msgCalculate, &req, &resp)
+	conn.SendAndReceive(msgCalculate, cli.id, &req, &resp)
 	fmt.Printf("CALCULATE command get response: %s\n", Display(resp))
 }

@@ -61,35 +61,35 @@ func newConnection(m *manager, c ipc.Connection) (*rewardCalculate, error) {
 	return rc, nil
 }
 
-func (rc *rewardCalculate) HandleMessage(c ipc.Connection, msg uint, data []byte) error {
+func (rc *rewardCalculate) HandleMessage(c ipc.Connection, msg uint, id uint32, data []byte) error {
 	switch msg {
 	case msgVERSION:
-		go rc.version(c, data)
+		go rc.version(c, id, data)
 	case msgClaim:
-		go rc.claim(c, data)
+		go rc.claim(c, id, data)
 	case msgQuery:
-		go rc.query(c, data)
+		go rc.query(c, id, data)
 	case msgCalculate:
-		return rc.calculate(c, data)
+		go rc.calculate(c, id, data)
 	case msgCommitBlock:
-		go rc.commitBlock(c, data)
+		go rc.commitBlock(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}
 	return nil
 }
 
-func (rc *rewardCalculate) version(c ipc.Connection, data []byte) error {
+func (rc *rewardCalculate) version(c ipc.Connection, id uint32, data []byte) error {
 	var req VersionMessage
 	req.Success = true
 	req.BlockHeight = rc.mgr.gOpts.db.info.BlockHeight
 
 	rc.mgr.gOpts.Print()
 
-	return rc.conn.Send(msgVERSION, &req)
+	return rc.conn.Send(msgVERSION, id, &req)
 }
 
-func (rc *rewardCalculate) query(c ipc.Connection, data []byte) error {
+func (rc *rewardCalculate) query(c ipc.Connection, id uint32, data []byte) error {
 	var addr common.Address
 	if _, err := codec.MP.UnmarshalFromBytes(data, &addr); err != nil {
 		return err
@@ -121,13 +121,13 @@ func (rc *rewardCalculate) query(c ipc.Connection, data []byte) error {
 		resp.BlockHeight = ia.BlockHeight
 	} else {
 		// No Info. about account
-		return c.Send(msgQuery, &resp)
+		return c.Send(msgQuery, id, &resp)
 	}
 
 	if claim != nil {
 		if ia.BlockHeight == claim.BlockHeight {
 			// already claimed in current period
-			return c.Send(msgQuery, &resp)
+			return c.Send(msgQuery, id, &resp)
 		}
 		// subtract claimed I-Score
 		ia.IScore.Sub(&ia.IScore.Int, &claim.IScore.Int)
@@ -136,5 +136,5 @@ func (rc *rewardCalculate) query(c ipc.Connection, data []byte) error {
 	// set calculated I-Score to response
 	resp.IScore = ia.IScore
 
-	return c.Send(msgQuery, &resp)
+	return c.Send(msgQuery, id, &resp)
 }

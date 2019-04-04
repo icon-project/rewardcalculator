@@ -10,14 +10,14 @@ import (
 type msgHandlerHello struct {
 }
 
-func (mh *msgHandlerHello) HandleMessage(c Connection, msg uint, data []byte) error {
+func (mh *msgHandlerHello) HandleMessage(c Connection, msg uint, id uint32, data []byte) error {
 	var buf []byte
 	_, err := codec.MP.UnmarshalFromBytes(data, &buf)
 	if err != nil {
 		log.Printf("Fail to unmarshal bytes:% X", data)
 	}
 	log.Printf("MsgHandlerHello data:%s", string(buf))
-	return c.Send(msg, "hello")
+	return c.Send(msg, id, "hello")
 }
 
 type connHandler struct {
@@ -46,7 +46,7 @@ func Test_server_self_connection(t *testing.T) {
 	}
 
 	var buf string
-	conn.SendAndReceive(1, []byte("TEST"), &buf)
+	conn.SendAndReceive(1, 0, []byte("TEST"), &buf)
 	log.Printf("Result:%s", buf)
 }
 

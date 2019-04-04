@@ -115,7 +115,7 @@ func TestServer_SetHandler(t *testing.T) {
 			return
 		}
 
-		err = conn.Send(1, []byte{0x01})
+		err = conn.Send(1, 0, []byte{0x01})
 		if err == nil {
 			t.Errorf("Connection should not be available.")
 			return

@@ -16,6 +16,6 @@ func (cli *CLI) query(conn ipc.Connection, address string) {
 
 	addr.SetString(address)
 
-	conn.SendAndReceive(msgQuery, &addr, &resp)
+	conn.SendAndReceive(msgQuery, cli.id, &addr, &resp)
 	fmt.Printf("QUERY command get response: %s\n", Display(resp))
 }

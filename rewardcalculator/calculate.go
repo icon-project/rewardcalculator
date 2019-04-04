@@ -188,7 +188,7 @@ func (rc *rewardCalculate) preCalculate() {
 	iScoreDB.resetCalcDB()
 }
 
-func (rc *rewardCalculate) calculate(c ipc.Connection, data []byte) error {
+func (rc *rewardCalculate) calculate(c ipc.Connection, id uint32, data []byte) error {
 	var req CalculateRequest
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
@@ -203,7 +203,7 @@ func (rc *rewardCalculate) calculate(c ipc.Connection, data []byte) error {
 	if req.BlockHeight <= iScoreDB.info.BlockHeight {
 		log.Printf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
 			blockHeight, iScoreDB.info.BlockHeight)
-		return rc.sendCalcResponse(blockHeight, false, nil)
+		return rc.sendCalcResponse(id, blockHeight, false, nil)
 	}
 
 	startTime := time.Now()
@@ -212,13 +212,13 @@ func (rc *rewardCalculate) calculate(c ipc.Connection, data []byte) error {
 	header, gvList, prepStatList, txList := LoadIISSData(req.Path, false)
 	if header == nil {
 		log.Printf("Calculate: Failed to load IISS data\n")
-		return rc.sendCalcResponse(blockHeight, false, nil)
+		return rc.sendCalcResponse(id, blockHeight, false, nil)
 	}
 
 	if header.BlockHeight != blockHeight {
 		log.Printf("Calculate message hash wrong block height. (request: %d, IISS data: %d)\n",
 			blockHeight, header.BlockHeight)
-		return rc.sendCalcResponse(blockHeight, false, nil)
+		return rc.sendCalcResponse(id, blockHeight, false, nil)
 	}
 
 	rc.preCalculate()
@@ -275,16 +275,16 @@ func (rc *rewardCalculate) calculate(c ipc.Connection, data []byte) error {
 	opts.db.SetBlockHeight(blockHeight)
 
 	// send response
-	return rc.sendCalcResponse(blockHeight, true, stateHash)
+	return rc.sendCalcResponse(id, blockHeight, true, stateHash)
 }
 
-func (rc *rewardCalculate) sendCalcResponse(blockHeight uint64, success bool, stateHash []byte) error {
+func (rc *rewardCalculate) sendCalcResponse(id uint32, blockHeight uint64, success bool, stateHash []byte) error {
 	var resp CalculateResponse
 	resp.BlockHeight = blockHeight
 	resp.Success = success
 	resp.StateHash = stateHash
 
-	return rc.conn.Send(msgCalculate, &resp)
+	return rc.conn.Send(msgCalculate, id, &resp)
 }
 
 // Update I-Score of account in TX list

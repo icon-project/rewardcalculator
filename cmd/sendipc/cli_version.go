@@ -10,6 +10,6 @@ import (
 func (cli *CLI) version(conn ipc.Connection) {
 	var buf rewardcalculator.VersionMessage
 
-	conn.SendAndReceive(msgVERSION, nil, &buf)
+	conn.SendAndReceive(msgVERSION, cli.id, nil, &buf)
 	fmt.Printf("VERSION command get response: %s\n", Display(buf))
 }

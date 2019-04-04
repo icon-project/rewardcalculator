@@ -18,7 +18,8 @@ func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
 	req.BlockHash = make([]byte, 8)
 	binary.BigEndian.PutUint64(req.BlockHash, blockHeight)
 
-	conn.SendAndReceive(msgClaim, &req, &resp)
+	conn.SendAndReceive(msgClaim, cli.id, &req, &resp)
+	cli.id++
 	fmt.Printf("CLAIM command get response: %s\n", Display(resp))
 
 	var commit rewardcalculator.CommitBlock
@@ -29,6 +30,6 @@ func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
 	commit.BlockHeight = blockHeight
 
 	fmt.Printf("Send COMMIT_BLOCK message: %s\n", Display(commit))
-	conn.SendAndReceive(msgCommitBlock, &commit, &commitResp)
+	conn.SendAndReceive(msgCommitBlock, cli.id, &commit, &commitResp)
 	fmt.Printf("COMMIT_BLOCK message get response: %s\n", Display(commitResp))
 }

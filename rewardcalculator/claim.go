@@ -21,7 +21,7 @@ type ResponseClaim struct {
 	IScore common.HexInt
 }
 
-func (rc *rewardCalculate) claim(c ipc.Connection, data []byte) error {
+func (rc *rewardCalculate) claim(c ipc.Connection, id uint32, data []byte) error {
 	var req ClaimMessage
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		log.Printf("Failed to deserialize CLAIM message. err=%+v", err)
@@ -35,7 +35,7 @@ func (rc *rewardCalculate) claim(c ipc.Connection, data []byte) error {
 	if pc != nil {
 		// already claimed in current block
 		resp.BlockHeight = pc.BlockHeight
-		return c.Send(msgQuery, &resp)
+		return c.Send(msgQuery, id, &resp)
 	}
 
 	var claim *Claim = nil
@@ -59,19 +59,19 @@ func (rc *rewardCalculate) claim(c ipc.Connection, data []byte) error {
 	if bs != nil {
 		ia, err = NewIScoreAccountFromBytes(bs)
 		if nil != err {
-			return c.Send(msgQuery, &resp)
+			return c.Send(msgQuery, id, &resp)
 		}
 		ia.Address = req.Address
 		resp.BlockHeight = ia.BlockHeight
 	} else {
 		// No Info. about account
-		return c.Send(msgQuery, &resp)
+		return c.Send(msgQuery, id, &resp)
 	}
 
 	if claim != nil {
 		if ia.BlockHeight == claim.BlockHeight {
 			// already claimed in current period
-			return c.Send(msgQuery, &resp)
+			return c.Send(msgQuery, id, &resp)
 		}
 		// subtract claimed I-Score
 		ia.IScore.Sub(&ia.IScore.Int, &claim.IScore.Int)
@@ -83,7 +83,7 @@ func (rc *rewardCalculate) claim(c ipc.Connection, data []byte) error {
 	// update preCommit with calculated I-Score
 	rc.updatePreCommit(req.BlockHeight, req.BlockHash, ia)
 
-	return c.Send(msgClaim, &resp)
+	return c.Send(msgClaim, id, &resp)
 }
 
 type CommitBlock struct {
@@ -92,7 +92,7 @@ type CommitBlock struct {
 	BlockHash   []byte
 }
 
-func (rc *rewardCalculate) commitBlock(c ipc.Connection, data []byte) error {
+func (rc *rewardCalculate) commitBlock(c ipc.Connection, id uint32, data []byte) error {
 	var req CommitBlock
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); nil != err {
 		return err
@@ -109,7 +109,7 @@ func (rc *rewardCalculate) commitBlock(c ipc.Connection, data []byte) error {
 	resp = req
 	resp.Success = ret
 
-	return c.Send(msgCommitBlock, &resp)
+	return c.Send(msgCommitBlock, id, &resp)
 }
 
 func (rc *rewardCalculate) updatePreCommit(blockHeight uint64, blockHash []byte, ia *IScoreAccount) {
