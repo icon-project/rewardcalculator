@@ -92,26 +92,26 @@ func (gv *IISSGovernanceVariable) SetBytes(bs []byte) error {
 
 const numPRep	= 22
 
-type IISSPRepStatData struct {
+type IISSBlockProduceInfoData struct {
 	Generator common.Address
 	Validator []common.Address
 }
 
-type IISSPRepStat struct {
+type IISSBlockProduceInfo struct {
 	BlockHeight uint64
-	IISSPRepStatData
+	IISSBlockProduceInfoData
 }
 
-func (prep  *IISSPRepStat) ID() []byte {
+func (bp *IISSBlockProduceInfo) ID() []byte {
 	bs := make([]byte, 8)
-	id := common.Uint64ToBytes(prep.BlockHeight)
+	id := common.Uint64ToBytes(bp.BlockHeight)
 	copy(bs[len(bs)-len(id):], id)
 	return bs
 }
 
-func (prep *IISSPRepStat) Bytes() ([]byte, error) {
+func (bp *IISSBlockProduceInfo) Bytes() ([]byte, error) {
 	var bytes []byte
-	if bs, err := codec.MarshalToBytes(&prep.IISSPRepStatData); err != nil {
+	if bs, err := codec.MarshalToBytes(&bp.IISSBlockProduceInfoData); err != nil {
 		return nil, err
 	} else {
 		bytes = bs
@@ -119,16 +119,16 @@ func (prep *IISSPRepStat) Bytes() ([]byte, error) {
 	return bytes, nil
 }
 
-func (prep *IISSPRepStat) String() string {
-	b, err := json.Marshal(prep)
+func (bp *IISSBlockProduceInfo) String() string {
+	b, err := json.Marshal(bp)
 	if err != nil {
 		return "Can't covert Message to json"
 	}
 	return string(b)
 }
 
-func (prep *IISSPRepStat) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, &prep.IISSPRepStatData)
+func (bp *IISSBlockProduceInfo) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, &bp.IISSBlockProduceInfoData)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (tx *IISSTX) SetBytes(bs []byte) error {
 	return nil
 }
 
-func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVariable, []*IISSPRepStat, []*IISSTX) {
+func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVariable, []*IISSBlockProduceInfo, []*IISSTX) {
 	dbPath = filepath.Clean(dbPath)
 	dbDir, dbName := filepath.Split(dbPath)
 
@@ -239,12 +239,12 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 	}
 
 	// P-Rep statistics list
-	prepStatList := make([]*IISSPRepStat, 0, numPRep)
+	prepStatList := make([]*IISSBlockProduceInfo, 0, numPRep)
 	iter, _ = iissDB.GetIterator()
 	prefix = util.BytesPrefix([]byte(db.PrefixIISSPRep))
 	iter.New(prefix.Start, prefix.Limit)
 	for entries := 0; iter.Next(); entries++ {
-		prepStat := new(IISSPRepStat)
+		prepStat := new(IISSBlockProduceInfo)
 		err = prepStat.SetBytes(iter.Value())
 		if err != nil {
 			log.Printf("Failed to read P-Rep list from IISS Data. err=%+v\n", err)

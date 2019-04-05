@@ -11,14 +11,12 @@ type Manager interface {
 	Close() error
 }
 
-
 type manager struct {
 	clientMode bool
 	server     ipc.Server
 	conn       ipc.Connection
 
-	gOpts *GlobalOptions
-	//lock   sync.Mutex		//TODO need?
+	ctx        *Context
 
 	IISSDataPath  string
 }
@@ -49,8 +47,8 @@ func (m *manager) Close() error {
 		}
 	}
 
-	// TODO stop all rewardCalculate instance
-	CloseIScoreDB(m.gOpts.db)
+	// TODO stop all msgHandler instance
+	CloseIScoreDB(m.ctx.db)
 	return nil
 }
 
@@ -95,11 +93,11 @@ func InitManager(clientMode bool, net string, addr string, IISSDataPath string, 
 	m.IISSDataPath = IISSDataPath
 
 	// Initialize DB and load global options
-	m.gOpts, err = InitIScoreDB(dbPath, string(db.GoLevelDBBackend), "IScore", dbCount)
+	m.ctx, err = NewContext(dbPath, string(db.GoLevelDBBackend), "IScore", dbCount)
 
 	// TODO send VERSION message
 
-	m.gOpts.Print()
+	m.ctx.Print()
 
 	return m, err
 }

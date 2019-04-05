@@ -6,7 +6,6 @@ import (
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"github.com/pkg/errors"
-	"sync"
 )
 
 const (
@@ -32,22 +31,13 @@ type ResponseQuery struct {
 	BlockHeight uint64
 }
 
-type preCommitMap struct {
-	BlockHeight uint64
-	BlockHash   []byte
-	claimMap map[common.Address]*Claim
-}
-
-type rewardCalculate struct {
+type msgHandler struct {
 	mgr  *manager
 	conn ipc.Connection
-
-	claimLock sync.RWMutex
-	preCommitMapList []*preCommitMap
 }
 
-func newConnection(m *manager, c ipc.Connection) (*rewardCalculate, error) {
-	rc := &rewardCalculate{
+func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
+	rc := &msgHandler{
 		mgr: m,
 		conn: c,
 	}
@@ -61,35 +51,35 @@ func newConnection(m *manager, c ipc.Connection) (*rewardCalculate, error) {
 	return rc, nil
 }
 
-func (rc *rewardCalculate) HandleMessage(c ipc.Connection, msg uint, id uint32, data []byte) error {
+func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data []byte) error {
 	switch msg {
 	case msgVERSION:
-		go rc.version(c, id, data)
+		go mh.version(c, id, data)
 	case msgClaim:
-		go rc.claim(c, id, data)
+		go mh.claim(c, id, data)
 	case msgQuery:
-		go rc.query(c, id, data)
+		go mh.query(c, id, data)
 	case msgCalculate:
-		go rc.calculate(c, id, data)
+		go mh.calculate(c, id, data)
 	case msgCommitBlock:
-		go rc.commitBlock(c, id, data)
+		go mh.commitBlock(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}
 	return nil
 }
 
-func (rc *rewardCalculate) version(c ipc.Connection, id uint32, data []byte) error {
+func (mh *msgHandler) version(c ipc.Connection, id uint32, data []byte) error {
 	var req VersionMessage
 	req.Success = true
-	req.BlockHeight = rc.mgr.gOpts.db.info.BlockHeight
+	req.BlockHeight = mh.mgr.ctx.db.info.BlockHeight
 
-	rc.mgr.gOpts.Print()
+	mh.mgr.ctx.Print()
 
-	return rc.conn.Send(msgVERSION, id, &req)
+	return c.Send(msgVERSION, id, &req)
 }
 
-func (rc *rewardCalculate) query(c ipc.Connection, id uint32, data []byte) error {
+func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 	var addr common.Address
 	if _, err := codec.MP.UnmarshalFromBytes(data, &addr); err != nil {
 		return err
@@ -97,8 +87,8 @@ func (rc *rewardCalculate) query(c ipc.Connection, id uint32, data []byte) error
 
 	var claim *Claim = nil
 	var ia *IScoreAccount = nil
-	opts := rc.mgr.gOpts
-	isDB := opts.db
+	ctx := mh.mgr.ctx
+	isDB := ctx.db
 
 	// make response
 	var resp ResponseQuery

@@ -178,8 +178,8 @@ func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVa
 	return count, entries, stateHash
 }
 
-func (rc *rewardCalculate) preCalculate() {
-	iScoreDB := rc.mgr.gOpts.db
+func preCalculate(ctx *Context) {
+	iScoreDB := ctx.db
 
 	// change calculate DB to query DB
 	iScoreDB.toggleAccountDB()
@@ -188,14 +188,25 @@ func (rc *rewardCalculate) preCalculate() {
 	iScoreDB.resetCalcDB()
 }
 
-func (rc *rewardCalculate) calculate(c ipc.Connection, id uint32, data []byte) error {
+func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error {
 	var req CalculateRequest
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
 
-	opts := rc.mgr.gOpts
-	iScoreDB := opts.db
+	success, blockHeight, stateHash := DoCalculate(mh.mgr.ctx, &req)
+
+	// send response
+	var resp CalculateResponse
+	resp.BlockHeight = blockHeight
+	resp.Success = success
+	resp.StateHash = stateHash
+
+	return c.Send(msgCalculate, id, &resp)
+}
+
+func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
+	iScoreDB := ctx.db
 	blockHeight := req.BlockHeight
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
@@ -203,7 +214,7 @@ func (rc *rewardCalculate) calculate(c ipc.Connection, id uint32, data []byte) e
 	if req.BlockHeight <= iScoreDB.info.BlockHeight {
 		log.Printf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
 			blockHeight, iScoreDB.info.BlockHeight)
-		return rc.sendCalcResponse(id, blockHeight, false, nil)
+		return false, blockHeight, nil
 	}
 
 	startTime := time.Now()
@@ -212,32 +223,32 @@ func (rc *rewardCalculate) calculate(c ipc.Connection, id uint32, data []byte) e
 	header, gvList, prepStatList, txList := LoadIISSData(req.Path, false)
 	if header == nil {
 		log.Printf("Calculate: Failed to load IISS data\n")
-		return rc.sendCalcResponse(id, blockHeight, false, nil)
+		return false, blockHeight, nil
 	}
 
 	if header.BlockHeight != blockHeight {
 		log.Printf("Calculate message hash wrong block height. (request: %d, IISS data: %d)\n",
 			blockHeight, header.BlockHeight)
-		return rc.sendCalcResponse(id, blockHeight, false, nil)
+		return false, blockHeight, nil
 	}
 
-	rc.preCalculate()
+	preCalculate(ctx)
 
 	// Update GV
-	opts.UpdateGovernanceVariable(gvList)
+	ctx.UpdateGovernanceVariable(gvList)
 
 	// Update P-Rep candidate with IISS TX(P-Rep register/unregister)
-	opts.UpdatePRepCandidate(txList)
+	ctx.UpdatePRepCandidate(txList)
 
 	//
 	// Calculate I-Score @ Account DB
 	//
 
 	// Update calculate DB with delegate TX
-	rc.calculateIISSTX(txList, blockHeight)
+	calculateIISSTX(ctx, txList, blockHeight)
 
 	// Update P-Rep reward
-	rc.calculateIISSPRepStat(prepStatList)
+	calculateIISSPRepStat(ctx, prepStatList)
 
 	var totalCount, totalEntry uint64
 	var wait sync.WaitGroup
@@ -253,7 +264,7 @@ func (rc *rewardCalculate) calculate(c ipc.Connection, id uint32, data []byte) e
 			var count, entry uint64
 
 			// Update all accounts in the calculate DB
-			count, entry, stateHashList[i] = calculateDB(read, write, opts.GV, opts.PRepCandidates, blockHeight, writeBatchCount)
+			count, entry, stateHashList[i] = calculateDB(read, write, ctx.GV, ctx.PRepCandidates, blockHeight, writeBatchCount)
 
 			totalCount += count
 			totalEntry += entry
@@ -269,34 +280,21 @@ func (rc *rewardCalculate) calculate(c ipc.Connection, id uint32, data []byte) e
 
 	elapsedTime := time.Since(startTime)
 	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d for %d entries",
-		elapsedTime, opts.db.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount, totalEntry)
+		elapsedTime, ctx.db.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount, totalEntry)
 
 	// set blockHeight
-	opts.db.SetBlockHeight(blockHeight)
+	ctx.db.SetBlockHeight(blockHeight)
 
-	// send response
-	return rc.sendCalcResponse(id, blockHeight, true, stateHash)
-}
-
-func (rc *rewardCalculate) sendCalcResponse(id uint32, blockHeight uint64, success bool, stateHash []byte) error {
-	var resp CalculateResponse
-	resp.BlockHeight = blockHeight
-	resp.Success = success
-	resp.StateHash = stateHash
-
-	return rc.conn.Send(msgCalculate, id, &resp)
+	return true, blockHeight, stateHash
 }
 
 // Update I-Score of account in TX list
-func (rc *rewardCalculate) calculateIISSTX(txList []*IISSTX, blockHeight uint64) {
-	opts := rc.mgr.gOpts
-	iDB := opts.db
-
+func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) {
 	for _, tx := range txList {
 		switch tx.DataType {
 		case TXDataTypeDelegate:
 			// get Calculate DB for account
-			aDB := iDB.GetCalculateDB(tx.Address)
+			aDB := ctx.db.GetCalculateDB(tx.Address)
 			bucket, _ := aDB.GetBucket(db.PrefixIScore)
 
 			// update I-Score
@@ -315,13 +313,13 @@ func (rc *rewardCalculate) calculateIISSTX(txList []*IISSTX, blockHeight uint64)
 				}
 
 				// get I-Score to tx.BlockHeight
-				calculateIScore(ia, opts.GV, opts.PRepCandidates, tx.BlockHeight)
+				calculateIScore(ia, ctx.GV, ctx.PRepCandidates, tx.BlockHeight)
 
 				newIA.IScore = ia.IScore
 			}
 
 			// calculate I-Score to blockHeight with updated delegation Info.
-			calculateIScore(newIA, opts.GV, opts.PRepCandidates, blockHeight)
+			calculateIScore(newIA, ctx.GV, ctx.PRepCandidates, blockHeight)
 
 			// write to account DB
 			bucket.Set(newIA.ID(), newIA.Bytes())
@@ -331,7 +329,7 @@ func (rc *rewardCalculate) calculateIISSTX(txList []*IISSTX, blockHeight uint64)
 	}
 }
 
-func (rc *rewardCalculate) calculateIISSPRepStat(prepStatList []*IISSPRepStat) {
+func calculateIISSPRepStat(ctx *Context, prepStatList []*IISSBlockProduceInfo) {
 	prepMap := make(map[common.Address]common.HexInt)
 	var genReward common.HexInt
 	for _, pRepStat := range prepStatList {
@@ -348,10 +346,8 @@ func (rc *rewardCalculate) calculateIISSPRepStat(prepStatList []*IISSPRepStat) {
 	}
 
 	for addr, reward := range prepMap {
-		iDB := rc.mgr.gOpts.db
-
 		// get Account DB for account
-		aDB := iDB.GetCalculateDB(addr)
+		aDB := ctx.db.GetCalculateDB(addr)
 		bucket, _ := aDB.GetBucket(db.PrefixIScore)
 
 		// update IScoreAccount

@@ -12,12 +12,16 @@ import (
 
 const MaxDBCount  = 256
 
-type DBInfo struct {
-	DBRoot        string
-	DBType        string
+type DBInfoData struct {
 	DBCount       int
 	BlockHeight   uint64 // BlockHeight of finished calculate message
 	QueryDBIsZero bool
+}
+
+type DBInfo struct {
+	DBRoot        string
+	DBType        string
+	DBInfoData
 }
 
 func (dbi *DBInfo) ID() []byte {
@@ -26,7 +30,7 @@ func (dbi *DBInfo) ID() []byte {
 
 func (dbi *DBInfo) Bytes() ([]byte, error) {
 	var bytes []byte
-	if bs, err := codec.MarshalToBytes(dbi); err != nil {
+	if bs, err := codec.MarshalToBytes(&dbi.DBInfoData); err != nil {
 		return nil, err
 	} else {
 		bytes = bs
@@ -43,7 +47,7 @@ func (dbi *DBInfo) String() string {
 }
 
 func (dbi *DBInfo) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, dbi)
+	_, err := codec.UnmarshalFromBytes(bs, &dbi.DBInfoData)
 	if err != nil {
 		return err
 	}
@@ -66,12 +70,14 @@ func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string
 		}
 	} else {
 		// write Initial values. DB path, type and count
-		dbInfo.DBRoot = dbPath + "/" + dbName
-		dbInfo.DBType = dbType
 		dbInfo.DBCount = dbCount
 		value, _ := dbInfo.Bytes()
 		bucket.Set(dbInfo.ID(), value)
 	}
+
+	dbInfo.DBRoot = dbPath + "/" + dbName
+	dbInfo.DBType = dbType
+
 	return dbInfo, nil
 }
 
@@ -83,7 +89,7 @@ type GVData struct {
 type GovernanceVariable struct {
 	BlockHeight uint64
 	GVData
-	RewardRep	common.HexInt
+	RewardRep	  common.HexInt
 }
 
 func (gv *GovernanceVariable) ID() []byte {

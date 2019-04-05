@@ -15,23 +15,16 @@ const (
 	NumDelegate              = 10
 )
 
-type IconDB interface {
-	ID() []byte
-	Bytes() []byte
-	String() string
-	SetBytes([]byte) error
-}
-
 type IScoreDB struct {
 	// Info. for service
 	info *DBInfo
 
 	// DB instance
-	Global db.Database
+	management    db.Database
+
+	claim         db.Database
 
 	accountLock   sync.RWMutex
-	claim         db.Database
-	claimSnapshot db.Snapshot
 	Account0      []db.Database
 	Account1      []db.Database
 }
@@ -88,39 +81,6 @@ func (idb *IScoreDB) GetClaimDB() db.Database {
 	return idb.claim
 }
 
-func (idb *IScoreDB) SetClaimDBSnapshot() {
-	snapshot, err := idb.claim.GetSnapshot()
-	if err != nil {
-		log.Printf("Failed to get snapshot of claim DB. err=%+v\n", err)
-		return
-	}
-
-	snapshot.New()
-	idb.claimSnapshot = snapshot
-}
-
-func (idb *IScoreDB) listClaimDBSnapshot(head string) {
-	log.Printf("%s : list up claim db snapshot entries\n", head)
-	// get iterator of claim DB snapshot
-	idb.claimSnapshot.NewIterator(nil, nil)
-	for idb.claimSnapshot.IterNext() {
-		// read
-		key := idb.claimSnapshot.IterKey()[len(db.PrefixIScore):]
-		claim, err := NewClaimFromBytes(idb.claimSnapshot.IterValue())
-		if err != nil {
-			log.Printf("Can't read data with claim snapshot iterator\n")
-			continue
-		}
-		claim.Address = *common.NewAddress(key)
-		log.Printf("Claim Snapshot : %s\n", claim.String())
-	}
-	idb.claimSnapshot.ReleaseIterator()
-}
-
-func (idb *IScoreDB) GetClaimDBSnapshot() db.Snapshot {
-	return idb.claimSnapshot
-}
-
 func (idb *IScoreDB) resetCalcDB() {
 	idb.accountLock.Lock()
 	defer idb.accountLock.Unlock()
@@ -151,29 +111,32 @@ func (idb *IScoreDB) SetBlockHeight(blockHeight uint64) {
 	idb.writeToDB()
 }
 func (idb *IScoreDB) writeToDB() {
-	bucket, _ := idb.Global.GetBucket(db.PrefixManagement)
+	bucket, _ := idb.management.GetBucket(db.PrefixManagement)
 	value, _ := idb.info.Bytes()
 	bucket.Set(idb.info.ID(), value)
 }
 
-type GlobalOptions struct {
+type Context struct {
 	db              *IScoreDB
+
 	PRepCandidates  map[common.Address]*PRepCandidate
 	GV              []*GovernanceVariable
+
+	preCommit       *preCommit
 }
 
 // Update Governance variable with IISS data
-func (opts *GlobalOptions) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
-	bucket, _ := opts.db.Global.GetBucket(db.PrefixGovernanceVariable)
+func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
+	bucket, _ := ctx.db.management.GetBucket(db.PrefixGovernanceVariable)
 
 	// Update GV
 	for _, gvIISS := range gvList {
 		// there is new GV
-		if  len(opts.GV) == 0 || opts.GV[len(opts.GV)-1].BlockHeight < gvIISS.BlockHeight {
+		if  len(ctx.GV) == 0 || ctx.GV[len(ctx.GV)-1].BlockHeight < gvIISS.BlockHeight {
 			gv :=  NewGVFromIISS(gvIISS)
 
 			// write to memory
-			opts.GV = append(opts.GV, gv)
+			ctx.GV = append(ctx.GV, gv)
 
 			// write to global DB
 			value, _ := gv.Bytes()
@@ -182,26 +145,26 @@ func (opts *GlobalOptions) UpdateGovernanceVariable(gvList []*IISSGovernanceVari
 	}
 
 	// delete old value
-	gvLen := len(opts.GV)
-	for i, gv := range opts.GV {
-		if i != (gvLen - 1) &&gv.BlockHeight < opts.db.info.BlockHeight {
+	gvLen := len(ctx.GV)
+	for i, gv := range ctx.GV {
+		if i != (gvLen - 1) &&gv.BlockHeight < ctx.db.info.BlockHeight {
 			// delete from global DB
 			bucket.Delete(gv.ID())
 
 			// delete from memory
-			opts.GV = opts.GV[i:]
+			ctx.GV = ctx.GV[i:]
 			break
 		}
 	}
 }
 
 // Update P-Rep candidate with IISS TX(P-Rep register/unregister)
-func (opts *GlobalOptions) UpdatePRepCandidate(txList []*IISSTX) {
+func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 	for _, tx := range txList {
 		switch tx.DataType {
 		case TXDataTypeDelegate:
 		case TXDataTypePrepReg:
-			pRep := opts.PRepCandidates[tx.Address]
+			pRep := ctx.PRepCandidates[tx.Address]
 			if pRep == nil {
 				p := new(PRepCandidate)
 				p.Address = tx.Address
@@ -209,10 +172,10 @@ func (opts *GlobalOptions) UpdatePRepCandidate(txList []*IISSTX) {
 				p.End = 0
 
 				// write to memory
-				opts.PRepCandidates[tx.Address] = p
+				ctx.PRepCandidates[tx.Address] = p
 
 				// write to global DB
-				bucket, _ := opts.db.Global.GetBucket(db.PrefixPrepCandidate)
+				bucket, _ := ctx.db.management.GetBucket(db.PrefixPrepCandidate)
 				data, _ := p.Bytes()
 				bucket.Set(p.ID(), data)
 			} else {
@@ -220,7 +183,7 @@ func (opts *GlobalOptions) UpdatePRepCandidate(txList []*IISSTX) {
 				continue
 			}
 		case TXDataTypePrepUnReg:
-			pRep := opts.PRepCandidates[tx.Address]
+			pRep := ctx.PRepCandidates[tx.Address]
 			if pRep != nil {
 				if pRep.End != 0 {
 					log.Printf("P-Rep : %s was unregistered already\n", tx.Address.String())
@@ -231,7 +194,7 @@ func (opts *GlobalOptions) UpdatePRepCandidate(txList []*IISSTX) {
 				pRep.End = tx.BlockHeight
 
 				// write to global DB
-				bucket, _ := opts.db.Global.GetBucket(db.PrefixPrepCandidate)
+				bucket, _ := ctx.db.management.GetBucket(db.PrefixPrepCandidate)
 				data, _ := pRep.Bytes()
 				bucket.Set(pRep.ID(), data)
 			} else {
@@ -242,44 +205,44 @@ func (opts *GlobalOptions) UpdatePRepCandidate(txList []*IISSTX) {
 	}
 }
 
-func (opts *GlobalOptions) Print() {
+func (ctx *Context) Print() {
 	log.Printf("============================================================================")
-	log.Printf("Global Option\n")
-	log.Printf("Management Info.: %s\n", opts.db.info.String())
-	log.Printf("Governance Variable: %d\n", len(opts.GV))
-	for i, v := range opts.GV {
+	log.Printf("Context\n")
+	log.Printf("Database Info.: %s\n", ctx.db.info.String())
+	log.Printf("Governance Variable: %d\n", len(ctx.GV))
+	for i, v := range ctx.GV {
 		log.Printf("\t%d: %s\n", i, v.String())
 	}
-	log.Printf("P-Rep candidate count : %d\n", len(opts.PRepCandidates))
+	log.Printf("P-Rep candidate count : %d\n", len(ctx.PRepCandidates))
 	log.Printf("============================================================================")
 }
 
-func InitIScoreDB(dbPath string, dbType string, dbName string, dbCount int) (*GlobalOptions, error) {
-	gOpts := new(GlobalOptions)
+func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Context, error) {
+	ctx := new(Context)
 	isDB := new(IScoreDB)
-	gOpts.db = isDB
+	ctx.db = isDB
 	var err error
 
-	// Open global DB
-	globalDB := db.Open(dbPath, dbType, dbName)
-	isDB.Global = globalDB
+	// Open management DB
+	mngDB := db.Open(dbPath, dbType, dbName)
+	isDB.management = mngDB
 
-	// read management Info.
-	isDB.info, err = NewDBInfo(globalDB, dbPath, dbType, dbName, dbCount)
+	// read DB Info.
+	isDB.info, err = NewDBInfo(mngDB, dbPath, dbType, dbName, dbCount)
 	if err != nil {
-		log.Panicf("Failed to load management Information\n")
+		log.Panicf("Failed to load DB Information\n")
 		return nil, err
 	}
 
 	// read Governance variable
-	gOpts.GV, err = LoadGovernanceVariable(globalDB, gOpts.db.info.BlockHeight)
+	ctx.GV, err = LoadGovernanceVariable(mngDB, ctx.db.info.BlockHeight)
 	if err != nil {
 		log.Printf("Failed to load GV structure\n")
 		return nil, err
 	}
 
 	// read P-Rep candidate list
-	gOpts.PRepCandidates, err = LoadPRepCandidate(globalDB)
+	ctx.PRepCandidates, err = LoadPRepCandidate(mngDB)
 	if err != nil {
 		log.Printf("Failed to load P-Rep candidate structure\n")
 		return nil, err
@@ -300,16 +263,19 @@ func InitIScoreDB(dbPath string, dbType string, dbName string, dbCount int) (*Gl
 	// Open claim DB
 	isDB.claim = db.Open(isDB.info.DBRoot, isDB.info.DBType, "claim")
 
+	// Init prCommit
+	ctx.preCommit = new(preCommit)
+
 	// TODO find IISS data and load
 
-	return gOpts, nil
+	return ctx, nil
 }
 
 func CloseIScoreDB(isDB *IScoreDB) {
 	log.Printf("Close 1 global DB and %d account DBs\n", len(isDB.Account0) + len(isDB.Account1))
 
-	// close global DB
-	isDB.Global.Close()
+	// close management DB
+	isDB.management.Close()
 
 	// close account DBs
 	for _, aDB := range isDB.Account0 {
@@ -320,4 +286,7 @@ func CloseIScoreDB(isDB *IScoreDB) {
 		aDB.Close()
 	}
 	isDB.Account1 = nil
+
+	// close claim DB
+	isDB.claim.Close()
 }
