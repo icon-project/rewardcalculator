@@ -3,7 +3,6 @@ package rewardcalculator
 import (
 	"fmt"
 	"log"
-	"os"
 	"sync"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -20,46 +19,12 @@ type IScoreDB struct {
 	info *DBInfo
 
 	// DB instance
-	management    db.Database
+	management  db.Database
+	claim       db.Database
 
-	claim         db.Database
-
-	accountLock   sync.RWMutex
-	Account0      []db.Database
-	Account1      []db.Database
-}
-
-func (idb *IScoreDB) getQueryDBList() []db.Database {
-	idb.accountLock.RLock()
-	defer idb.accountLock.RUnlock()
-	if idb.info.QueryDBIsZero {
-		return idb.Account0
-	} else {
-		return idb.Account1
-	}
-}
-
-func (idb *IScoreDB) getCalcDBList() []db.Database {
-	idb.accountLock.RLock()
-	defer idb.accountLock.RUnlock()
-	return idb._getCalcDBList()
-}
-
-func (idb *IScoreDB) _getCalcDBList() []db.Database {
-	if idb.info.QueryDBIsZero {
-		return idb.Account1
-	} else {
-		return idb.Account0
-	}
-}
-
-func (idb *IScoreDB) toggleAccountDB() {
-	idb.accountLock.Lock()
-	idb.info.QueryDBIsZero = !idb.info.QueryDBIsZero
-	idb.accountLock.Unlock()
-
-	// write to DB
-	idb.writeToDB()
+	accountLock sync.RWMutex
+	calculate   []db.Database
+	query       []db.Snapshot
 }
 
 func (idb *IScoreDB) getAccountDBIndex(address common.Address) int {
@@ -67,49 +32,64 @@ func (idb *IScoreDB) getAccountDBIndex(address common.Address) int {
 	return prefix % idb.info.DBCount
 }
 
-func (idb *IScoreDB) GetCalculateDB(address common.Address) db.Database {
-	aDB := idb.getCalcDBList()
-	return aDB[idb.getAccountDBIndex(address)]
-}
-
-func (idb *IScoreDB) GetQueryDB(address common.Address) db.Database {
-	aDB := idb.getQueryDBList()
-	return aDB[idb.getAccountDBIndex(address)]
-}
-
-func (idb *IScoreDB) GetClaimDB() db.Database {
-	return idb.claim
-}
-
-func (idb *IScoreDB) resetCalcDB() {
+func (idb *IScoreDB) setQueryDB() {
 	idb.accountLock.Lock()
 	defer idb.accountLock.Unlock()
 
-	calcDBList := idb._getCalcDBList()
-	var calcDBPostFix = 0
-	if idb.info.QueryDBIsZero {
-		calcDBPostFix = 1
+	if idb.query == nil {
+		idb.query = make([]db.Snapshot, idb.info.DBCount)
 	}
 
-	newDBList := make([]db.Database, len(calcDBList))
+	calcDBList := idb.getCalculateDBList()
+
 	for i, calcDB := range calcDBList {
-		calcDB.Close()
-		dbName := fmt.Sprintf("%d_%d_%d", i+1, idb.info.DBCount, calcDBPostFix)
-		os.RemoveAll(idb.info.DBRoot + "/" + dbName)
-		newDBList[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbName)
-	}
+		snapshot, err := calcDB.GetSnapshot()
+		if err != nil {
+			log.Printf("Failed to get snapshot of calculation DB(%d). err=%+v\n", i, err)
+			return
+		}
 
-	if idb.info.QueryDBIsZero {
-		idb.Account1 = newDBList
-	} else {
-		idb.Account0 = newDBList
+		// release old snapshot
+		if idb.query[i] != nil {
+			idb.query[i].Release()
+		}
+
+		// make new snapshot
+		snapshot.New()
+		idb.query[i] = snapshot
 	}
 }
 
-func (idb *IScoreDB) SetBlockHeight(blockHeight uint64) {
+func (idb *IScoreDB) getQueryDBList() []db.Snapshot{
+	return idb.query
+}
+
+func (idb *IScoreDB) getFromQueryDB(address common.Address) ([]byte, error) {
+	idb.accountLock.RLock()
+	defer idb.accountLock.RUnlock()
+	qDB := idb.getQueryDBList()
+	snapshot := qDB[idb.getAccountDBIndex(address)]
+	return snapshot.Get(address.Bytes())
+}
+
+func (idb *IScoreDB) getCalculateDBList() []db.Database {
+	return idb.calculate
+}
+
+func (idb *IScoreDB) getCalculateDB(address common.Address) db.Database {
+	aDB := idb.getCalculateDBList()
+	return aDB[idb.getAccountDBIndex(address)]
+}
+
+func (idb *IScoreDB) getClaimDB() db.Database {
+	return idb.claim
+}
+
+func (idb *IScoreDB) setBlockHeight(blockHeight uint64) {
 	idb.info.BlockHeight = blockHeight
 	idb.writeToDB()
 }
+
 func (idb *IScoreDB) writeToDB() {
 	bucket, _ := idb.management.GetBucket(db.PrefixManagement)
 	value, _ := idb.info.Bytes()
@@ -147,7 +127,8 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 	// delete old value
 	gvLen := len(ctx.GV)
 	for i, gv := range ctx.GV {
-		if i != (gvLen - 1) &&gv.BlockHeight < ctx.db.info.BlockHeight {
+		// FIXME check delete logic
+		if i < (gvLen - 1) && gv.BlockHeight < ctx.db.info.BlockHeight {
 			// delete from global DB
 			bucket.Delete(gv.ID())
 
@@ -248,22 +229,20 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 		return nil, err
 	}
 
-	// Open account DBs for Query and Calculate
-	isDB.Account0 = make([]db.Database, isDB.info.DBCount)
+	// Open DB for Calculate
+	isDB.calculate = make([]db.Database, isDB.info.DBCount)
 	for i := 0; i < isDB.info.DBCount; i++ {
-		dbNameTemp := fmt.Sprintf("%d_%d_0", i + 1, isDB.info.DBCount)
-		isDB.Account0[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
+		dbNameTemp := fmt.Sprintf("calculate_%d_%d", i + 1, isDB.info.DBCount)
+		isDB.calculate[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
 	}
-	isDB.Account1 = make([]db.Database, isDB.info.DBCount)
-	for i := 0; i < isDB.info.DBCount; i++ {
-		dbNameTemp := fmt.Sprintf("%d_%d_1", i + 1, isDB.info.DBCount)
-		isDB.Account1[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
-	}
+
+	// Set snapshot of Calculate DBs as query DB
+	isDB.setQueryDB()
 
 	// Open claim DB
 	isDB.claim = db.Open(isDB.info.DBRoot, isDB.info.DBType, "claim")
 
-	// Init prCommit
+	// Init preCommit
 	ctx.preCommit = new(preCommit)
 
 	// TODO find IISS data and load
@@ -272,20 +251,21 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 }
 
 func CloseIScoreDB(isDB *IScoreDB) {
-	log.Printf("Close 1 global DB and %d account DBs\n", len(isDB.Account0) + len(isDB.Account1))
+	log.Printf("Close DBs\n")
 
 	// close management DB
 	isDB.management.Close()
 
 	// close account DBs
-	for _, aDB := range isDB.Account0 {
+	for _, aDB := range isDB.calculate {
 		aDB.Close()
 	}
-	isDB.Account0 = nil
-	for _, aDB := range isDB.Account1 {
-		aDB.Close()
+	isDB.calculate = nil
+
+	for _, snaphost := range isDB.query {
+		snaphost.Release()
 	}
-	isDB.Account1 = nil
+	isDB.query = nil
 
 	// close claim DB
 	isDB.claim.Close()

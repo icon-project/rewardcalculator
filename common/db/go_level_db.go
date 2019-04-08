@@ -209,6 +209,12 @@ func (s *goLevelSnapshot) Get(key []byte) ([]byte, error) {
 	}
 }
 
+func (s *goLevelSnapshot) Release() {
+	if s.snapshot != nil {
+		s.snapshot.Release()
+	}
+}
+
 func (s *goLevelSnapshot) NewIterator(start []byte, limit []byte) {
 	if start == nil {
 		s.iter = s.snapshot.NewIterator(nil, nil)
@@ -234,8 +240,4 @@ func (s *goLevelSnapshot) IterValue() []byte {
 
 func (s *goLevelSnapshot) ReleaseIterator() {
 	s.iter.Release()
-}
-
-func (s *goLevelSnapshot) Release() {
-	s.snapshot.Release()
 }

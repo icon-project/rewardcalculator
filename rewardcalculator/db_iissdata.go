@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -190,6 +191,13 @@ func (tx *IISSTX) SetBytes(bs []byte) error {
 func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVariable, []*IISSBlockProduceInfo, []*IISSTX) {
 	dbPath = filepath.Clean(dbPath)
 	dbDir, dbName := filepath.Split(dbPath)
+
+	if _ , err := os.Stat(dbPath); err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("There is no IISS data. %s\n", dbPath)
+			return nil, nil, nil, nil
+		}
+	}
 
 	iissDB := db.Open(dbDir, string(db.GoLevelDBBackend), dbName)
 	defer iissDB.Close()

@@ -95,7 +95,7 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 	resp.Address = addr
 
 	// read from claim DB
-	cDB := isDB.GetClaimDB()
+	cDB := isDB.getClaimDB()
 	bucket, _ := cDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(addr.Bytes())
 	if bs != nil {
@@ -103,9 +103,7 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 	}
 
 	// read from account query DB
-	aDB := isDB.GetQueryDB(addr)
-	bucket, _ = aDB.GetBucket(db.PrefixIScore)
-	bs, _ = bucket.Get(addr.Bytes())
+	bs, _ = isDB.getFromQueryDB(addr)
 	if bs != nil {
 		ia, _ = NewIScoreAccountFromBytes(bs)
 		resp.BlockHeight = ia.BlockHeight

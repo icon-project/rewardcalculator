@@ -15,7 +15,6 @@ const MaxDBCount  = 256
 type DBInfoData struct {
 	DBCount       int
 	BlockHeight   uint64 // BlockHeight of finished calculate message
-	QueryDBIsZero bool
 }
 
 type DBInfo struct {
@@ -147,7 +146,7 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 
 		gv.SetBytes(iter.Value())
 		gv.BlockHeight = gvBlockHeight
-		if workingBH < gvBlockHeight {
+		if workingBH < gvBlockHeight && len(gvList) > 1 {
 			gvList = append(gvList, gv)
 		} else {
 			// overwrite
