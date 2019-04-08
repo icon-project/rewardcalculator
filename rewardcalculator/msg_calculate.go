@@ -108,37 +108,36 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 	return true
 }
 
-func calculateDB(snapshot db.Snapshot, writeDB db.Database, gvList []*GovernanceVariable,
+func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVariable,
 	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (uint64, uint64, []byte) {
 
+	iter, _ := readDB.GetIterator()
 	bucket, _ := writeDB.GetBucket(db.PrefixIScore)
 	batch, _ := writeDB.GetBatch()
 	var entries, count uint64 = 0, 0
 	stateHash := make([]byte, 64)
 
 	batch.New()
-	snapshot.NewIterator(nil, nil)
-	for entries = 0; snapshot.IterNext(); entries++ {
+	iter.New(nil, nil)
+	for entries = 0; iter.Next(); entries++ {
 		// read
-		key := snapshot.IterKey()[len(db.PrefixIScore):]
-		ia, err := NewIScoreAccountFromBytes(snapshot.IterValue())
+		key := iter.Key()[len(db.PrefixIScore):]
+		ia, err := NewIScoreAccountFromBytes(iter.Value())
 		if err != nil {
 			log.Printf("Can't read data with iterator\n")
 			return 0, 0, nil
 		}
 		ia.Address = *common.NewAddress(key)
 
-		//log.Printf("Read IA data: %s\n", ia.String())
-
 		// calculate
 		if calculateIScore(ia, gvList, pRepCandidates, blockHeight) == false {
 			continue
 		}
 
-		//log.Printf("Updated IA data: %s. I-Score: %s\n", ia.String(), ia.IScore.String())
+		//log.Printf("Updated data: %s. I-Score: %s\n", ia.String(), ia.IScore.String())
 
 		if batchCount > 0 {
-			batch.Set(snapshot.IterKey(), ia.Bytes())
+			batch.Set(iter.Key(), ia.Bytes())
 
 			// write batch to DB
 			if entries != 0 && (entries % batchCount) == 0 {
@@ -167,8 +166,12 @@ func calculateDB(snapshot db.Snapshot, writeDB db.Database, gvList []*Governance
 		batch.Reset()
 	}
 
-	// finalize iterator of snapshot
-	snapshot.ReleaseIterator()
+	// finalize iterator
+	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		log.Printf("There is error while iteration. %+v", err)
+	}
 
 	//log.Printf("Calculate %d/%d. stateHash:%v\n", count, entries, stateHash)
 
@@ -178,8 +181,11 @@ func calculateDB(snapshot db.Snapshot, writeDB db.Database, gvList []*Governance
 func preCalculate(ctx *Context) {
 	iScoreDB := ctx.db
 
-	// make new snapshot of calculate DB for query
-	iScoreDB.setQueryDB()
+	// change calculate DB to query DB
+	iScoreDB.toggleAccountDB()
+
+	// close and delete old query DB and open new calculate DB
+	iScoreDB.resetCalcDB()
 }
 
 func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error {
@@ -215,12 +221,12 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 
 	// Load IISS Data
 	header, gvList, prepStatList, txList := LoadIISSData(req.Path, false)
-	//if header == nil {
-	//	log.Printf("Calculate: Failed to load IISS data\n")
-	//	return false, blockHeight, nil
-	//}
+	if header == nil {
+		log.Printf("Calculate: Failed to load IISS data\n")
+		return false, blockHeight, nil
+	}
 
-	if req.BlockHeight != blockHeight {
+	if header.BlockHeight != blockHeight {
 		log.Printf("Calculate message hash wrong block height. (request: %d, IISS data: %d)\n",
 			blockHeight, header.BlockHeight)
 		return false, blockHeight, nil
@@ -249,10 +255,10 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 	wait.Add(iScoreDB.info.DBCount)
 
 	queryDBList := iScoreDB.getQueryDBList()
-	calcDBList := iScoreDB.getCalculateDBList()
+	calcDBList := iScoreDB.getCalcDBList()
 	stateHashList := make([][]byte, iScoreDB.info.DBCount)
 	for i, cDB := range calcDBList {
-		go func(read db.Snapshot, write db.Database) {
+		go func(read db.Database, write db.Database) {
 			defer wait.Done()
 
 			var count, entry uint64
@@ -277,7 +283,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 		elapsedTime, ctx.db.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount, totalEntry)
 
 	// set blockHeight
-	ctx.db.setBlockHeight(blockHeight)
+	ctx.db.SetBlockHeight(blockHeight)
 
 	return true, blockHeight, stateHash
 }
@@ -288,8 +294,8 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) {
 		switch tx.DataType {
 		case TXDataTypeDelegate:
 			// get Calculate DB for account
-			cDB := ctx.db.getCalculateDB(tx.Address)
-			bucket, _ := cDB.GetBucket(db.PrefixIScore)
+			aDB := ctx.db.GetCalculateDB(tx.Address)
+			bucket, _ := aDB.GetBucket(db.PrefixIScore)
 
 			// update I-Score
 			newIA := NewIScoreAccountFromIISS(tx)
@@ -340,9 +346,9 @@ func calculateIISSPRepStat(ctx *Context, prepStatList []*IISSBlockProduceInfo) {
 	}
 
 	for addr, reward := range prepMap {
-		// get Calculate DB
-		cDB := ctx.db.getCalculateDB(addr)
-		bucket, _ := cDB.GetBucket(db.PrefixIScore)
+		// get Account DB for account
+		aDB := ctx.db.GetCalculateDB(addr)
+		bucket, _ := aDB.GetBucket(db.PrefixIScore)
 
 		// update IScoreAccount
 		var ia  *IScoreAccount

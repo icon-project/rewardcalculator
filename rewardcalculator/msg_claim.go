@@ -53,15 +53,17 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	isDB := ctx.db
 
 	// read from claim DB
-	cDB := isDB.getClaimDB()
+	cDB := isDB.GetClaimDB()
 	bucket, _ := cDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(req.Address.Bytes())
 	if bs != nil {
 		claim, _ = NewClaimFromBytes(bs)
 	}
 
-	// read from query DB
-	bs, _ =  isDB.getFromQueryDB(req.Address)
+	// read from account query DB
+	aDB := isDB.GetQueryDB(req.Address)
+	bucket, _ = aDB.GetBucket(db.PrefixIScore)
+	bs, _ = bucket.Get(req.Address.Bytes())
 	if bs != nil {
 		ia, err = NewIScoreAccountFromBytes(bs)
 		if nil != err {
@@ -214,7 +216,7 @@ func (pc *preCommit) writeClaimToDB(ctx *Context, blockHeight uint64, blockHash 
 	pc.lock.Lock()
 	defer pc.lock.Unlock()
 
-	claimDB := ctx.db.getClaimDB()
+	claimDB := ctx.db.GetClaimDB()
 	bucket, _ := claimDB.GetBucket(db.PrefixIScore)
 
 	// find preCommit and write preCommit to preCommitData
