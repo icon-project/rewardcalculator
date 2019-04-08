@@ -13,6 +13,7 @@ import (
 
 const (
 	NumDelegate              = 10
+	calculateDBNameFormat    = "calculate_%d_%d_%d"
 )
 
 type IScoreDB struct {
@@ -67,17 +68,17 @@ func (idb *IScoreDB) getAccountDBIndex(address common.Address) int {
 	return prefix % idb.info.DBCount
 }
 
-func (idb *IScoreDB) GetCalculateDB(address common.Address) db.Database {
-	aDB := idb.getCalcDBList()
-	return aDB[idb.getAccountDBIndex(address)]
+func (idb *IScoreDB) getCalculateDB(address common.Address) db.Database {
+	cDB := idb.getCalcDBList()
+	return cDB[idb.getAccountDBIndex(address)]
 }
 
-func (idb *IScoreDB) GetQueryDB(address common.Address) db.Database {
-	aDB := idb.getQueryDBList()
-	return aDB[idb.getAccountDBIndex(address)]
+func (idb *IScoreDB) getQueryDB(address common.Address) db.Database {
+	qDB := idb.getQueryDBList()
+	return qDB[idb.getAccountDBIndex(address)]
 }
 
-func (idb *IScoreDB) GetClaimDB() db.Database {
+func (idb *IScoreDB) getClaimDB() db.Database {
 	return idb.claim
 }
 
@@ -94,7 +95,7 @@ func (idb *IScoreDB) resetCalcDB() {
 	newDBList := make([]db.Database, len(calcDBList))
 	for i, calcDB := range calcDBList {
 		calcDB.Close()
-		dbName := fmt.Sprintf("%d_%d_%d", i+1, idb.info.DBCount, calcDBPostFix)
+		dbName := fmt.Sprintf(calculateDBNameFormat, i+1, idb.info.DBCount, calcDBPostFix)
 		os.RemoveAll(idb.info.DBRoot + "/" + dbName)
 		newDBList[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbName)
 	}
@@ -106,10 +107,11 @@ func (idb *IScoreDB) resetCalcDB() {
 	}
 }
 
-func (idb *IScoreDB) SetBlockHeight(blockHeight uint64) {
+func (idb *IScoreDB) setBlockHeight(blockHeight uint64) {
 	idb.info.BlockHeight = blockHeight
 	idb.writeToDB()
 }
+
 func (idb *IScoreDB) writeToDB() {
 	bucket, _ := idb.management.GetBucket(db.PrefixManagement)
 	value, _ := idb.info.Bytes()
@@ -138,7 +140,7 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 			// write to memory
 			ctx.GV = append(ctx.GV, gv)
 
-			// write to global DB
+			// write to management DB
 			value, _ := gv.Bytes()
 			bucket.Set(gv.ID(), value)
 		}
@@ -146,15 +148,22 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 
 	// delete old value
 	gvLen := len(ctx.GV)
-	for i, gv := range ctx.GV {
-		if i != (gvLen - 1) &&gv.BlockHeight < ctx.db.info.BlockHeight {
-			// delete from global DB
-			bucket.Delete(gv.ID())
-
-			// delete from memory
-			ctx.GV = ctx.GV[i:]
-			break
+	deleteOld := false
+	deleteIndex := -1
+	for i := gvLen - 1; i >= 0 ; i-- {
+		if ctx.GV[i].BlockHeight < ctx.db.info.BlockHeight {
+			if deleteOld {
+				// delete from management DB
+				bucket.Delete(ctx.GV[i].ID())
+			} else {
+				deleteOld = true
+				deleteIndex = i
+			}
 		}
+	}
+	// delete old value from memory
+	if deleteOld && deleteIndex != -1 {
+		ctx.GV = ctx.GV[deleteIndex:]
 	}
 }
 
@@ -251,19 +260,19 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	// Open account DBs for Query and Calculate
 	isDB.Account0 = make([]db.Database, isDB.info.DBCount)
 	for i := 0; i < isDB.info.DBCount; i++ {
-		dbNameTemp := fmt.Sprintf("%d_%d_0", i + 1, isDB.info.DBCount)
+		dbNameTemp := fmt.Sprintf(calculateDBNameFormat, i + 1, isDB.info.DBCount, 0)
 		isDB.Account0[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
 	}
 	isDB.Account1 = make([]db.Database, isDB.info.DBCount)
 	for i := 0; i < isDB.info.DBCount; i++ {
-		dbNameTemp := fmt.Sprintf("%d_%d_1", i + 1, isDB.info.DBCount)
+		dbNameTemp := fmt.Sprintf(calculateDBNameFormat, i + 1, isDB.info.DBCount, 1)
 		isDB.Account1[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
 	}
 
 	// Open claim DB
 	isDB.claim = db.Open(isDB.info.DBRoot, isDB.info.DBType, "claim")
 
-	// Init prCommit
+	// Init preCommit
 	ctx.preCommit = new(preCommit)
 
 	// TODO find IISS data and load

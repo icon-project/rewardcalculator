@@ -95,16 +95,16 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 	resp.Address = addr
 
 	// read from claim DB
-	cDB := isDB.GetClaimDB()
+	cDB := isDB.getClaimDB()
 	bucket, _ := cDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(addr.Bytes())
 	if bs != nil {
 		claim, _ = NewClaimFromBytes(bs)
 	}
 
-	// read from account query DB
-	aDB := isDB.GetQueryDB(addr)
-	bucket, _ = aDB.GetBucket(db.PrefixIScore)
+	// read from Query DB
+	qDB := isDB.getQueryDB(addr)
+	bucket, _ = qDB.GetBucket(db.PrefixIScore)
 	bs, _ = bucket.Get(addr.Bytes())
 	if bs != nil {
 		ia, _ = NewIScoreAccountFromBytes(bs)

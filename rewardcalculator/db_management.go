@@ -131,12 +131,14 @@ func (gv *GovernanceVariable) setRewardRep() {
 
 func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVariable, error) {
 	gvCount := 0
-	gvList := make([]*GovernanceVariable, 1)
+	gvList := make([]*GovernanceVariable, 0)
 
 	iter, err := dbi.GetIterator()
 	if err != nil {
 		return nil, err
 	}
+
+	oldGV := 0
 	prefix := util.BytesPrefix([]byte(db.PrefixGovernanceVariable))
 	iter.New(prefix.Start, prefix.Limit)
 	for iter.Next() {
@@ -147,11 +149,9 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 
 		gv.SetBytes(iter.Value())
 		gv.BlockHeight = gvBlockHeight
-		if workingBH < gvBlockHeight {
-			gvList = append(gvList, gv)
-		} else {
-			// overwrite
-			gvList[0] = gv
+		gvList = append(gvList, gv)
+		if workingBH > gvBlockHeight {
+			oldGV++
 		}
 	}
 
@@ -160,6 +160,17 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 	err = iter.Error()
 	if err != nil {
 		return nil, err
+	}
+
+	// delete old GVs except last one
+	if oldGV > 0 {
+		// delete from management DB
+		bucket, _ := dbi.GetBucket(db.PrefixGovernanceVariable)
+		for i := 0; i < oldGV-1; i++ {
+			bucket.Delete(gvList[i].ID())
+		}
+		// delete from memory
+		gvList = gvList[oldGV-1:]
 	}
 
 	if gvCount == 0 {

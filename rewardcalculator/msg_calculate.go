@@ -221,12 +221,8 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 
 	// Load IISS Data
 	header, gvList, prepStatList, txList := LoadIISSData(req.Path, false)
-	if header == nil {
-		log.Printf("Calculate: Failed to load IISS data\n")
-		return false, blockHeight, nil
-	}
 
-	if header.BlockHeight != blockHeight {
+	if req.BlockHeight != blockHeight {
 		log.Printf("Calculate message hash wrong block height. (request: %d, IISS data: %d)\n",
 			blockHeight, header.BlockHeight)
 		return false, blockHeight, nil
@@ -283,7 +279,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 		elapsedTime, ctx.db.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount, totalEntry)
 
 	// set blockHeight
-	ctx.db.SetBlockHeight(blockHeight)
+	ctx.db.setBlockHeight(blockHeight)
 
 	return true, blockHeight, stateHash
 }
@@ -294,8 +290,8 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) {
 		switch tx.DataType {
 		case TXDataTypeDelegate:
 			// get Calculate DB for account
-			aDB := ctx.db.GetCalculateDB(tx.Address)
-			bucket, _ := aDB.GetBucket(db.PrefixIScore)
+			cDB := ctx.db.getCalculateDB(tx.Address)
+			bucket, _ := cDB.GetBucket(db.PrefixIScore)
 
 			// update I-Score
 			newIA := NewIScoreAccountFromIISS(tx)
@@ -347,8 +343,8 @@ func calculateIISSPRepStat(ctx *Context, prepStatList []*IISSBlockProduceInfo) {
 
 	for addr, reward := range prepMap {
 		// get Account DB for account
-		aDB := ctx.db.GetCalculateDB(addr)
-		bucket, _ := aDB.GetBucket(db.PrefixIScore)
+		cDB := ctx.db.getCalculateDB(addr)
+		bucket, _ := cDB.GetBucket(db.PrefixIScore)
 
 		// update IScoreAccount
 		var ia  *IScoreAccount
