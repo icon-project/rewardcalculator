@@ -30,7 +30,5 @@ func (cli *CLI) query(dbName string, key string) {
 
 	bucket, _ := lvlDB.GetBucket(db.PrefixGovernanceVariable)
 
-	// TODO find RC account DB
-
 	fmt.Printf("Get value %s for %s\n", queryData(bucket, key), key)
 }

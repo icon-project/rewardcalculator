@@ -211,7 +211,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
 
-	if req.BlockHeight <= iScoreDB.info.BlockHeight {
+	if blockHeight != 0 && blockHeight <= iScoreDB.info.BlockHeight {
 		log.Printf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
 			blockHeight, iScoreDB.info.BlockHeight)
 		return false, blockHeight, nil
@@ -222,10 +222,13 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 	// Load IISS Data
 	header, gvList, prepStatList, txList := LoadIISSData(req.Path, false)
 
-	if req.BlockHeight != blockHeight {
-		log.Printf("Calculate message hash wrong block height. (request: %d, IISS data: %d)\n",
-			blockHeight, header.BlockHeight)
-		return false, blockHeight, nil
+	// set block height
+	if blockHeight == 0 {
+		if header != nil {
+			blockHeight = header.BlockHeight
+		} else {
+			blockHeight = iScoreDB.info.BlockHeight + 1
+		}
 	}
 
 	preCalculate(ctx)

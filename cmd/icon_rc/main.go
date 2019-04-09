@@ -9,13 +9,13 @@ import (
 )
 
 type RcConfig struct {
-	IISSDataPath string `json:"IISSData"`
-	DBDir        string `json:"IScoreDB"`
-	IpcAddr      string `json:"IPCAddress"`
-	ClientMode   bool   `json:"ClientMode"`
-	DBCount      int    `json:"DBCount"`
-	fileName     string
-	test         uint
+	IISSDataDir string `json:"IISSData"`
+	DBDir       string `json:"IScoreDB"`
+	IpcAddr     string `json:"IPCAddress"`
+	ClientMode  bool   `json:"ClientMode"`
+	DBCount     int    `json:"DBCount"`
+	fileName    string
+	test        uint
 }
 
 func (cfg *RcConfig) Print() {
@@ -33,7 +33,7 @@ func main() {
 	var cfg RcConfig
 	var generate bool
 
-	flag.StringVar(&cfg.IISSDataPath, "iissdata", "./iissdata", "IISS Data directory")
+	flag.StringVar(&cfg.IISSDataDir, "iissdata", "./iissdata", "IISS Data directory")
 	flag.StringVar(&cfg.DBDir, "db", ".iscoredb", "I-Score database directory")
 	flag.StringVar(&cfg.IpcAddr, "ipc", "/tmp/icon-rc.sock", "IPC channel")
 	flag.StringVar(&cfg.fileName, "config", "rc_config.json", "Reward Calculator configuration file")
@@ -66,7 +66,7 @@ func main() {
 		log.Printf("Too large -db-count %d. MAX: %d", cfg.DBCount, rewardcalculator.MaxDBCount)
 	}
 
-	rcm, err := rewardcalculator.InitManager(cfg.ClientMode, "unix", cfg.IpcAddr, cfg.IISSDataPath, cfg.DBDir, cfg.DBCount)
+	rcm, err := rewardcalculator.InitManager(cfg.ClientMode, "unix", cfg.IpcAddr, cfg.IISSDataDir, cfg.DBDir, cfg.DBCount)
 	if err != nil {
 		log.Panicf("Failed to start RewardCalculator manager %+v", err)
 	}

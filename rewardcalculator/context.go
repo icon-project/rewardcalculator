@@ -275,8 +275,6 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	// Init preCommit
 	ctx.preCommit = new(preCommit)
 
-	// TODO find IISS data and load
-
 	return ctx, nil
 }
 

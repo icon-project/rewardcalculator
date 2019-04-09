@@ -3,8 +3,11 @@ package rewardcalculator
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
@@ -289,4 +292,22 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 	}
 
 	return header, gvList, prepStatList, txList
+}
+
+func findIISSData(dir string) []os.FileInfo {
+	iissData := make([]os.FileInfo, 0)
+
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.Printf("Failed to find IISS RC data. err=%+v", err)
+		return nil
+	}
+
+	for _, f := range files {
+		if f.IsDir() == true && strings.HasPrefix(f.Name(), "iiss_") == true {
+			iissData = append(iissData, f)
+		}
+	}
+
+	return iissData
 }

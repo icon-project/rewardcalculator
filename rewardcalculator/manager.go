@@ -17,8 +17,6 @@ type manager struct {
 	conn       ipc.Connection
 
 	ctx        *Context
-
-	IISSDataPath  string
 }
 
 func (m *manager) Loop() error {
@@ -66,7 +64,7 @@ func (m *manager) OnClose(c ipc.Connection) error {
 	return nil
 }
 
-func InitManager(clientMode bool, net string, addr string, IISSDataPath string, dbPath string, dbCount int) (*manager, error) {
+func InitManager(clientMode bool, net string, addr string, IISSDataDir string, dbPath string, dbCount int) (*manager, error) {
 	var err error
 	m := new(manager)
 	m.clientMode = clientMode
@@ -89,15 +87,25 @@ func InitManager(clientMode bool, net string, addr string, IISSDataPath string, 
 		m.server = srv
 	}
 
-	// set IISS Data path
-	m.IISSDataPath = IISSDataPath
-
-	// Initialize DB and load global options
+	// Initialize DB and load context values
 	m.ctx, err = NewContext(dbPath, string(db.GoLevelDBBackend), "IScore", dbCount)
 
-	// TODO send VERSION message
+	// find IISS data and calculate
+	reloadIISSData(m.ctx, IISSDataDir)
 
+	// TODO send VERSION message
 	m.ctx.Print()
 
 	return m, err
+}
+
+func reloadIISSData(ctx *Context, dir string) {
+	for _, iissdata := range findIISSData(dir) {
+		var req CalculateRequest
+		req.Path = dir + "/" + iissdata.Name()
+		req.BlockHeight = 0
+
+		log.Printf("Restore IISS Data. %s", req.Path)
+		DoCalculate(ctx, &req)
+	}
 }
