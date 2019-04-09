@@ -11,13 +11,13 @@ import (
 func (cli *CLI) prep(blockHeight uint64, generator string, validator string, delete bool) {
 	bucket, _ := cli.DB.GetBucket(db.PrefixIISSPRep)
 
-	prep := new(rewardcalculator.IISSPRepStat)
+	prep := new(rewardcalculator.IISSBlockProduceInfo)
 	prep.BlockHeight = blockHeight
 
 	key := prep.ID()
 	if delete {
 		bucket.Delete(key)
-		fmt.Printf("Delete P-Rep %d\n", prep.BlockHeight)
+		fmt.Printf("Delete P-Rep block produce Info. : %d\n", prep.BlockHeight)
 	} else {
 		if generator == "" || validator == "" {
 			fmt.Printf("Can't add P-Rep statistics. You must input GENERATOR and VLIDATOR Info.\n")

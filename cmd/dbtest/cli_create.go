@@ -24,7 +24,7 @@ func createAddress(prefix []byte) (*common.Address, error) {
 	copy(buf[len(prefix):], data)
 
 	addr := common.NewAccountAddress(buf)
-	fmt.Printf("Created an address : %s\n", addr.String())
+	//fmt.Printf("Created an address : %s\n", addr.String())
 
 	return addr, nil
 }
@@ -47,12 +47,12 @@ func createIScoreData(prefix []byte, pRepList []*rewardcalculator.PRepCandidate)
 	}
 	ia.Address = *addr
 
-	fmt.Printf("Result: %s\n", ia.String())
+	//fmt.Printf("Result: %s\n", ia.String())
 
 	return ia
 }
 
-func createData(bucket db.Bucket, prefix []byte, count int, opts *rewardcalculator.GlobalOptions) int {
+func createData(bucket db.Bucket, prefix []byte, count int, opts *rewardcalculator.Context) int {
 	pRepList := make([]*rewardcalculator.PRepCandidate, rewardcalculator.NumDelegate)
 	i := 0
 	for _, v := range opts.PRepCandidates {
@@ -70,17 +70,14 @@ func createData(bucket db.Bucket, prefix []byte, count int, opts *rewardcalculat
 			return i
 		}
 
-		key := data.ID()
-		value, _ := data.Bytes()
-
-		bucket.Set(key, value)
+		bucket.Set(data.ID(), data.Bytes())
 	}
 
 	return count
 }
 
 
-func createAccountDB(dbDir string, dbCount int, entryCount int, opts *rewardcalculator.GlobalOptions) {
+func createAccountDB(dbDir string, dbCount int, entryCount int, opts *rewardcalculator.Context) {
 	dbEntryCount := entryCount / dbCount
 	totalCount := 0
 
@@ -88,18 +85,22 @@ func createAccountDB(dbDir string, dbCount int, entryCount int, opts *rewardcalc
 	wait.Add(dbCount)
 
 	for i := 0; i < dbCount; i++ {
-		go func(index int) {
-			dbNameTemp := fmt.Sprintf("%d_%d", index + 1, dbCount)
-			lvlDB := db.Open(dbDir, DBType, dbNameTemp)
+		dbNameTemp := fmt.Sprintf("calculate_%d_%d_0", i + 1, dbCount)
+		go func(index int, dbName string) {
+			lvlDB := db.Open(dbDir, DBType, dbName)
 			defer lvlDB.Close()
 			defer wait.Done()
 
 			bucket, _ := lvlDB.GetBucket(db.PrefixIScore)
 			count := createData(bucket, []byte(strconv.FormatInt(int64(index), 16)), dbEntryCount, opts)
 
-			fmt.Printf("Create DB %s with %d entries.\n", dbNameTemp, count)
+			fmt.Printf("Create DB %s with %d entries.\n", dbName, count)
 			totalCount += count
-		} (i)
+		} (i, dbNameTemp)
+
+		dbNameTemp = fmt.Sprintf("calculate_%d_%d_1", i + 1, dbCount)
+		lvlDB := db.Open(dbDir, DBType, dbNameTemp)
+		lvlDB.Close()
 	}
 	wait.Wait()
 
@@ -122,8 +123,7 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 	bucket.Set(dbInfo.ID(), data)
 
 	// make global options
-	gOpts := new(rewardcalculator.GlobalOptions)
-	gOpts.BlockHeight = 0
+	ctx := new(rewardcalculator.Context)
 
 	// make governance variable
 	gvList := make([]*rewardcalculator.GovernanceVariable, 0)
@@ -145,7 +145,7 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 	gv.IcxPrice.Int.SetUint64(300)
 	gvList = append(gvList, gv)
 
-	gOpts.GV = gvList
+	ctx.GV = gvList
 
 	// make P-Rep candidate list
 	pRepMap := make(map[common.Address]*rewardcalculator.PRepCandidate)
@@ -157,23 +157,23 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 		pRepMap[pRep.Address] = pRep
 	}
 
-	gOpts.PRepCandidates = pRepMap
+	ctx.PRepCandidates = pRepMap
 
 	// write global options to DB
 	bucket, _ = lvlDB.GetBucket(db.PrefixGovernanceVariable)
-	for _, v := range gOpts.GV {
+	for _, v := range ctx.GV {
 		value, _ := v.Bytes()
 		bucket.Set(v.ID(), value)
 		fmt.Printf("Write Governance variables: %+v, %s\n", v.ID(), v.String())
 	}
 
 	bucket, _ = lvlDB.GetBucket(db.PrefixPrepCandidate)
-	for _, v := range gOpts.PRepCandidates {
+	for _, v := range ctx.PRepCandidates {
 		value, _ := v.Bytes()
 		bucket.Set(v.ID(), value)
 		fmt.Printf("Write P-Rep candidate: %s\n", v.String())
 	}
 
 	// create account DB
-	createAccountDB(dbDir, dbCount, entryCount, gOpts)
+	createAccountDB(dbDir, dbCount, entryCount, ctx)
 }
