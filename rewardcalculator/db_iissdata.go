@@ -212,7 +212,6 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 	}
 	if verbose {
 		log.Printf("Header: %s\n", header.String())
-		log.Printf("data : %x, %v, %b", data, data, data)
 	}
 
 	// Governance Variable

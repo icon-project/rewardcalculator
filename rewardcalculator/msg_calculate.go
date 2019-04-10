@@ -2,6 +2,7 @@ package rewardcalculator
 
 import (
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -195,6 +196,13 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	}
 
 	success, blockHeight, stateHash := DoCalculate(mh.mgr.ctx, &req)
+
+	// remove IISS data DB
+	if success == true {
+		os.RemoveAll(req.Path)
+	} else {
+		os.Rename(req.Path, req.Path + "_failed")
+	}
 
 	// send response
 	var resp CalculateResponse
