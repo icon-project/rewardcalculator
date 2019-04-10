@@ -6,15 +6,15 @@ import (
 	"github.com/icon-project/rewardcalculator/rewardcalculator"
 )
 
-func (cli *CLI) governanceVariable(blockHeight uint64, price uint64, incentive uint64) {
+func (cli *CLI) governanceVariable(blockHeight uint64, incentive uint64, reward uint64) {
 	fmt.Printf("Start set header of IISS data DB.\n")
 
 	bucket, _ := cli.DB.GetBucket(db.PrefixIISSGV)
 
 	gv := new(rewardcalculator.IISSGovernanceVariable)
 	gv.BlockHeight = blockHeight
-	gv.IcxPrice = price
 	gv.IncentiveRep = incentive
+	gv.RewardRep = reward
 
 	value, _ := gv.Bytes()
 	bucket.Set(gv.ID(), value)

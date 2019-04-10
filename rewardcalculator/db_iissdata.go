@@ -51,8 +51,8 @@ func (ih *IISSHeader) SetBytes(bs []byte) error {
 }
 
 type IISSGVData struct {
-	IcxPrice      uint64
 	IncentiveRep  uint64
+	RewardRep     uint64
 }
 
 type IISSGovernanceVariable struct {

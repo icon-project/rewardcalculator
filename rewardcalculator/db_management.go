@@ -82,14 +82,13 @@ func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string
 }
 
 type GVData struct {
-	IcxPrice      common.HexInt
-	IncentiveRep  common.HexInt
+	IncentiveRep common.HexInt
+	RewardRep    common.HexInt
 }
 
 type GovernanceVariable struct {
 	BlockHeight uint64
 	GVData
-	RewardRep	  common.HexInt
 }
 
 func (gv *GovernanceVariable) ID() []byte {
@@ -120,13 +119,7 @@ func (gv *GovernanceVariable) SetBytes(bs []byte) error {
 	if err != nil {
 		return err
 	}
-	gv.setRewardRep()
 	return nil
-}
-
-func (gv *GovernanceVariable) setRewardRep() {
-	// TODO modify RewardRep
-	gv.RewardRep = gv.IncentiveRep
 }
 
 func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVariable, error) {
@@ -183,9 +176,8 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 func NewGVFromIISS(iiss *IISSGovernanceVariable) *GovernanceVariable {
 	gv := new(GovernanceVariable)
 	gv.BlockHeight = iiss.BlockHeight
-	gv.IcxPrice.SetUint64(iiss.IcxPrice)
 	gv.IncentiveRep.SetUint64(iiss.IncentiveRep)
-	gv.setRewardRep()
+	gv.RewardRep.SetUint64(iiss.RewardRep)
 
 	return gv
 }

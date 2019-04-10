@@ -25,7 +25,7 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("\t read                                 Read the IISS data DB\n")
 	fmt.Printf("\t delete                               Delete an IISS data DB\n")
 	fmt.Printf("\t header VERSION BLOCKHEIGHT           Set VERSION and block height in header\n")
-	fmt.Printf("\t gv BLOCKHEIGHT PRICE INCENTIVE       Set governance variable\n")
+	fmt.Printf("\t gv BLOCKHEIGHT INCENTIVE RERWARD     Set governance variable\n")
 	fmt.Printf("\t prep BLOCKHEIGHT GENERATOR VALIDATOR DELETE Add P-Rep statistics at block height \n")
 	fmt.Printf("\t    GENERATOR                         Address of block generator\n")
 	fmt.Printf("\t    VALIDATOR                         Addresses of block validators which seperated by ','\n")
@@ -59,8 +59,8 @@ func (cli *CLI) Run() {
 	headerVersion := headerCmd.Uint64("version", 1, "Version of IISS data")
 	headerBlockHeight := headerCmd.Uint64("blockheight", 1, "Block height of IISS data")
 	gvBlockHeight := gvCmd.Uint64("blockheight", 0, "Block height of Governance variable")
-	gvPrice := gvCmd.Uint64("price", 1, "ICX price in cent unit")
 	gvIncentive := gvCmd.Uint64("incentive", 1, "P-Rep incentive in %")
+	gvReward := gvCmd.Uint64("reward", 1, "P-Rep reward in %")
 	prepBlockHeight := prepCmd.Uint64("blockheight", 0, "Block height of P-Rep statistics")
 	prepGenerator := prepCmd.String("generator", "", "Address of block generator")
 	prepValidator := prepCmd.String("validator", "", "Addresses of block validator")
@@ -139,7 +139,7 @@ func (cli *CLI) Run() {
 	}
 
 	if gvCmd.Parsed() {
-		cli.governanceVariable(*gvBlockHeight, *gvPrice, *gvIncentive)
+		cli.governanceVariable(*gvBlockHeight, *gvIncentive, *gvReward)
 		return
 	}
 
