@@ -1,0 +1,5 @@
+vendor
+.idea
+.iscoredb
+**/.DS_Store
+**/*.iml
