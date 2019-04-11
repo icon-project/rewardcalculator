@@ -3,6 +3,7 @@ package rewardcalculator
 import (
 	"encoding/json"
 	"log"
+	"path/filepath"
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
@@ -75,7 +76,7 @@ func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string
 		bucket.Set(dbInfo.ID(), value)
 	}
 
-	dbInfo.DBRoot = dbPath + "/" + dbName
+	dbInfo.DBRoot = filepath.Join(dbPath, dbName)
 	dbInfo.DBType = dbType
 
 	return dbInfo, nil

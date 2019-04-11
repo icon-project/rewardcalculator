@@ -1,9 +1,11 @@
 package rewardcalculator
 
 import (
+	"log"
+	"path/filepath"
+
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
-	"log"
 )
 
 type Manager interface {
@@ -102,7 +104,7 @@ func InitManager(clientMode bool, net string, addr string, IISSDataDir string, d
 func reloadIISSData(ctx *Context, dir string) {
 	for _, iissdata := range findIISSData(dir) {
 		var req CalculateRequest
-		req.Path = dir + "/" + iissdata.Name()
+		req.Path = filepath.Join(dir, iissdata.Name())
 		req.BlockHeight = 0
 
 		log.Printf("Restore IISS Data. %s", req.Path)

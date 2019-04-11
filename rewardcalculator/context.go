@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -96,7 +97,7 @@ func (idb *IScoreDB) resetCalcDB() {
 	for i, calcDB := range calcDBList {
 		calcDB.Close()
 		dbName := fmt.Sprintf(calculateDBNameFormat, i+1, idb.info.DBCount, calcDBPostFix)
-		os.RemoveAll(idb.info.DBRoot + "/" + dbName)
+		os.RemoveAll(filepath.Join(idb.info.DBRoot, dbName))
 		newDBList[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbName)
 	}
 

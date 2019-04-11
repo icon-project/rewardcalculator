@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/icon-project/rewardcalculator/common/db"
 	"os"
+	"path/filepath"
+
+	"github.com/icon-project/rewardcalculator/common/db"
 )
 
 const (
@@ -124,7 +126,7 @@ func (cli *CLI) Run() {
 	}
 
 	if deleteCmd.Parsed() {
-		path := DBDir + "/" + dbName
+		path := filepath.Join(DBDir, dbName)
 		os.RemoveAll(path)
 		fmt.Printf("Delete %s\n", path)
 		return
