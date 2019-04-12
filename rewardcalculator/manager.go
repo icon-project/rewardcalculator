@@ -8,6 +8,8 @@ import (
 	"github.com/icon-project/rewardcalculator/common/ipc"
 )
 
+const Version uint16 = 1
+
 type Manager interface {
 	Loop() error
 	Close() error
@@ -43,11 +45,9 @@ func (m *manager) Close() error {
 	} else {
 		if err := m.server.Close(); err != nil {
 			log.Printf("Failed to close IPC server err=%+v", err)
-			return err
 		}
 	}
 
-	// TODO stop all msgHandler instance
 	CloseIScoreDB(m.ctx.db)
 	return nil
 }
@@ -70,6 +70,16 @@ func InitManager(clientMode bool, net string, addr string, IISSDataDir string, d
 	var err error
 	m := new(manager)
 	m.clientMode = clientMode
+
+	// Initialize DB and load context values
+	m.ctx, err = NewContext(dbPath, string(db.GoLevelDBBackend), "IScore", dbCount)
+
+	// find IISS data and calculate
+	reloadIISSData(m.ctx, IISSDataDir)
+
+	m.ctx.Print()
+
+	// Initialize ipc channel
 	if m.clientMode {
 		// connect to server
 		conn, err := ipc.Dial(net, addr)
@@ -78,6 +88,11 @@ func InitManager(clientMode bool, net string, addr string, IISSDataDir string, d
 		}
 		m.OnConnect(conn)
 		m.conn = conn
+
+		// send VERSION message to server
+		if m.clientMode {
+			m.conn.Send(msgVERSION, 0, Version)
+		}
 	} else {
 		// IPC Server
 		srv := ipc.NewServer()
@@ -88,15 +103,6 @@ func InitManager(clientMode bool, net string, addr string, IISSDataDir string, d
 		srv.SetHandler(m)
 		m.server = srv
 	}
-
-	// Initialize DB and load context values
-	m.ctx, err = NewContext(dbPath, string(db.GoLevelDBBackend), "IScore", dbCount)
-
-	// find IISS data and calculate
-	reloadIISSData(m.ctx, IISSDataDir)
-
-	// TODO send VERSION message
-	m.ctx.Print()
 
 	return m, err
 }

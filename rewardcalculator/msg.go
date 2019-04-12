@@ -37,18 +37,18 @@ type msgHandler struct {
 }
 
 func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
-	rc := &msgHandler{
+	handler := &msgHandler{
 		mgr: m,
 		conn: c,
 	}
 
-	c.SetHandler(msgVERSION, rc)
-	c.SetHandler(msgClaim, rc)
-	c.SetHandler(msgQuery, rc)
-	c.SetHandler(msgCalculate, rc)
-	c.SetHandler(msgCommitBlock, rc)
+	c.SetHandler(msgVERSION, handler)
+	c.SetHandler(msgClaim, handler)
+	c.SetHandler(msgQuery, handler)
+	c.SetHandler(msgCalculate, handler)
+	c.SetHandler(msgCommitBlock, handler)
 
-	return rc, nil
+	return handler, nil
 }
 
 func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data []byte) error {
