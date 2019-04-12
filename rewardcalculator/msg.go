@@ -16,11 +16,6 @@ const (
 	msgCommitBlock    = 4
 )
 
-type VersionMessage struct {
-	Success     bool
-	BlockHeight uint64
-}
-
 type QueryMessage struct {
 	Address     common.Address
 }
@@ -70,13 +65,9 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 }
 
 func (mh *msgHandler) version(c ipc.Connection, id uint32, data []byte) error {
-	var req VersionMessage
-	req.Success = true
-	req.BlockHeight = mh.mgr.ctx.db.info.BlockHeight
-
 	mh.mgr.ctx.Print()
 
-	return c.Send(msgVERSION, id, &req)
+	return c.Send(msgVERSION, id, Version)
 }
 
 func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
