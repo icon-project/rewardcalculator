@@ -35,7 +35,7 @@ func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 	resp.ClaimMessage = req
 	resp.BlockHeight = blockHeight
 	if IScore != nil {
-		resp.IScore = *IScore
+		resp.IScore.Set(&IScore.Int)
 	}
 
 	return c.Send(msgClaim, id, &resp)
@@ -183,7 +183,7 @@ func (pc *preCommit) update(blockHeight uint64, blockHash []byte, ia *IScoreAcco
 				return
 			}
 			claim.BlockHeight = ia.BlockHeight
-			claim.IScore = ia.IScore
+			claim.IScore.Set(&ia.IScore.Int)
 			return
 		}
 	}

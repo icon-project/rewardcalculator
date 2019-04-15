@@ -93,8 +93,6 @@ func (gv *IISSGovernanceVariable) SetBytes(bs []byte) error {
 	return nil
 }
 
-const numPRep	= 22
-
 type IISSBlockProduceInfoData struct {
 	Generator common.Address
 	Validator []common.Address
@@ -190,7 +188,8 @@ func (tx *IISSTX) SetBytes(bs []byte) error {
 	return nil
 }
 
-func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVariable, []*IISSBlockProduceInfo, []*IISSTX) {
+func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVariable,
+	[]*IISSBlockProduceInfo, []*PRep, []*IISSTX) {
 	dbPath = filepath.Clean(dbPath)
 	dbDir, dbName := filepath.Split(dbPath)
 
@@ -202,13 +201,13 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 	data, _ := bucket.Get([]byte(""))
 	if data == nil {
 		log.Printf("There is no header data\n")
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil
 	}
 	header := new(IISSHeader)
 	err := header.SetBytes(data)
 	if err != nil {
 		log.Printf("Failed to read header from IISS Data. err=%+v\n", err)
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil
 	}
 	if verbose {
 		log.Printf("Header: %s\n", header.String())
@@ -224,7 +223,7 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 		err = gv.SetBytes(iter.Value())
 		if err != nil {
 			log.Printf("Failed to read governance variable from IISS Data(%+v). err=%+v\n", iter.Value(), err)
-			return nil, nil, nil, nil
+			return nil, nil, nil, nil, nil
 		}
 		gv.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSGV):])
 		gvList = append(gvList, gv)
@@ -240,27 +239,52 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 		}
 	}
 
-	// P-Rep statistics list
-	prepStatList := make([]*IISSBlockProduceInfo, 0, numPRep)
+	// Block produce Info.
+	bpInfoList := make([]*IISSBlockProduceInfo, 0, numMainPRep)
+	iter, _ = iissDB.GetIterator()
+	prefix = util.BytesPrefix([]byte(db.PrefixIISSBPInfo))
+	iter.New(prefix.Start, prefix.Limit)
+	for entries := 0; iter.Next(); entries++ {
+		bpInfo := new(IISSBlockProduceInfo)
+		err = bpInfo.SetBytes(iter.Value())
+		if err != nil {
+			log.Printf("Failed to read Block Produce Info. from IISS Data. err=%+v\n", err)
+			return nil, nil, nil, nil, nil
+		}
+		bpInfo.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSBPInfo):])
+		bpInfoList = append(bpInfoList, bpInfo)
+	}
+	iter.Release()
+	if verbose {
+		if len(bpInfoList) > 0 {
+			log.Printf("Block Produce Info.:\n")
+			for i, bpInfo := range bpInfoList {
+				log.Printf("\t%d: %s\n", i, bpInfo.String())
+			}
+		}
+	}
+
+	// Main/Sub P-Rep
+	prepList := make([]*PRep, 0, numPRep)
 	iter, _ = iissDB.GetIterator()
 	prefix = util.BytesPrefix([]byte(db.PrefixIISSPRep))
 	iter.New(prefix.Start, prefix.Limit)
 	for entries := 0; iter.Next(); entries++ {
-		prepStat := new(IISSBlockProduceInfo)
-		err = prepStat.SetBytes(iter.Value())
+		preps := new(PRep)
+		err = preps.SetBytes(iter.Value())
 		if err != nil {
 			log.Printf("Failed to read P-Rep list from IISS Data. err=%+v\n", err)
-			return nil, nil, nil, nil
+			return nil, nil, nil, nil, nil
 		}
-		prepStat.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSPRep):])
-		prepStatList = append(prepStatList, prepStat)
+		preps.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSPRep):])
+		prepList = append(prepList, preps)
 	}
 	iter.Release()
 	if verbose {
-		if len(prepStatList) > 0 {
-			log.Printf("P-Rep Stat:\n")
-			for i, prepStat := range prepStatList {
-				log.Printf("\t%d: %s\n", i, prepStat.String())
+		if len(prepList) > 0 {
+			log.Printf("Main/Sub P-Rep list:\n")
+			for i, preps:= range prepList {
+				log.Printf("\t%d: %s\n", i, preps.String())
 			}
 		}
 	}
@@ -275,7 +299,7 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 		err = tx.SetBytes(iter.Value())
 		if err != nil {
 			log.Printf("Failed to read TX list from IISS Data. err=%+v\n", err)
-			return nil, nil, nil, nil
+			return nil, nil, nil, nil, nil
 		}
 		tx.Index = common.BytesToUint64(iter.Key()[len(db.PrefixIISSTX):])
 		txList = append(txList, tx)
@@ -290,7 +314,7 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 		}
 	}
 
-	return header, gvList, prepStatList, txList
+	return header, gvList, bpInfoList, prepList, txList
 }
 
 func findIISSData(dir string) []os.FileInfo {

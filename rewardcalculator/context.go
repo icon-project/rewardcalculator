@@ -13,8 +13,8 @@ import (
 
 
 const (
-	NumDelegate              = 10
-	calculateDBNameFormat    = "calculate_%d_%d_%d"
+	NumDelegate           = 10
+	CalculateDBNameFormat = "calculate_%d_%d_%d"
 )
 
 type IScoreDB struct {
@@ -96,7 +96,7 @@ func (idb *IScoreDB) resetCalcDB() {
 	newDBList := make([]db.Database, len(calcDBList))
 	for i, calcDB := range calcDBList {
 		calcDB.Close()
-		dbName := fmt.Sprintf(calculateDBNameFormat, i+1, idb.info.DBCount, calcDBPostFix)
+		dbName := fmt.Sprintf(CalculateDBNameFormat, i+1, idb.info.DBCount, calcDBPostFix)
 		os.RemoveAll(filepath.Join(idb.info.DBRoot, dbName))
 		newDBList[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbName)
 	}
@@ -122,10 +122,21 @@ func (idb *IScoreDB) writeToDB() {
 type Context struct {
 	db              *IScoreDB
 
+	PRep            []*PRep
 	PRepCandidates  map[common.Address]*PRepCandidate
 	GV              []*GovernanceVariable
 
 	preCommit       *preCommit
+}
+
+func (ctx *Context) getGV(blockHeight uint64) *GovernanceVariable {
+	gvLen := len(ctx.GV)
+	for i := gvLen - 1; i >= 0; i-- {
+		if ctx.GV[i].BlockHeight < blockHeight {
+			return ctx.GV[i]
+		}
+	}
+	return nil
 }
 
 // Update Governance variable with IISS data
@@ -165,6 +176,41 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 	// delete old value from memory
 	if deleteOld && deleteIndex != -1 {
 		ctx.GV = ctx.GV[deleteIndex:]
+	}
+}
+
+// Update Main/Sub P-Rep list
+func (ctx *Context) UpdatePRep(prepList []*PRep) {
+	bucket, _ := ctx.db.management.GetBucket(db.PrefixPRep)
+
+	// Update GV
+	for _, prep := range prepList {
+		// write to memory
+		ctx.PRep = append(ctx.PRep, prep)
+
+		// write to management DB
+		value, _ := prep.Bytes()
+		bucket.Set(prep.ID(), value)
+	}
+
+	// delete old value
+	prepLen := len(ctx.PRep)
+	deleteOld := false
+	deleteIndex := -1
+	for i := prepLen - 1; i >= 0 ; i-- {
+		if ctx.PRep[i].BlockHeight < ctx.db.info.BlockHeight {
+			if deleteOld {
+				// delete from management DB
+				bucket.Delete(ctx.PRep[i].ID())
+			} else {
+				deleteOld = true
+				deleteIndex = i
+			}
+		}
+	}
+	// delete old value from memory
+	if deleteOld && deleteIndex != -1 {
+		ctx.PRep = ctx.PRep[deleteIndex:]
 	}
 }
 
@@ -217,10 +263,14 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 
 func (ctx *Context) Print() {
 	log.Printf("============================================================================")
-	log.Printf("Context\n")
+	log.Printf("Print context values\n")
 	log.Printf("Database Info.: %s\n", ctx.db.info.String())
 	log.Printf("Governance Variable: %d\n", len(ctx.GV))
 	for i, v := range ctx.GV {
+		log.Printf("\t%d: %s\n", i, v.String())
+	}
+	log.Printf("P-Rep list: %d\n", len(ctx.PRep))
+	for i, v := range ctx.PRep {
 		log.Printf("\t%d: %s\n", i, v.String())
 	}
 	log.Printf("P-Rep candidate count : %d\n", len(ctx.PRepCandidates))
@@ -261,12 +311,12 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	// Open account DBs for Query and Calculate
 	isDB.Account0 = make([]db.Database, isDB.info.DBCount)
 	for i := 0; i < isDB.info.DBCount; i++ {
-		dbNameTemp := fmt.Sprintf(calculateDBNameFormat, i + 1, isDB.info.DBCount, 0)
+		dbNameTemp := fmt.Sprintf(CalculateDBNameFormat, i + 1, isDB.info.DBCount, 0)
 		isDB.Account0[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
 	}
 	isDB.Account1 = make([]db.Database, isDB.info.DBCount)
 	for i := 0; i < isDB.info.DBCount; i++ {
-		dbNameTemp := fmt.Sprintf(calculateDBNameFormat, i + 1, isDB.info.DBCount, 1)
+		dbNameTemp := fmt.Sprintf(CalculateDBNameFormat, i + 1, isDB.info.DBCount, 1)
 		isDB.Account1[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
 	}
 

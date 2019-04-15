@@ -21,21 +21,27 @@ const (
 	// Information for management
 	PrefixManagement BucketID         = "MI"
 
-	// IISS governance variable
+	// Governance variable
 	PrefixGovernanceVariable BucketID = "GV"
 
 	// P-Rep candidate list
 	PrefixPrepCandidate BucketID      = "PC"
 
+	// Main/Sub P-Rep list
+	PrefixPRep BucketID               = "PR"
+
 	// FOR IISS data DB
 	// Header
 	PrefixIISSHeader BucketID         = "HD"
 
-	// Governance variable
-	PrefixIISSGV BucketID             = "gv"
+	// IISS Governance variable
+	PrefixIISSGV BucketID             = "GV"
 
-	// P-Rep list
-	PrefixIISSPRep BucketID           = "prep"
+	// Block Producer Info.
+	PrefixIISSBPInfo BucketID         = "BP"
+
+	// Main/Sub P-Rep list
+	PrefixIISSPRep BucketID           = "PR"
 
 	// TX
 	PrefixIISSTX BucketID             = "TX"

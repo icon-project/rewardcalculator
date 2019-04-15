@@ -115,7 +115,7 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 	}
 
 	// set calculated I-Score to response
-	resp.IScore = ia.IScore
+	resp.IScore.Set(&ia.IScore.Int)
 
 	return c.Send(msgQuery, id, &resp)
 }

@@ -3,6 +3,7 @@ package rewardcalculator
 import (
 	"encoding/json"
 	"log"
+	"math/big"
 	"path/filepath"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -11,7 +12,13 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-const MaxDBCount  = 256
+
+const (
+	MaxDBCount  = 256
+
+	numMainPRep = 22
+	numPRep = 100
+)
 
 type DBInfoData struct {
 	DBCount       int
@@ -82,14 +89,20 @@ func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string
 	return dbInfo, nil
 }
 
+var BigIntTwo = big.NewInt(2)
+var BigIntNumMainPRep = big.NewInt(numMainPRep)
+var BigIntNumPRep = big.NewInt(numPRep)
+
 type GVData struct {
-	IncentiveRep common.HexInt
-	RewardRep    common.HexInt
+	CalculatedIncentiveRep common.HexInt
+	RewardRep              common.HexInt
 }
 
 type GovernanceVariable struct {
 	BlockHeight uint64
 	GVData
+	blockProduceReward common.HexInt
+	pRepReward         common.HexInt
 }
 
 func (gv *GovernanceVariable) ID() []byte {
@@ -120,7 +133,17 @@ func (gv *GovernanceVariable) SetBytes(bs []byte) error {
 	if err != nil {
 		return err
 	}
+	gv.setReward()
 	return nil
+}
+
+func (gv *GovernanceVariable) setReward() {
+	// block produce reward
+	gv.blockProduceReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumMainPRep)
+	gv.blockProduceReward.Div(&gv.blockProduceReward.Int, BigIntTwo)
+
+	// Main/Sub P-Rep reward
+	gv.pRepReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumPRep)
 }
 
 func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVariable, error) {
@@ -177,10 +200,59 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 func NewGVFromIISS(iiss *IISSGovernanceVariable) *GovernanceVariable {
 	gv := new(GovernanceVariable)
 	gv.BlockHeight = iiss.BlockHeight
-	gv.IncentiveRep.SetUint64(iiss.IncentiveRep)
+	gv.CalculatedIncentiveRep.SetUint64(iiss.IncentiveRep)
 	gv.RewardRep.SetUint64(iiss.RewardRep)
+	gv.setReward()
 
 	return gv
+}
+
+type PRepDelegationInfo struct {
+	Address         common.Address
+	DelegatedAmount common.HexInt
+}
+
+type PRepData struct {
+	TotalDelegation common.HexInt
+	List []PRepDelegationInfo
+}
+
+type PRep struct {
+	BlockHeight uint64
+	PRepData
+}
+
+func (bp *PRep) ID() []byte {
+	bs := make([]byte, 8)
+	id := common.Uint64ToBytes(bp.BlockHeight)
+	copy(bs[len(bs)-len(id):], id)
+	return bs
+}
+
+func (bp *PRep) Bytes() ([]byte, error) {
+	var bytes []byte
+	if bs, err := codec.MarshalToBytes(&bp.PRepData); err != nil {
+		return nil, err
+	} else {
+		bytes = bs
+	}
+	return bytes, nil
+}
+
+func (bp *PRep) String() string {
+	b, err := json.Marshal(bp)
+	if err != nil {
+		return "Can't covert Message to json"
+	}
+	return string(b)
+}
+
+func (bp *PRep) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, &bp.PRepData)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type PRepCandidateData struct {
