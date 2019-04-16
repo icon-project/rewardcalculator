@@ -18,6 +18,11 @@ type RcConfig struct {
 	test        uint
 }
 
+var (
+	version = "unknown"
+	build   = "unknown"
+)
+
 func (cfg *RcConfig) Print() {
 	b, err := json.Marshal(cfg)
 	if err != nil {
@@ -32,6 +37,9 @@ func (cfg *RcConfig) Print() {
 func main() {
 	var cfg RcConfig
 	var generate bool
+
+	log.Printf("Version : %s", version)
+	log.Printf("Build   : %s", build)
 
 	flag.StringVar(&cfg.IISSDataDir, "iissdata", "./iissdata", "IISS Data directory")
 	flag.StringVar(&cfg.DBDir, "db", ".iscoredb", "I-Score database directory")
