@@ -50,7 +50,7 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 
 	var ia *IScoreAccount = nil
 	var err error
-	isDB := ctx.db
+	isDB := ctx.DB
 
 	// read from claim DB
 	cDB := isDB.getClaimDB()
@@ -216,7 +216,7 @@ func (pc *preCommit) writeClaimToDB(ctx *Context, blockHeight uint64, blockHash 
 	pc.lock.Lock()
 	defer pc.lock.Unlock()
 
-	claimDB := ctx.db.getClaimDB()
+	claimDB := ctx.DB.getClaimDB()
 	bucket, _ := claimDB.GetBucket(db.PrefixIScore)
 
 	// find preCommit and write preCommit to preCommitData

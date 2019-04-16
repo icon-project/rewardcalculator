@@ -28,10 +28,14 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("\t delete                               Delete an IISS data DB\n")
 	fmt.Printf("\t header VERSION BLOCKHEIGHT           Set VERSION and block height in header\n")
 	fmt.Printf("\t gv BLOCKHEIGHT INCENTIVE RERWARD     Set governance variable\n")
-	fmt.Printf("\t prep BLOCKHEIGHT GENERATOR VALIDATOR DELETE Add P-Rep statistics at block height \n")
+	fmt.Printf("\t bp BLOCKHEIGHT GENERATOR VALIDATOR DELETE Add/delete Block produce Info.\n")
 	fmt.Printf("\t    GENERATOR                         Address of block generator\n")
 	fmt.Printf("\t    VALIDATOR                         Addresses of block validators which seperated by ','\n")
-	fmt.Printf("\t    DELETE                            Delete P-Rep statistics\n")
+	fmt.Printf("\t    DELETE                            Delete Block produce Info.\n")
+	fmt.Printf("\t prep BLOCKHEIGHT PREPLIST DELEGATIONLIST DELETE     Add/delete P-Rep list\n")
+	fmt.Printf("\t    PREPLIST                          Addresses of Main/Sub P-Rep which seperated by ','\n")
+	fmt.Printf("\t    DELEGATIONLIST                    Delegation amount list of Main/Sub P-Rep which seperated by ','\n")
+	fmt.Printf("\t    DELETE                            Delete P-Rep list\n")
 	fmt.Printf("\t tx ADDR BLOCKHEIGHT TYPE DATA        Directory where the IISS data DB is located\n")
 	fmt.Printf("\t    DATA                              DATA should be one of followings\n")
 	fmt.Printf("\t        DELEGATE_ADDR DELEGATE        delegation address and delegation amount\n")
@@ -55,18 +59,27 @@ func (cli *CLI) Run() {
 	deleteCmd := flag.NewFlagSet("delete", flag.ExitOnError)
 	headerCmd := flag.NewFlagSet("header", flag.ExitOnError)
 	gvCmd := flag.NewFlagSet("gv", flag.ExitOnError)
+	bpCmd := flag.NewFlagSet("bp", flag.ExitOnError)
 	prepCmd := flag.NewFlagSet("prep", flag.ExitOnError)
 	txCmd := flag.NewFlagSet("tx", flag.ExitOnError)
 
 	headerVersion := headerCmd.Uint64("version", 1, "Version of IISS data")
 	headerBlockHeight := headerCmd.Uint64("blockheight", 1, "Block height of IISS data")
+
 	gvBlockHeight := gvCmd.Uint64("blockheight", 0, "Block height of Governance variable")
 	gvIncentive := gvCmd.Uint64("incentive", 1, "P-Rep incentive in %")
 	gvReward := gvCmd.Uint64("reward", 1, "P-Rep reward in %")
-	prepBlockHeight := prepCmd.Uint64("blockheight", 0, "Block height of P-Rep statistics")
-	prepGenerator := prepCmd.String("generator", "", "Address of block generator")
-	prepValidator := prepCmd.String("validator", "", "Addresses of block validator")
-	prepDelete := prepCmd.Bool("delete", false, "Delete P-Rep Statistics")
+
+	bpBlockHeight := bpCmd.Uint64("blockheight", 0, "Block height of Block produce Info.")
+	bpGenerator := bpCmd.String("generator", "", "Address of block generator")
+	bpValidator := bpCmd.String("validator", "", "Addresses of block validator")
+	bpDelete := bpCmd.Bool("delete", false, "Delete P-Rep Statistics")
+
+	prepBlockHeight := prepCmd.Uint64("blockheight", 0, "Block height of P-Rep list")
+	prepList := prepCmd.String("preplist", "", "Addresses of Main/Sub P-Rep")
+	prepDelegationList := prepCmd.String("delegationlist", "", "Delegation amount of Main/Sub P-Rep")
+	prepDelete := prepCmd.Bool("delete", false, "Delete P-Rep list")
+
 	txIndex := txCmd.Uint64("index", 0, "TX index")
 	txAddress := txCmd.String("address", "", "TX owner address")
 	txBlockHeight := txCmd.Uint64("blockheight", 0, "Block height of TX")
@@ -101,6 +114,12 @@ func (cli *CLI) Run() {
 			gvCmd.Usage()
 			os.Exit(1)
 		}
+	case "bp":
+		err := bpCmd.Parse(os.Args[3:])
+		if err != nil {
+			bpCmd.Usage()
+			os.Exit(1)
+		}
 	case "prep":
 		err := prepCmd.Parse(os.Args[3:])
 		if err != nil {
@@ -114,6 +133,7 @@ func (cli *CLI) Run() {
 			os.Exit(1)
 		}
 	default:
+		fmt.Printf("Unknown command : %s\n", cmd)
 		cli.printUsage()
 		os.Exit(1)
 	}
@@ -145,8 +165,13 @@ func (cli *CLI) Run() {
 		return
 	}
 
+	if bpCmd.Parsed() {
+		cli.bp(*bpBlockHeight, *bpGenerator, *bpValidator, *bpDelete)
+		return
+	}
+
 	if prepCmd.Parsed() {
-		cli.prep(*prepBlockHeight, *prepGenerator, *prepValidator, *prepDelete)
+		cli.prep(*prepBlockHeight, *prepList, *prepDelegationList, *prepDelete)
 		return
 	}
 

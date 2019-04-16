@@ -48,7 +48,7 @@ func (m *manager) Close() error {
 		}
 	}
 
-	CloseIScoreDB(m.ctx.db)
+	CloseIScoreDB(m.ctx.DB)
 	return nil
 }
 

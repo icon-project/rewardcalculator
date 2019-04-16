@@ -76,10 +76,14 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 		return err
 	}
 
+	resp := DoQuery(mh.mgr.ctx, addr)
+	return c.Send(msgQuery, id, &resp)
+}
+
+func DoQuery(ctx *Context, addr common.Address) *ResponseQuery {
 	var claim *Claim = nil
 	var ia *IScoreAccount = nil
-	ctx := mh.mgr.ctx
-	isDB := ctx.db
+	isDB := ctx.DB
 
 	// make response
 	var resp ResponseQuery
@@ -102,13 +106,13 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 		resp.BlockHeight = ia.BlockHeight
 	} else {
 		// No Info. about account
-		return c.Send(msgQuery, id, &resp)
+		return &resp
 	}
 
 	if claim != nil {
 		if ia.BlockHeight == claim.BlockHeight {
 			// already claimed in current period
-			return c.Send(msgQuery, id, &resp)
+			return &resp
 		}
 		// subtract claimed I-Score
 		ia.IScore.Sub(&ia.IScore.Int, &claim.IScore.Int)
@@ -117,5 +121,5 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 	// set calculated I-Score to response
 	resp.IScore.Set(&ia.IScore.Int)
 
-	return c.Send(msgQuery, id, &resp)
+	return &resp
 }

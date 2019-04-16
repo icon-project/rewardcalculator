@@ -63,6 +63,7 @@ func (dbi *DBInfo) SetBytes(bs []byte) error {
 }
 
 func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string, dbCount int) (*DBInfo, error) {
+	writeToDB := false
 	bucket, err := globalDB.GetBucket(db.PrefixManagement)
 	if err != nil {
 		log.Panicf("Failed to get DB Information bucket\n")
@@ -77,14 +78,20 @@ func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string
 			return nil, err
 		}
 	} else {
-		// write Initial values. DB path, type and count
+		// set DB count
 		dbInfo.DBCount = dbCount
-		value, _ := dbInfo.Bytes()
-		bucket.Set(dbInfo.ID(), value)
+
+		writeToDB = true
 	}
 
 	dbInfo.DBRoot = filepath.Join(dbPath, dbName)
 	dbInfo.DBType = dbType
+
+	// Write to management DB
+	if writeToDB {
+		value, _ := dbInfo.Bytes()
+		bucket.Set(dbInfo.ID(), value)
+	}
 
 	return dbInfo, nil
 }
@@ -255,6 +262,34 @@ func (bp *PRep) SetBytes(bs []byte) error {
 	return nil
 }
 
+func LoadPRep(dbi db.Database) ([]*PRep, error) {
+	pRepList := make([]*PRep, 0)
+
+	iter, err := dbi.GetIterator()
+	if err != nil {
+		return nil, err
+	}
+	prefix := util.BytesPrefix([]byte(db.PrefixPRep))
+	iter.New(prefix.Start, prefix.Limit)
+	for iter.Next() {
+		pRep := new(PRep)
+		// read
+		blockHeight := common.BytesToUint64(iter.Key()[len(db.PrefixPRep):])
+		pRep.SetBytes(iter.Value())
+		pRep.BlockHeight = blockHeight
+		pRepList = append(pRepList, pRep)
+	}
+
+	// finalize iterator
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		return nil, err
+	}
+
+	return pRepList, nil
+}
+
 type PRepCandidateData struct {
 	Start uint64
 	End   uint64	// 0 means that did not unregister
@@ -302,12 +337,12 @@ func LoadPRepCandidate(dbi db.Database) (map[common.Address]*PRepCandidate, erro
 	if err != nil {
 		return nil, err
 	}
-	prefix := util.BytesPrefix([]byte(db.PrefixPrepCandidate))
+	prefix := util.BytesPrefix([]byte(db.PrefixPRepCandidate))
 	iter.New(prefix.Start, prefix.Limit)
 	for iter.Next() {
 		pRep := new(PRepCandidate)
 		// read
-		addr := common.NewAddress(iter.Key()[len(db.PrefixPrepCandidate):])
+		addr := common.NewAddress(iter.Key()[len(db.PrefixPRepCandidate):])
 		pRep.SetBytes(iter.Value())
 		pRep.Address = *addr
 		pRepMap[*addr] = pRep

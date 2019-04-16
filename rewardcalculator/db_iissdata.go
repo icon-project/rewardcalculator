@@ -200,7 +200,7 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 	bucket, _ := iissDB.GetBucket(db.PrefixIISSHeader)
 	data, _ := bucket.Get([]byte(""))
 	if data == nil {
-		log.Printf("There is no header data\n")
+		log.Printf("There is no header data in IISS data\n")
 		return nil, nil, nil, nil, nil
 	}
 	header := new(IISSHeader)
@@ -322,7 +322,6 @@ func findIISSData(dir string) []os.FileInfo {
 
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		log.Printf("Failed to find IISS RC data. err=%+v", err)
 		return nil
 	}
 

@@ -182,7 +182,7 @@ func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVa
 }
 
 func preCalculate(ctx *Context) {
-	iScoreDB := ctx.db
+	iScoreDB := ctx.DB
 
 	// change calculate DB to query DB
 	iScoreDB.toggleAccountDB()
@@ -216,7 +216,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 }
 
 func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
-	iScoreDB := ctx.db
+	iScoreDB := ctx.DB
 	blockHeight := req.BlockHeight
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
@@ -262,7 +262,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 	wait.Add(iScoreDB.info.DBCount)
 
 	queryDBList := iScoreDB.getQueryDBList()
-	calcDBList := iScoreDB.getCalcDBList()
+	calcDBList := iScoreDB.GetCalcDBList()
 	stateHashList := make([][]byte, iScoreDB.info.DBCount)
 	for i, cDB := range calcDBList {
 		go func(read db.Database, write db.Database) {
@@ -296,10 +296,10 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 
 	elapsedTime := time.Since(startTime)
 	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d for %d entries",
-		elapsedTime, ctx.db.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount, totalEntry)
+		elapsedTime, ctx.DB.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount, totalEntry)
 
 	// set blockHeight
-	ctx.db.setBlockHeight(blockHeight)
+	ctx.DB.setBlockHeight(blockHeight)
 
 	return true, blockHeight, stateHash
 }
@@ -310,7 +310,7 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) {
 		switch tx.DataType {
 		case TXDataTypeDelegate:
 			// get Calculate DB for account
-			cDB := ctx.db.getCalculateDB(tx.Address)
+			cDB := ctx.DB.getCalculateDB(tx.Address)
 			bucket, _ := cDB.GetBucket(db.PrefixIScore)
 
 			// update I-Score
@@ -381,7 +381,7 @@ func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo,
 	// write to account DB
 	for addr, reward := range bpMap {
 		// get Account DB for account
-		cDB := ctx.db.getCalculateDB(addr)
+		cDB := ctx.DB.getCalculateDB(addr)
 		bucket, _ := cDB.GetBucket(db.PrefixIScore)
 
 		// update IScoreAccount
@@ -418,7 +418,7 @@ func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo,
 
 // Calculate Main/Sub P-Rep reward
 func calculatePRepReward(ctx *Context, to uint64) {
-	start := ctx.db.info.BlockHeight
+	start := ctx.DB.info.BlockHeight
 	end := to
 
 	// calculate for PRep list
@@ -478,7 +478,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 	// write to account DB
 	for i, dgInfo := range prep.List {
 		// get Account DB for account
-		cDB := ctx.db.getCalculateDB(dgInfo.Address)
+		cDB := ctx.DB.getCalculateDB(dgInfo.Address)
 		bucket, _ := cDB.GetBucket(db.PrefixIScore)
 
 		// update IScoreAccount

@@ -41,7 +41,7 @@ func (idb *IScoreDB) getQueryDBList() []db.Database {
 	}
 }
 
-func (idb *IScoreDB) getCalcDBList() []db.Database {
+func (idb *IScoreDB) GetCalcDBList() []db.Database {
 	idb.accountLock.RLock()
 	defer idb.accountLock.RUnlock()
 	return idb._getCalcDBList()
@@ -70,7 +70,7 @@ func (idb *IScoreDB) getAccountDBIndex(address common.Address) int {
 }
 
 func (idb *IScoreDB) getCalculateDB(address common.Address) db.Database {
-	cDB := idb.getCalcDBList()
+	cDB := idb.GetCalcDBList()
 	return cDB[idb.getAccountDBIndex(address)]
 }
 
@@ -120,7 +120,7 @@ func (idb *IScoreDB) writeToDB() {
 }
 
 type Context struct {
-	db              *IScoreDB
+	DB              *IScoreDB
 
 	PRep            []*PRep
 	PRepCandidates  map[common.Address]*PRepCandidate
@@ -141,7 +141,7 @@ func (ctx *Context) getGV(blockHeight uint64) *GovernanceVariable {
 
 // Update Governance variable with IISS data
 func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
-	bucket, _ := ctx.db.management.GetBucket(db.PrefixGovernanceVariable)
+	bucket, _ := ctx.DB.management.GetBucket(db.PrefixGovernanceVariable)
 
 	// Update GV
 	for _, gvIISS := range gvList {
@@ -163,7 +163,7 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 	deleteOld := false
 	deleteIndex := -1
 	for i := gvLen - 1; i >= 0 ; i-- {
-		if ctx.GV[i].BlockHeight < ctx.db.info.BlockHeight {
+		if ctx.GV[i].BlockHeight < ctx.DB.info.BlockHeight {
 			if deleteOld {
 				// delete from management DB
 				bucket.Delete(ctx.GV[i].ID())
@@ -181,7 +181,7 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 
 // Update Main/Sub P-Rep list
 func (ctx *Context) UpdatePRep(prepList []*PRep) {
-	bucket, _ := ctx.db.management.GetBucket(db.PrefixPRep)
+	bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRep)
 
 	// Update GV
 	for _, prep := range prepList {
@@ -198,7 +198,7 @@ func (ctx *Context) UpdatePRep(prepList []*PRep) {
 	deleteOld := false
 	deleteIndex := -1
 	for i := prepLen - 1; i >= 0 ; i-- {
-		if ctx.PRep[i].BlockHeight < ctx.db.info.BlockHeight {
+		if ctx.PRep[i].BlockHeight < ctx.DB.info.BlockHeight {
 			if deleteOld {
 				// delete from management DB
 				bucket.Delete(ctx.PRep[i].ID())
@@ -231,7 +231,7 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 				ctx.PRepCandidates[tx.Address] = p
 
 				// write to global DB
-				bucket, _ := ctx.db.management.GetBucket(db.PrefixPrepCandidate)
+				bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRepCandidate)
 				data, _ := p.Bytes()
 				bucket.Set(p.ID(), data)
 			} else {
@@ -250,7 +250,7 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 				pRep.End = tx.BlockHeight
 
 				// write to global DB
-				bucket, _ := ctx.db.management.GetBucket(db.PrefixPrepCandidate)
+				bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRepCandidate)
 				data, _ := pRep.Bytes()
 				bucket.Set(pRep.ID(), data)
 			} else {
@@ -264,7 +264,7 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 func (ctx *Context) Print() {
 	log.Printf("============================================================================")
 	log.Printf("Print context values\n")
-	log.Printf("Database Info.: %s\n", ctx.db.info.String())
+	log.Printf("Database Info.: %s\n", ctx.DB.info.String())
 	log.Printf("Governance Variable: %d\n", len(ctx.GV))
 	for i, v := range ctx.GV {
 		log.Printf("\t%d: %s\n", i, v.String())
@@ -280,7 +280,7 @@ func (ctx *Context) Print() {
 func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Context, error) {
 	ctx := new(Context)
 	isDB := new(IScoreDB)
-	ctx.db = isDB
+	ctx.DB = isDB
 	var err error
 
 	// Open management DB
@@ -295,9 +295,16 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	}
 
 	// read Governance variable
-	ctx.GV, err = LoadGovernanceVariable(mngDB, ctx.db.info.BlockHeight)
+	ctx.GV, err = LoadGovernanceVariable(mngDB, ctx.DB.info.BlockHeight)
 	if err != nil {
 		log.Printf("Failed to load GV structure\n")
+		return nil, err
+	}
+
+	// read P-Rep
+	ctx.PRep, err = LoadPRep(mngDB)
+	if err != nil {
+		log.Printf("Failed to load P-Rep structure\n")
 		return nil, err
 	}
 

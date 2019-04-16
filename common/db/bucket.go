@@ -25,7 +25,7 @@ const (
 	PrefixGovernanceVariable BucketID = "GV"
 
 	// P-Rep candidate list
-	PrefixPrepCandidate BucketID      = "PC"
+	PrefixPRepCandidate BucketID      = "PC"
 
 	// Main/Sub P-Rep list
 	PrefixPRep BucketID               = "PR"
