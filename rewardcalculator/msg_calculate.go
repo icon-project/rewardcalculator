@@ -366,6 +366,10 @@ func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo,
 		bpMap[bpInfo.Generator] = generator
 
 		// set block validator reward value
+		if len(bpInfo.Validator) == 0 {
+			continue
+		}
+
 		var valReward common.HexInt
 		valCount := common.NewHexInt(int64(len(bpInfo.Validator)))
 		valReward.Div(&gv.blockProduceReward.Int, &valCount.Int)
@@ -423,6 +427,10 @@ func calculatePRepReward(ctx *Context, to uint64) {
 
 	// calculate for PRep list
 	for i, prep := range ctx.PRep {
+		if prep.TotalDelegation.Sign() == 0 {
+			// there is no delegations, check next
+			continue
+		}
 		var s, e = start, end
 
 		if s < prep.BlockHeight {
