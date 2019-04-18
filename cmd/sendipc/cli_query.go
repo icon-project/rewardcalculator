@@ -10,12 +10,14 @@ import (
 
 
 
-func (cli *CLI) query(conn ipc.Connection, address string) {
+func (cli *CLI) query(conn ipc.Connection, address string) *rewardcalculator.ResponseQuery {
 	var addr common.Address
-	var resp rewardcalculator.ResponseQuery
+	resp := new(rewardcalculator.ResponseQuery)
 
 	addr.SetString(address)
 
-	conn.SendAndReceive(msgQuery, cli.id, &addr, &resp)
+	conn.SendAndReceive(msgQuery, cli.id, &addr, resp)
 	fmt.Printf("QUERY command get response: %s\n", Display(resp))
+
+	return resp
 }

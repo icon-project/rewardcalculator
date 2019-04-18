@@ -42,6 +42,7 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("\t calculate IISSDATA BLOCKHEIGHT     Send a CALCULATE message to update I-Score DB\n")
 	fmt.Printf("\t       IISSDATA                     IISS data DB path(Required)\n")
 	fmt.Printf("\t       BLOCKHEIGHT                  Block height to calculate. Set 0 if you want current block+1\n")
+	fmt.Printf("\t monitor CONFIG                     Monitor account in configuration file\n")
 }
 
 func (cli *CLI) validateArgs() {
@@ -58,14 +59,21 @@ func (cli *CLI) Run() {
 	cmd := os.Args[2]
 
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
+
 	queryCmd := flag.NewFlagSet("query", flag.ExitOnError)
 	queryAddress := queryCmd.String("address", "", "Account address(Required)")
+
 	claimCmd := flag.NewFlagSet("claim", flag.ExitOnError)
 	claimAddress := claimCmd.String("address", "", "Account address(Required)")
 	claimBlockHeight := claimCmd.Uint64("blockheight", 0, "Block height(Required)")
+
 	calculateCmd := flag.NewFlagSet("calculate", flag.ExitOnError)
 	calculateIISSData := calculateCmd.String("iissdata", "", "IISS data DB path(Required)")
 	calculateBlockHeight := calculateCmd.Uint64("blockheight", 0, "Block height to calculate. Set 0 if you want current block+1")
+
+	monitorCmd := flag.NewFlagSet("monitor", flag.ExitOnError)
+	monitorConfig := monitorCmd.String("config", "./monitor.json", "Monitoring configuration file path")
+	monitorURL := monitorCmd.String("url", "http://localhost:9091", "Push URL")
 
 	// Parse the CLI
 	switch cmd {
@@ -91,6 +99,12 @@ func (cli *CLI) Run() {
 		err := calculateCmd.Parse(os.Args[3:])
 		if err != nil {
 			calculateCmd.PrintDefaults()
+			os.Exit(1)
+		}
+	case "monitor":
+		err := monitorCmd.Parse(os.Args[3:])
+		if err != nil {
+			monitorCmd.PrintDefaults()
 			os.Exit(1)
 		}
 	default:
@@ -157,5 +171,9 @@ func (cli *CLI) Run() {
 		end := time.Now()
 		diff := end.Sub(start)
 		fmt.Printf("Duration : %v\n", diff)
+	}
+
+	if monitorCmd.Parsed() {
+		cli.monitor(conn, *monitorConfig, *monitorURL)
 	}
 }

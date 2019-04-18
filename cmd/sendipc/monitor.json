@@ -1,0 +1,32 @@
+{
+    "targets": [
+        {
+            "name": "ICONist_A",
+            "address": "hxaea08c655d5b45e1e43797f83175b8494124e63a"
+        },
+        {
+            "name": "ICONist_B",
+            "address": "hxbea08c655d5b45e1e43797f83175b8494124e63a"
+        },
+        {
+            "name": "ICONist_C",
+            "address": "hxcea08c655d5b45e1e43797f83175b8494124e63a"
+        },
+        {
+            "name": "PRep_D",
+            "address": "hx22e518ccd16760355023affd8c29f80bf7b8a0bd"
+        },
+        {
+            "name": "PRep_E",
+            "address": "hx901b280815e88c5b6b310cd0fb6383e5c978aea5"
+        },
+        {
+            "name": "PRep_F",
+            "address": "hx8ea08c655d5b45e1e43797f83175b8494124e638"
+        },
+        {
+            "name": "PRep_G",
+            "address": "hx8ea08c655d5b45e1e43797f83175b8494124e63a"
+        }
+    ]
+}
