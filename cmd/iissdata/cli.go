@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/icon-project/rewardcalculator/common/db"
 )
 
 const (
-	DBDir     = "/Users/eunsoopark/test/rc_test"
-	DBType    = "goleveldb"
-	DBName    = "test"
+	DBType = "goleveldb"
 )
 
 type CLI struct{
@@ -138,21 +137,26 @@ func (cli *CLI) Run() {
 		os.Exit(1)
 	}
 
+	if strings.HasSuffix(dbName, "/") {
+		dbName = dbName[:len(dbName) - len("/")]
+	}
+	dbDir, dbName := filepath.Split(dbName)
+
 	// Run the command
 	if readCmd.Parsed() {
 		// read
-		cli.read(DBDir, dbName)
+		cli.read(dbDir, dbName)
 		return
 	}
 
 	if deleteCmd.Parsed() {
-		path := filepath.Join(DBDir, dbName)
+		path := filepath.Join(dbDir, dbName)
 		os.RemoveAll(path)
 		fmt.Printf("Delete %s\n", path)
 		return
 	}
 
-	cli.DB = db.Open(DBDir, DBType, dbName)
+	cli.DB = db.Open(dbDir, DBType, dbName)
 	defer cli.DB.Close()
 
 	if headerCmd.Parsed() {
