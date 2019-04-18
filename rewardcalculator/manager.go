@@ -1,6 +1,7 @@
 package rewardcalculator
 
 import (
+	"encoding/json"
 	"log"
 	"path/filepath"
 
@@ -8,7 +9,32 @@ import (
 	"github.com/icon-project/rewardcalculator/common/ipc"
 )
 
-const Version uint16 = 1
+const (
+	Version uint16 = 1
+	debugAddress   = "/tmp/icon-rc-debug.sock"
+)
+
+type RcConfig struct {
+	IISSDataDir string `json:"IISSData"`
+	DBDir       string `json:"IScoreDB"`
+	IpcNet      string `json:"IPCNet"`
+	IpcAddr     string `json:"IPCAddress"`
+	ClientMode  bool   `json:"ClientMode"`
+	DBCount     int    `json:"DBCount"`
+	Monitor     bool   `json:"Monitor"`
+	FileName    string
+}
+
+func (cfg *RcConfig) Print() {
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		log.Printf("Can't covert configuration to json")
+		return
+	}
+
+
+	log.Printf("Running config %s\n", string(b))
+}
 
 type Manager interface {
 	Loop() error
@@ -66,23 +92,24 @@ func (m *manager) OnClose(c ipc.Connection) error {
 	return nil
 }
 
-func InitManager(clientMode bool, net string, addr string, IISSDataDir string, dbPath string, dbCount int) (*manager, error) {
+func InitManager(cfg *RcConfig) (*manager, error) {
+
 	var err error
 	m := new(manager)
-	m.clientMode = clientMode
+	m.clientMode = cfg.ClientMode
 
 	// Initialize DB and load context values
-	m.ctx, err = NewContext(dbPath, string(db.GoLevelDBBackend), "IScore", dbCount)
+	m.ctx, err = NewContext(cfg.DBDir, string(db.GoLevelDBBackend), "IScore", cfg.DBCount)
 
 	// find IISS data and calculate
-	reloadIISSData(m.ctx, IISSDataDir)
+	reloadIISSData(m.ctx, cfg.IISSDataDir)
 
 	m.ctx.Print()
 
 	// Initialize ipc channel
 	if m.clientMode {
 		// connect to server
-		conn, err := ipc.Dial(net, addr)
+		conn, err := ipc.Dial(cfg.IpcNet, cfg.IpcAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -96,12 +123,28 @@ func InitManager(clientMode bool, net string, addr string, IISSDataDir string, d
 	} else {
 		// IPC Server
 		srv := ipc.NewServer()
-		err = srv.Listen(net, addr)
+		err = srv.Listen(cfg.IpcNet, cfg.IpcAddr)
 		if err != nil {
 			return nil, err
 		}
 		srv.SetHandler(m)
 		m.server = srv
+	}
+
+	// Initialize debug channel
+	if cfg.Monitor == true {
+		debug := new(manager)
+		debug.ctx = m.ctx
+
+		srv := ipc.NewServer()
+		err = srv.Listen("unix", debugAddress)
+		if err != nil {
+			return nil, err
+		}
+		srv.SetHandler(debug)
+		debug.server = srv
+
+		debug.Loop()
 	}
 
 	return m, err
