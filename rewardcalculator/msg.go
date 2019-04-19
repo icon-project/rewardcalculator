@@ -16,10 +16,6 @@ const (
 	msgCommitBlock    = 4
 )
 
-type QueryMessage struct {
-	Address     common.Address
-}
-
 type ResponseQuery struct {
 	Address common.Address
 	IScore  common.HexInt

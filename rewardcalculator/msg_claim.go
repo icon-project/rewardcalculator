@@ -2,6 +2,7 @@ package rewardcalculator
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"sync"
 
@@ -85,7 +86,11 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	}
 
 	// update preCommit with calculated I-Score
-	ctx.preCommit.update(req.BlockHeight, req.BlockHash, ia)
+	err = ctx.preCommit.update(req.BlockHeight, req.BlockHash, ia)
+	if err != nil {
+		log.Printf("Failed to update preCommit. err=%+v", err)
+		return 0, nil
+	}
 
 	return ia.BlockHeight, &ia.IScore
 }
@@ -170,7 +175,7 @@ func (pc *preCommit) queryAndAdd(blockHeight uint64, blockHash []byte, address c
 	return nil
 }
 
-func (pc *preCommit) update(blockHeight uint64, blockHash []byte, ia *IScoreAccount) {
+func (pc *preCommit) update(blockHeight uint64, blockHash []byte, ia *IScoreAccount) error {
 	pc.lock.Lock()
 	defer pc.lock.Unlock()
 
@@ -179,14 +184,14 @@ func (pc *preCommit) update(blockHeight uint64, blockHash []byte, ia *IScoreAcco
 		if data.BlockHeight == blockHeight && bytes.Compare(data.BlockHash, blockHash) == 0 {
 			claim, ok := data.claimMap[ia.Address]
 			if false == ok {
-				log.Printf("Failed to update preCommit: preCommit is nil\n")
-				return
+				return fmt.Errorf("Failed to update preCommit: preCommit is nil\n")
 			}
 			claim.BlockHeight = ia.BlockHeight
 			claim.IScore.Set(&ia.IScore.Int)
-			return
+			return nil
 		}
 	}
+	return fmt.Errorf("There is no preCommit\n")
 }
 
 func (pc *preCommit) delete(blockHeight uint64, blockHash []byte) {
@@ -222,23 +227,23 @@ func (pc *preCommit) writeClaimToDB(ctx *Context, blockHeight uint64, blockHash 
 	// find preCommit and write preCommit to preCommitData
 	for _, data := range pc.dataList {
 		if data.BlockHeight == blockHeight && bytes.Compare(data.BlockHash, blockHash) == 0 {
-			for _, pc := range data.claimMap {
-				if pc.IScore.Sign() == 0 {
+			for _, claim := range data.claimMap {
+				if claim.IScore.Sign() == 0 {
 					continue
 				}
 
-				bs, _ := bucket.Get(pc.ID())
+				bs, _ := bucket.Get(claim.ID())
 				if nil != bs {
 					claim, _ := NewClaimFromBytes(bs)
-					if pc.BlockHeight <= claim.BlockHeight {
+					if claim.BlockHeight <= claim.BlockHeight {
 						continue
 					}
 					// update with old I-Score
-					pc.IScore.Add(&pc.IScore.Int, &claim.IScore.Int)
+					claim.IScore.Add(&claim.IScore.Int, &claim.IScore.Int)
 				}
 
 				// write to claim DB
-				bucket.Set(pc.ID(), pc.Bytes())
+				bucket.Set(claim.ID(), claim.Bytes())
 			}
 
 			// delete all preCommitData
