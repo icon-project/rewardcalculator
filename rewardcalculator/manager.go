@@ -144,7 +144,7 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 		srv.SetHandler(debug)
 		debug.server = srv
 
-		debug.Loop()
+		go debug.Loop()
 	}
 
 	return m, err
