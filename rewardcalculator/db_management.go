@@ -108,8 +108,8 @@ type GVData struct {
 type GovernanceVariable struct {
 	BlockHeight uint64
 	GVData
-	blockProduceReward common.HexInt
-	pRepReward         common.HexInt
+	BlockProduceReward common.HexInt
+	PRepReward         common.HexInt
 }
 
 func (gv *GovernanceVariable) ID() []byte {
@@ -146,15 +146,14 @@ func (gv *GovernanceVariable) SetBytes(bs []byte) error {
 
 func (gv *GovernanceVariable) setReward() {
 	// block produce reward
-	gv.blockProduceReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumMainPRep)
-	gv.blockProduceReward.Div(&gv.blockProduceReward.Int, BigIntTwo)
+	gv.BlockProduceReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumMainPRep)
+	gv.BlockProduceReward.Div(&gv.BlockProduceReward.Int, BigIntTwo)
 
 	// Main/Sub P-Rep reward
-	gv.pRepReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumPRep)
+	gv.PRepReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumPRep)
 }
 
 func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVariable, error) {
-	gvCount := 0
 	gvList := make([]*GovernanceVariable, 0)
 
 	iter, err := dbi.GetIterator()
@@ -166,7 +165,6 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 	prefix := util.BytesPrefix([]byte(db.PrefixGovernanceVariable))
 	iter.New(prefix.Start, prefix.Limit)
 	for iter.Next() {
-		gvCount++
 		gv := new(GovernanceVariable)
 		// read
 		gvBlockHeight := common.BytesToUint64(iter.Key()[len(db.PrefixGovernanceVariable):])
@@ -197,11 +195,7 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 		gvList = gvList[oldGV-1:]
 	}
 
-	if gvCount == 0 {
-		return nil, nil
-	} else {
-		return gvList, nil
-	}
+	return gvList, nil
 }
 
 func NewGVFromIISS(iiss *IISSGovernanceVariable) *GovernanceVariable {

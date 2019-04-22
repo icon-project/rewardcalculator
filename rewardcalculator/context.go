@@ -129,7 +129,7 @@ type Context struct {
 	preCommit       *preCommit
 }
 
-func (ctx *Context) getGV(blockHeight uint64) *GovernanceVariable {
+func (ctx *Context) getGVByBlockHeight(blockHeight uint64) *GovernanceVariable {
 	gvLen := len(ctx.GV)
 	for i := gvLen - 1; i >= 0; i-- {
 		if ctx.GV[i].BlockHeight < blockHeight {

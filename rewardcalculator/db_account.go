@@ -108,8 +108,6 @@ func NewIScoreAccountFromIISS(iisstx *IISSTX) *IScoreAccount {
 				return nil
 			}
 		}
-	} else {
-		return nil
 	}
 	return ia
 }

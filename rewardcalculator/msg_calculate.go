@@ -357,12 +357,15 @@ func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo,
 
 	// calculate reward
 	for _, bpInfo := range bpInfoList {
-		// get Governance variable for block height
-		gv := ctx.getGV(bpInfo.BlockHeight)
+		// get Governance variable
+		gv := ctx.getGVByBlockHeight(bpInfo.BlockHeight)
+		if gv == nil {
+			continue
+		}
 
 		// update Generator reward
 		generator := bpMap[bpInfo.Generator]
-		generator.Add(&generator.Int, &gv.blockProduceReward.Int)
+		generator.Add(&generator.Int, &gv.BlockProduceReward.Int)
 		bpMap[bpInfo.Generator] = generator
 
 		// set block validator reward value
@@ -372,7 +375,7 @@ func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo,
 
 		var valReward common.HexInt
 		valCount := common.NewHexInt(int64(len(bpInfo.Validator)))
-		valReward.Div(&gv.blockProduceReward.Int, &valCount.Int)
+		valReward.Div(&gv.BlockProduceReward.Int, &valCount.Int)
 
 		// update Validator reward
 		for _, v := range bpInfo.Validator {
@@ -456,9 +459,12 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 	for i, gv := range ctx.GV {
 		var s, e  = start, end
 
-		if s < gv.BlockHeight {
+		if s <= gv.BlockHeight {
 			s = gv.BlockHeight
+		} else {
+			continue
 		}
+
 		if i+1 < len(ctx.GV) && ctx.GV[i+1].BlockHeight < end {
 			e = ctx.GV[i+1].BlockHeight
 		}
@@ -470,7 +476,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 
 		// reward = period * GV
 		var rewardRate common.HexInt
-		rewardRate.Mul(&period.Int, &gv.pRepReward.Int)
+		rewardRate.Mul(&period.Int, &gv.PRepReward.Int)
 
 		// update totalReward
 		for i, dgInfo:= range prep.List {
