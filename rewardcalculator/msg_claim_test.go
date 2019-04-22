@@ -2,8 +2,6 @@ package rewardcalculator
 
 import (
 	"github.com/icon-project/rewardcalculator/common/db"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -20,13 +18,8 @@ func TestMsgClaim_PreCommit(t *testing.T) {
 		{blockHeight: 1, blockHash: []byte("1-2"), address: common.NewAddressFromString("hx12")},
 	}
 
-	dir, err := ioutil.TempDir("", "goleveldb")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(dir)
-
-	ctx, _ := NewContext(dir, string(db.GoLevelDBBackend), "test", 2)
+	ctx := initTest()
+	defer finalizeTest()
 
 	// Query and add
 	for _, tt := range tests {
@@ -41,7 +34,7 @@ func TestMsgClaim_PreCommit(t *testing.T) {
 	ia.Address = *tests[0].address
 	ia.BlockHeight = tests[0].blockHeight
 	ia.IScore.SetUint64(100)
-	err = ctx.preCommit.update(tests[0].blockHeight, tests[0].blockHash, ia)
+	err := ctx.preCommit.update(tests[0].blockHeight, tests[0].blockHash, ia)
 	assert.NoError(t, err)
 
 	// update - invalid block height
@@ -101,13 +94,8 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 	alreadyClaimedInCurrentPeriodClaim :=
 		ClaimMessage{BlockHeight: 102, BlockHash: []byte("1-1"), Address: *address}
 
-	dir, err := ioutil.TempDir("", "goleveldb")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(dir)
-
-	ctx, _ := NewContext(dir, string(db.GoLevelDBBackend), "test", 2)
+	ctx := initTest()
+	defer finalizeTest()
 
 	// write content to Query DB
 	queryDB := ctx.DB.getQueryDB(dbContent0.Address)

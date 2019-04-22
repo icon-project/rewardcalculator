@@ -72,6 +72,8 @@ func calculateDelegationReward(delegation *common.HexInt, start uint64, end uint
 
 func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64) bool {
+	//log.Printf("[Delegation reward] Read data: %s\n", ia.String())
+
 	// IScore = old + period * G.V * sum(valid dgAmount)
 	if blockHeight == 0 {
 		blockHeight = ia.BlockHeight + 1
@@ -106,6 +108,7 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 	// update BlockHeight
 	ia.BlockHeight = blockHeight
 
+	//log.Printf("[Delegation reward] Updated data: %s\n", ia.String())
 	return true
 }
 
@@ -130,14 +133,10 @@ func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVa
 		}
 		ia.Address = *common.NewAddress(key)
 
-		//log.Printf("[Delegation reward] Read data: %s\n", ia.String())
-
 		// calculate
 		if calculateIScore(ia, gvList, pRepCandidates, blockHeight) == false {
 			continue
 		}
-
-		//log.Printf("[Delegation reward] Updated data: %s\n", ia.String())
 
 		if batchCount > 0 {
 			batch.Set(iter.Key(), ia.Bytes())
@@ -307,6 +306,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 // Update I-Score of account in TX list
 func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) {
 	for _, tx := range txList {
+		//log.Printf("[IISSTX] TX : %s", tx.String())
 		switch tx.DataType {
 		case TXDataTypeDelegate:
 			// get Calculate DB for account
@@ -342,6 +342,7 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) {
 
 			// calculate I-Score from tx.BlockHeight to blockHeight with new delegation Info.
 			calculateIScore(newIA, ctx.GV, ctx.PRepCandidates, blockHeight)
+			//log.Printf("[IISSTX] %s", newIA.String())
 
 			// write to account DB
 			bucket.Set(newIA.ID(), newIA.Bytes())
@@ -430,6 +431,7 @@ func calculatePRepReward(ctx *Context, to uint64) {
 
 	// calculate for PRep list
 	for i, prep := range ctx.PRep {
+		//log.Printf("[P-Rep reward] P-Rep : %s", prep.String())
 		if prep.TotalDelegation.Sign() == 0 {
 			// there is no delegations, check next
 			continue
@@ -484,7 +486,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 			reward.Mul(&rewardRate.Int, &dgInfo.DelegatedAmount.Int)
 			reward.Div(&reward.Int, &prep.TotalDelegation.Int)
 			totalReward[i].Add(&totalReward[i].Int, &reward.Int)
-			//log.Printf("P-Reps: %s, deletation: %s, reward: %s\n",
+			//log.Printf("[P-Rep reward] %s: deletation: %s, reward: %s\n",
 			//	dgInfo.Address.String(), dgInfo.DelegatedAmount.String(), totalReward[i].String())
 		}
 	}
@@ -509,7 +511,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 			// update I-Score
 			ia.IScore.Add(&ia.IScore.Int, &totalReward[i].Int)
 			ia.Address = dgInfo.Address
-			//log.Printf("P-Rep reward: %s, %s", ia.String(), totalReward[i].String())
+			//log.Printf("[P-Rep reward] Write to DB %s, %s", ia.String(), totalReward[i].String())
 
 			// do not update block height of IA
 		} else {
