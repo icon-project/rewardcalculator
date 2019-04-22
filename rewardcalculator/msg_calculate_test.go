@@ -6,7 +6,6 @@ import (
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
-	"log"
 	"testing"
 )
 
@@ -118,7 +117,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	ia, _ := NewIScoreAccountFromBytes(bs)
 
 	reward := common.NewHexInt(30 * (20 - 10) + 100 * (30 - 20))
-	log.Printf("%s , %s", reward.String(), ia.String())
+	//log.Printf("%s , %s", reward.String(), ia.String())
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 }
 
@@ -126,9 +125,9 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	const (
 		bp0BlockHeight = 5
 		bp1BlockHeight = 11
-		bp2BlockHeight uint64 = 12
-		gv0BlockHeight uint64 = 0
-		gv1BlockHeight uint64 = 10
+		bp2BlockHeight = 12
+		gv0BlockHeight = 0
+		gv1BlockHeight = 10
 	)
 
 	ctx := initTest()
@@ -328,7 +327,7 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	bs, _ := bucket.Get(prepA.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
-	log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
+	//log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 
 	// check prepB
@@ -348,6 +347,123 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	bs, _ = bucket.Get(prepB.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
-	log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
+	//log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
+	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+}
+
+func TestMsgCalc_CalculateDB(t *testing.T) {
+	const (
+		rewardRep = 1
+
+		calculateBlockHeight = 100
+
+		addr1BlockHeight = 1
+		addr1InitIScore = 100
+		addr1DelegationToPRepA = 10
+
+		addr2BlockHeight = 10
+		addr2InitIScore = 0
+		addr2DelegationToPRepA = 20
+		addr2DelegationToPRepB = 30
+	)
+	ctx := initTest()
+	defer finalizeTest()
+
+	// set GV
+	gv := new(GovernanceVariable)
+	gv.BlockHeight = 0
+	gv.CalculatedIncentiveRep.SetUint64(1)
+	gv.RewardRep.SetUint64(rewardRep)
+	gv.setReward()
+	ctx.GV = append(ctx.GV, gv)
+
+	// set P-Rep candidate
+	prepA := new(PRepCandidate)
+	prepA.Address = *common.NewAddressFromString("hxaa")
+	prepA.Start = 0
+	ctx.PRepCandidates[prepA.Address] = prepA
+	prepB := new(PRepCandidate)
+	prepB.Address = *common.NewAddressFromString("hxbb")
+	prepB.Start = 0
+	ctx.PRepCandidates[prepB.Address] = prepB
+
+	addr1 := *common.NewAddressFromString("hx11")
+	addr2 := *common.NewAddressFromString("hx22")
+
+	// set Query DB for read
+	queryDB := ctx.DB.getQueryDB(addr1)
+	calcDB := ctx.DB.getCalculateDB(addr1)
+	bucket, _ := queryDB.GetBucket(db.PrefixIScore)
+
+	/// addr1
+	ia := new(IScoreAccount)
+	ia.Address = addr1
+	ia.BlockHeight = addr1BlockHeight
+	ia.IScore.SetUint64(addr1InitIScore)
+	ia.Delegations = make([]*DelegateData, 0)
+	delegation := new(DelegateData)
+	delegation.Address = prepA.Address
+	delegation.Delegate.SetUint64(addr1DelegationToPRepA)
+	ia.Delegations = append(ia.Delegations, delegation)
+	delegation = new(DelegateData)
+	delegation.Address = addr2
+	delegation.Delegate.SetUint64(1000)
+	ia.Delegations = append(ia.Delegations, delegation)
+	bucket.Set(ia.ID(), ia.Bytes())
+
+	/// addr2
+	ia = new(IScoreAccount)
+	ia.Address = addr2
+	ia.BlockHeight = addr2BlockHeight
+	ia.IScore.SetUint64(addr2InitIScore)
+	ia.Delegations = make([]*DelegateData, 0)
+	delegation = new(DelegateData)
+	delegation.Address = prepA.Address
+	delegation.Delegate.SetUint64(addr2DelegationToPRepA)
+	ia.Delegations = append(ia.Delegations, delegation)
+	delegation = new(DelegateData)
+	delegation.Address = prepB.Address
+	delegation.Delegate.SetUint64(addr2DelegationToPRepB)
+	ia.Delegations = append(ia.Delegations, delegation)
+	bucket.Set(ia.ID(), ia.Bytes())
+
+	// calculate
+	calculateDB(queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
+
+	var reward, rewardA, rewardB common.HexInt
+
+	// check - addr1
+	period := common.NewHexIntFromUint64(calculateBlockHeight - addr1BlockHeight)
+	gv = ctx.getGVByBlockHeight(addr1BlockHeight)
+	if gv == nil {
+		assert.True(t, false)
+		return
+	}
+	// calculate delegation reward for P-Rep only
+	reward.Mul(&gv.RewardRep.Int, &period.Int)
+	reward.Mul(&reward.Int, &common.NewHexIntFromUint64(addr1DelegationToPRepA).Int)
+	reward.Add(&reward.Int, &common.NewHexIntFromUint64(addr1InitIScore).Int)
+
+	bucket, _ = calcDB.GetBucket(db.PrefixIScore)
+	bs, _ := bucket.Get(addr1.Bytes())
+	ia, _ = NewIScoreAccountFromBytes(bs)
+	//log.Printf("%s : %s", reward.String(), ia.String())
+	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+
+	// check - addr2
+	period = common.NewHexIntFromUint64(calculateBlockHeight - addr2BlockHeight)
+	gv = ctx.getGVByBlockHeight(addr2BlockHeight)
+	if gv == nil {
+		assert.True(t, false)
+		return
+	}
+	reward.Mul(&gv.RewardRep.Int, &period.Int)
+	rewardA.Mul(&reward.Int, &common.NewHexIntFromUint64(addr2DelegationToPRepA).Int)
+	rewardB.Mul(&reward.Int, &common.NewHexIntFromUint64(addr2DelegationToPRepB).Int)
+	reward.Add(&rewardA.Int, &rewardB.Int)
+
+	bs, _ = bucket.Get(addr2.Bytes())
+	ia, _ = NewIScoreAccountFromBytes(bs)
+	//log.Printf("%s : %s", reward.String(), ia.String())
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 }
