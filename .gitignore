@@ -3,3 +3,9 @@ vendor
 .iscoredb
 **/.DS_Store
 **/*.iml
+cmd/dbtest/dbtest
+cmd/icon_rc/icon_rc
+cmd/iissdata/iissdata
+cmd/sendipc/sendipc
+linux
+bin
