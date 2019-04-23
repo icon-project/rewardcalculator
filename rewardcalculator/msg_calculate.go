@@ -433,7 +433,7 @@ func calculatePRepReward(ctx *Context, to uint64) {
 
 	// calculate for PRep list
 	for i, prep := range ctx.PRep {
-		log.Printf("[P-Rep reward] P-Rep : %s", prep.String())
+		//log.Printf("[P-Rep reward] P-Rep : %s", prep.String())
 		if prep.TotalDelegation.Sign() == 0 {
 			// there is no delegations, check next
 			continue
@@ -458,7 +458,11 @@ func calculatePRepReward(ctx *Context, to uint64) {
 }
 
 func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
-	totalReward := make([]common.HexInt, len(prep.List))
+	type reward struct {
+		iScore      common.HexInt
+		blockHeight uint64
+	}
+	totalReward := make([]reward, len(prep.List))
 
 	// calculate P-Rep reward for Governance variable
 	for i, gv := range ctx.GV {
@@ -488,9 +492,10 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 			var reward common.HexInt
 			reward.Mul(&rewardRate.Int, &dgInfo.DelegatedAmount.Int)
 			reward.Div(&reward.Int, &prep.TotalDelegation.Int)
-			totalReward[i].Add(&totalReward[i].Int, &reward.Int)
-			//log.Printf("[P-Rep reward] %s: deletation: %s, reward: %s\n",
-			//	dgInfo.Address.String(), dgInfo.DelegatedAmount.String(), totalReward[i].String())
+			totalReward[i].iScore.Add(&totalReward[i].iScore.Int, &reward.Int)
+			totalReward[i].blockHeight = e
+			//log.Printf("[P-Rep reward] deletation: %s, reward: %s,%d\n",
+			//	dgInfo.String(), totalReward[i].iScore.String(), totalReward[i].blockHeight)
 		}
 	}
 
@@ -512,21 +517,21 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 			}
 
 			// update I-Score
-			ia.IScore.Add(&ia.IScore.Int, &totalReward[i].Int)
-			ia.Address = dgInfo.Address
+			ia.IScore.Add(&ia.IScore.Int, &totalReward[i].iScore.Int)
+			ia.BlockHeight = totalReward[i].blockHeight
 
 			// do not update block height of IA
 		} else {
 			// there is no account in DB
 			ia = new(IScoreAccount)
-			ia.IScore.Set(&totalReward[i].Int)
-			ia.Address = dgInfo.Address
+			ia.IScore.Set(&totalReward[i].iScore.Int)
 			ia.BlockHeight = end // Set blockHeight to end
 		}
 
 		// write to account DB
 		if ia != nil {
-			//log.Printf("[P-Rep reward] Write to DB %s, increased reward: %s", ia.String(), totalReward[i].String())
+			ia.Address = dgInfo.Address
+			//log.Printf("[P-Rep reward] Write to DB %s, increased reward: %s", ia.String(), totalReward[i].iScore.String())
 			bucket.Set(ia.ID(), ia.Bytes())
 		}
 	}
