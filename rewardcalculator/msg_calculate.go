@@ -251,6 +251,8 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, []byte){
 	// Update P-Rep candidate with IISS TX(P-Rep register/unregister)
 	ctx.UpdatePRepCandidate(txList)
 
+	ctx.Print()
+
 	//
 	// Calculate I-Score @ Account DB
 	//
@@ -431,7 +433,7 @@ func calculatePRepReward(ctx *Context, to uint64) {
 
 	// calculate for PRep list
 	for i, prep := range ctx.PRep {
-		//log.Printf("[P-Rep reward] P-Rep : %s", prep.String())
+		log.Printf("[P-Rep reward] P-Rep : %s", prep.String())
 		if prep.TotalDelegation.Sign() == 0 {
 			// there is no delegations, check next
 			continue
@@ -444,6 +446,7 @@ func calculatePRepReward(ctx *Context, to uint64) {
 		if i+1 < len(ctx.PRep) && ctx.PRep[i+1].BlockHeight < to {
 			e = ctx.PRep[i+1].BlockHeight
 		}
+		//log.Printf("[P-Rep reward] : s, e : %d - %d", s, e)
 
 		if e  <= s {
 			continue
@@ -459,20 +462,20 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 
 	// calculate P-Rep reward for Governance variable
 	for i, gv := range ctx.GV {
+		//log.Printf("setPRepReward: gv: %s", gv.String())
 		var s, e  = start, end
 
 		if s <= gv.BlockHeight {
 			s = gv.BlockHeight
-		} else {
-			continue
 		}
 
 		if i+1 < len(ctx.GV) && ctx.GV[i+1].BlockHeight < end {
 			e = ctx.GV[i+1].BlockHeight
 		}
 
+		//log.Printf("[P-Rep reward]setPRepReward: s, e : %d - %d", s, e)
 		if e <= s {
-			break
+			continue
 		}
 		period := common.NewHexIntFromUint64(e - s)
 
@@ -511,7 +514,6 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 			// update I-Score
 			ia.IScore.Add(&ia.IScore.Int, &totalReward[i].Int)
 			ia.Address = dgInfo.Address
-			//log.Printf("[P-Rep reward] Write to DB %s, %s", ia.String(), totalReward[i].String())
 
 			// do not update block height of IA
 		} else {
@@ -524,6 +526,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) {
 
 		// write to account DB
 		if ia != nil {
+			//log.Printf("[P-Rep reward] Write to DB %s, increased reward: %s", ia.String(), totalReward[i].String())
 			bucket.Set(ia.ID(), ia.Bytes())
 		}
 	}
