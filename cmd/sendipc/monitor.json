@@ -1,32 +1,32 @@
 {
     "targets": [
         {
-            "name": "ICONist_A",
-            "address": "hxaea08c655d5b45e1e43797f83175b8494124e63a"
+            "name": "icon_iiss_iscore_PRep_A",
+            "address": "hx26856d5e93b6330ed66ecd9c87ab5ce23d18718b"
         },
         {
-            "name": "ICONist_B",
-            "address": "hxbea08c655d5b45e1e43797f83175b8494124e63a"
+            "name": "icon_iiss_iscore_PRep_B",
+            "address": "hxbdeee120efdb76a6d5e963e0c720c775285fb335"
         },
         {
-            "name": "ICONist_C",
-            "address": "hxcea08c655d5b45e1e43797f83175b8494124e63a"
+            "name": "icon_iiss_iscore_PRep_C",
+            "address": "hxfd85c7b4e20bb20f41ec3e53d210caac53f5247d"
         },
         {
-            "name": "PRep_D",
-            "address": "hx22e518ccd16760355023affd8c29f80bf7b8a0bd"
+            "name": "icon_iiss_iscore_PRep_D",
+            "address": "hx5768729a6a2f1149ae8190bca43d88a51e401cd5"
         },
         {
-            "name": "PRep_E",
-            "address": "hx901b280815e88c5b6b310cd0fb6383e5c978aea5"
+            "name": "icon_iiss_iscore_ICONist_E",
+            "address": "hx1c78e6824d754be36cb65c66e6145405320f1a69"
         },
         {
-            "name": "PRep_F",
-            "address": "hx8ea08c655d5b45e1e43797f83175b8494124e638"
+            "name": "icon_iiss_iscore_ICONist_F",
+            "address": "hx06c06f75f561a7fd2a95f9f3e6ef07ae2221b37a"
         },
         {
-            "name": "PRep_G",
-            "address": "hx8ea08c655d5b45e1e43797f83175b8494124e63a"
+            "name": "icon_iiss_iscore_ICONist_G",
+            "address": "hx4d7b134cfcd672ad2d2cd521a8d5af5a17a4bc5b"
         }
     ]
 }
