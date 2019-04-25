@@ -21,6 +21,7 @@ type monitorTarget struct {
 }
 
 type monitorConfig struct {
+	Interval time.Duration  `json:"interval,omitempty"`
 	Targets []monitorTarget `json:"targets"`
 }
 
@@ -42,7 +43,7 @@ func (cli *CLI) monitor(conn ipc.Connection, configFile string, url string) {
 
 	for true {
 		cli.readAndPush(conn, config.Targets, url)
-		time.Sleep(10 * time.Second)
+		time.Sleep(config.Interval * time.Second)
 	}
 }
 
