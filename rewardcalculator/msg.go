@@ -106,10 +106,6 @@ func DoQuery(ctx *Context, addr common.Address) *ResponseQuery {
 	}
 
 	if claim != nil {
-		if ia.BlockHeight == claim.BlockHeight {
-			// already claimed in current period
-			return &resp
-		}
 		// subtract claimed I-Score
 		ia.IScore.Sub(&ia.IScore.Int, &claim.IScore.Int)
 	}

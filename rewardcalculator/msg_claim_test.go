@@ -46,14 +46,17 @@ func TestMsgClaim_PreCommit(t *testing.T) {
 	err = ctx.preCommit.update(tests[0].blockHeight, tests[0].blockHash, ia)
 	assert.Error(t, err)
 
-	// delete - one of two
-	pcLen := len(ctx.preCommit.dataList)
-	ctx.preCommit.delete(tests[0].blockHeight, tests[0].blockHash)
-	assert.Equal(t, pcLen - 1, len(ctx.preCommit.dataList))
+	// delete
+	ret := ctx.preCommit.delete(tests[0].blockHeight, tests[0].blockHash, *tests[0].address)
+	assert.True(t, ret)
 
-	// delete - last one
-	pcLen = len(ctx.preCommit.dataList)
-	ctx.preCommit.delete(tests[1].blockHeight, tests[1].blockHash)
+	// delete - invalid claim
+	ret = ctx.preCommit.delete(tests[0].blockHeight, tests[0].blockHash, *tests[0].address)
+	assert.False(t, ret)
+
+	// flush precommitData
+	pcLen := len(ctx.preCommit.dataList)
+	ctx.preCommit.flush(tests[1].blockHeight, tests[1].blockHash)
 	assert.Equal(t, pcLen - 1, len(ctx.preCommit.dataList))
 
 	// make data for write test
@@ -77,13 +80,22 @@ func TestMsgClaim_PreCommit(t *testing.T) {
 }
 
 func TestMsgClaim_DoClaim(t *testing.T) {
+	const (
+		db1IScore = claimMinIScore + 100
+		db2IScore = claimMinIScore + 2000
+	)
 	address := common.NewAddressFromString("hx11")
 	dbContent0 := IScoreAccount { Address: *address }
-	dbContent0.BlockHeight = 100
+	dbContent0.BlockHeight = 10
 	dbContent0.IScore.SetUint64(100)
+
 	dbContent1 := IScoreAccount { Address: *address }
-	dbContent1.BlockHeight = 200
-	dbContent1.IScore.SetUint64(300)
+	dbContent1.BlockHeight = 100
+	dbContent1.IScore.SetUint64(db1IScore)
+
+	dbContent2 := IScoreAccount { Address: *address }
+	dbContent2.BlockHeight = 200
+	dbContent2.IScore.SetUint64(db2IScore)
 
 	claim :=
 		ClaimMessage {BlockHeight: 101, BlockHash: []byte("1-1"), Address: *address}
@@ -102,14 +114,22 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 	bucket, _ := queryDB.GetBucket(db.PrefixIScore)
 	bucket.Set(dbContent0.ID(), dbContent0.Bytes())
 
-	// claim I-Score
+	//// claim I-Score less than 1000
 	blockHeight, iScore := DoClaim(ctx, &claim)
-	assert.Equal(t, dbContent0.BlockHeight, blockHeight)
-	assert.Equal(t, 0, dbContent0.IScore.Cmp(&iScore.Int))
+	assert.Equal(t, uint64(0), blockHeight)
+	assert.Nil(t, iScore)
+
+	// update Query DB
+	bucket.Set(dbContent1.ID(), dbContent1.Bytes())
+
+	// claim I-Score
+	blockHeight, iScore = DoClaim(ctx, &claim)
+	assert.Equal(t, dbContent1.BlockHeight, blockHeight)
+	assert.Equal(t, uint64(db1IScore - (db1IScore % claimMinIScore)), iScore.Uint64())
 
 	// already claimed in current block
 	blockHeight, iScore = DoClaim(ctx, &claim)
-	assert.Equal(t, dbContent0.BlockHeight, blockHeight)
+	assert.Equal(t, dbContent1.BlockHeight, blockHeight)
 	assert.Nil(t, iScore)
 
 	// commit claim
@@ -122,17 +142,19 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 
 	// already claimed in current period
 	blockHeight, iScore = DoClaim(ctx, &alreadyClaimedInCurrentPeriodClaim)
-	assert.Equal(t, dbContent0.BlockHeight, blockHeight)
+	assert.Equal(t, dbContent1.BlockHeight, blockHeight)
 	assert.Nil(t, iScore)
 
 	// update Query DB
-	bucket.Set(dbContent1.ID(), dbContent1.Bytes())
+	bucket.Set(dbContent2.ID(), dbContent2.Bytes())
 
 	// claim I-Score in next period
 	claim.BlockHeight = 201
 	blockHeight, iScore = DoClaim(ctx, &claim)
-	assert.Equal(t, dbContent1.BlockHeight, blockHeight)
+	assert.Equal(t, dbContent2.BlockHeight, blockHeight)
 	var iScoreExpected common.HexInt
-	iScoreExpected.Sub(&dbContent1.IScore.Int, &dbContent0.IScore.Int)
-	assert.Equal(t, 0, iScoreExpected.Cmp(&iScore.Int))
+	iScoreExpected.Sub(&dbContent2.IScore.Int, &dbContent1.IScore.Int)
+	// db2Iscore - claimed IScore
+	assert.Equal(t, uint64(db2IScore - (db2IScore % claimMinIScore) - (db1IScore - (db1IScore % claimMinIScore))),
+		iScore.Uint64())
 }

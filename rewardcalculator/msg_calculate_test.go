@@ -6,6 +6,7 @@ import (
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
+	"log"
 	"testing"
 )
 
@@ -235,9 +236,9 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 
 func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	const (
-		BlockHeight0 = 0
-		BlockHeight1 = 10
-		BlockHeight2 = 20
+		BlockHeight0 uint64 = 0
+		BlockHeight1 uint64 = 10
+		BlockHeight2 uint64 = 20
 
 		TotalDelegation0 = 10
 		DelegationA0     = 4
@@ -327,8 +328,9 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	bs, _ := bucket.Get(prepA.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
-	//log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
+	log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+	assert.Equal(t, BlockHeight2, ia.BlockHeight)
 
 	// check prepB
 	period = common.NewHexIntFromUint64(BlockHeight1 - BlockHeight0)
@@ -347,21 +349,22 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	bs, _ = bucket.Get(prepB.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
-	//log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
+	log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+	assert.Equal(t, BlockHeight2, ia.BlockHeight)
 }
 
 func TestMsgCalc_CalculateDB(t *testing.T) {
 	const (
 		rewardRep = 1
 
-		calculateBlockHeight = 100
+		calculateBlockHeight uint64 = 100
 
-		addr1BlockHeight = 1
+		addr1BlockHeight uint64 = 1
 		addr1InitIScore = 100
 		addr1DelegationToPRepA = 10
 
-		addr2BlockHeight = 10
+		addr2BlockHeight uint64 = 10
 		addr2InitIScore = 0
 		addr2DelegationToPRepA = 20
 		addr2DelegationToPRepB = 30
@@ -449,6 +452,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	ia, _ = NewIScoreAccountFromBytes(bs)
 	//log.Printf("%s : %s", reward.String(), ia.String())
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+	assert.Equal(t, calculateBlockHeight, ia.BlockHeight)
 
 	// check - addr2
 	period = common.NewHexIntFromUint64(calculateBlockHeight - addr2BlockHeight)
@@ -466,4 +470,5 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	ia, _ = NewIScoreAccountFromBytes(bs)
 	//log.Printf("%s : %s", reward.String(), ia.String())
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+	assert.Equal(t, calculateBlockHeight, ia.BlockHeight)
 }

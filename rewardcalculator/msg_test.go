@@ -12,11 +12,11 @@ func TestMsg_DoQuery(t *testing.T) {
 	address := common.NewAddressFromString("hx11")
 	dbContent0 := IScoreAccount { Address: *address }
 	dbContent0.BlockHeight = 100
-	dbContent0.IScore.SetUint64(100)
+	dbContent0.IScore.SetUint64(claimMinIScore + 100)
 
 	claim := ClaimMessage{BlockHeight: 101, BlockHash: []byte("1-1"), Address: *address}
 
-	ctx := initTest()
+	ctx := initTest(1)
 	defer finalizeTest()
 
 	// write content to Query DB
@@ -43,5 +43,5 @@ func TestMsg_DoQuery(t *testing.T) {
 	// Query to claimed Account after commit
 	resp = DoQuery(ctx, *address)
 	assert.Equal(t, dbContent0.BlockHeight, resp.BlockHeight)
-	assert.Equal(t, 0, resp.IScore.Sign())
+	assert.Equal(t, 0, resp.IScore.Cmp(&common.NewHexIntFromUint64(100).Int))
 }
