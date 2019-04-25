@@ -18,7 +18,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	gv := new(GovernanceVariable)
 	gv.BlockHeight = 0
 	gv.CalculatedIncentiveRep.SetUint64(1)
-	gv.RewardRep.SetUint64(1)
+	gv.RewardRep.SetUint64(minRewardRep)
 	gv.setReward()
 	ctx.GV = append(ctx.GV, gv)
 
@@ -37,8 +37,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	iconist := *common.NewAddressFromString("hx11")
 
 	// TX 0: Add new delegation at block height 10
-	// hx11 delegates 10 to prepA and delegates 20 to prepB
-	// get 10 + 20 I-Score per block
+	// hx11 delegates minDelegation to prepA and delegates 2 * minDelegation to prepB
 	tx := new(IISSTX)
 	tx.Index = 0
 	tx.BlockHeight = 10
@@ -50,12 +49,12 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 	dgData := make([]interface{}, 0)
 	dgData = append(dgData, &prepA.Address)
-	dgData = append(dgData, 10)
+	dgData = append(dgData, minDelegation)
 	delegation = append(delegation, dgData)
 
 	dgData = make([]interface{}, 0)
 	dgData = append(dgData, &prepB.Address)
-	dgData = append(dgData, 20)
+	dgData = append(dgData, 2 * minDelegation)
 	delegation = append(delegation, dgData)
 
 	var err error
@@ -67,8 +66,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	tests = append(tests, tx)
 
 	// TX 1: Modify delegation at block height 20
-	// hx11 delegates 100 to prepA and delegates 200 to iconist
-	// get 100 I-Score per block
+	// hx11 delegates minDelegation to prepA and delegates minDelegation to iconist
 	tx = new(IISSTX)
 	tx.Index = 1
 	tx.BlockHeight = 20
@@ -80,12 +78,12 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 	dgData = make([]interface{}, 0)
 	dgData = append(dgData, &prepA.Address)
-	dgData = append(dgData, 100)
+	dgData = append(dgData, minDelegation)
 	delegation = append(delegation, dgData)
 
 	dgData = make([]interface{}, 0)
 	dgData = append(dgData, &iconist)
-	dgData = append(dgData, 200)
+	dgData = append(dgData, minDelegation)
 	delegation = append(delegation, dgData)
 
 	tx.Data, err = common.EncodeAny(delegation)
@@ -117,9 +115,75 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	bs, _ := bucket.Get(iconist.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
 
-	reward := common.NewHexInt(30 * (20 - 10) + 100 * (30 - 20))
-	//log.Printf("%s , %s", reward.String(), ia.String())
-	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+	reward := 3 * minDelegation * (20 - 10) * minRewardRep / rewardDivider +
+		minDelegation * (30 - 20) * minRewardRep / rewardDivider
+
+	//log.Printf("%d , %d", reward, ia.IScore.Uint64())
+	assert.Equal(t, uint64(reward), ia.IScore.Uint64())
+}
+
+func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
+	ctx := initTest()
+	defer finalizeTest()
+
+	// set GV
+	gv := new(GovernanceVariable)
+	gv.BlockHeight = 0
+	gv.CalculatedIncentiveRep.SetUint64(1)
+	gv.RewardRep.SetUint64(minRewardRep)
+	gv.setReward()
+	ctx.GV = append(ctx.GV, gv)
+
+	// set P-Rep candidate
+	prepA := new(PRepCandidate)
+	prepA.Address = *common.NewAddressFromString("hxaa")
+	prepA.Start = 0
+	ctx.PRepCandidates[prepA.Address] = prepA
+	prepB := new(PRepCandidate)
+	prepB.Address = *common.NewAddressFromString("hxbb")
+	prepB.Start = 0
+	ctx.PRepCandidates[prepB.Address] = prepB
+
+	// set IISS TX
+	tests := make([]*IISSTX, 0)
+	iconist := *common.NewAddressFromString("hx11")
+
+	// TX 0: Add new delegation at block height 10
+	// hx11 delegates minDelegation to prepA and delegates 2 * minDelegation to prepB
+	tx := new(IISSTX)
+	tx.Index = 0
+	tx.BlockHeight = 10
+	tx.Address = iconist
+	tx.DataType = TXDataTypeDelegate
+	tx.Data = new(codec.TypedObj)
+
+	delegation := make([]interface{}, 0)
+
+	// delegate small value
+	dgData := make([]interface{}, 0)
+	dgData = append(dgData, &prepA.Address)
+	dgData = append(dgData, minDelegation - 1)
+	delegation = append(delegation, dgData)
+
+	var err error
+	tx.Data, err = common.EncodeAny(delegation)
+	if err != nil {
+		fmt.Printf("Can't encode delegation. err=%+v\n", err)
+		return
+	}
+	tests = append(tests, tx)
+
+	// calculate IISS TX
+	calculateIISSTX(ctx, tests, 100)
+
+	// check Calculate DB
+	calcDB := ctx.DB.getCalculateDB(iconist)
+	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
+	bs, _ := bucket.Get(iconist.Bytes())
+	ia, _ := NewIScoreAccountFromBytes(bs)
+
+	//log.Printf("%d , %d", reward, ia.IScore.Uint64())
+	assert.Equal(t, uint64(0), ia.IScore.Uint64())
 }
 
 func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
@@ -433,42 +497,37 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	// calculate
 	calculateDB(queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
 
-	var reward, rewardA, rewardB common.HexInt
+	var reward uint64
 
 	// check - addr1
-	period := common.NewHexIntFromUint64(calculateBlockHeight - addr1BlockHeight)
+	period := calculateBlockHeight - addr1BlockHeight
 	gv = ctx.getGVByBlockHeight(addr1BlockHeight)
 	if gv == nil {
 		assert.True(t, false)
 		return
 	}
 	// calculate delegation reward for P-Rep only
-	reward.Mul(&gv.RewardRep.Int, &period.Int)
-	reward.Mul(&reward.Int, &common.NewHexIntFromUint64(addr1DelegationToPRepA).Int)
-	reward.Add(&reward.Int, &common.NewHexIntFromUint64(addr1InitIScore).Int)
+	reward = gv.RewardRep.Uint64() * period * addr1DelegationToPRepA / rewardDivider + addr1InitIScore
 
 	bucket, _ = calcDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(addr1.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
-	//log.Printf("%s : %s", reward.String(), ia.String())
-	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+	//log.Printf("%d : %d", reward, ia.IScore.Uint64())
+	assert.Equal(t, reward, ia.IScore.Uint64())
 	assert.Equal(t, calculateBlockHeight, ia.BlockHeight)
 
 	// check - addr2
-	period = common.NewHexIntFromUint64(calculateBlockHeight - addr2BlockHeight)
+	period = calculateBlockHeight - addr2BlockHeight
 	gv = ctx.getGVByBlockHeight(addr2BlockHeight)
 	if gv == nil {
 		assert.True(t, false)
 		return
 	}
-	reward.Mul(&gv.RewardRep.Int, &period.Int)
-	rewardA.Mul(&reward.Int, &common.NewHexIntFromUint64(addr2DelegationToPRepA).Int)
-	rewardB.Mul(&reward.Int, &common.NewHexIntFromUint64(addr2DelegationToPRepB).Int)
-	reward.Add(&rewardA.Int, &rewardB.Int)
+	reward = gv.RewardRep.Uint64() * period * (addr2DelegationToPRepA + addr2DelegationToPRepB) / rewardDivider
 
 	bs, _ = bucket.Get(addr2.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
-	//log.Printf("%s : %s", reward.String(), ia.String())
-	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+	//log.Printf("%d : %d", reward, ia.IScore.Uint64())
+	assert.Equal(t, reward, ia.IScore.Uint64())
 	assert.Equal(t, calculateBlockHeight, ia.BlockHeight)
 }

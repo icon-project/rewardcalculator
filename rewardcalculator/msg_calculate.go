@@ -2,6 +2,7 @@ package rewardcalculator
 
 import (
 	"log"
+	"math/big"
 	"os"
 	"sync"
 	"time"
@@ -13,7 +14,19 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-const writeBatchCount = 10
+const (
+	writeBatchCount = 10
+
+	minRewardRep     = 200
+	minDelegation    = 788400
+
+	blocksPerYear    = 15768000
+	gvDivider        = 10000
+	iScoreMultiplier = 1000
+	rewardDivider    = blocksPerYear * gvDivider / iScoreMultiplier
+)
+
+var BigIntRewardDivider = big.NewInt(rewardDivider)
 
 type CalculateRequest struct {
 	Path        string
@@ -55,13 +68,14 @@ func calculateDelegationReward(delegation *common.HexInt, start uint64, end uint
 		}
 		period := common.NewHexIntFromUint64(e - s)
 
-		// reward = delegation amount * period * GV
+		// reward = delegation amount * period * GV / rewardDivider
 		var reward common.HexInt
 		reward.Mul(&delegation.Int, &period.Int)
 		reward.Mul(&reward.Int, &gv.RewardRep.Int)
+		reward.Div(&reward.Int, BigIntRewardDivider)
 
-		//log.Printf("dg: %s, period: %s, Rep: %s. reward: %s\n",
-		//	delegation.String(), period.String(), gv.RewardRep.String(), reward.String())
+		//log.Printf("dg: %s, period: %s, Rrep: %s, reward: %s, rewardDivider: %d\n",
+		//	delegation.String(), period.String(), gv.RewardRep.String(), reward.String(), rewardDivider)
 
 		// update total
 		total.Add(&total.Int, &reward.Int)
@@ -85,15 +99,17 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 
 	var totalReward common.HexInt
 	for _, dg := range ia.Delegations {
-		if dg.Delegate.Int.Sign() == 0 {
-			// there is no delegation
+		if minDelegation > dg.Delegate.Uint64() {
+			// not enough delegation
 			continue
 		}
 
-		if pRepCandidates[dg.Address] == nil {
+		_, ok := pRepCandidates[dg.Address]
+		if ok == false {
 			// there is no P-Rep
 			continue
 		}
+
 		reward := calculateDelegationReward(&dg.Delegate, ia.BlockHeight, blockHeight, gvList, pRepCandidates[dg.Address])
 
 		// update totalReward
