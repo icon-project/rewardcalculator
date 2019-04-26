@@ -43,7 +43,7 @@ func createIScoreData(prefix []byte, pRepList []*rewardcalculator.PRepCandidate)
 	for i := 0; i < rewardcalculator.NumDelegate; i++ {
 		dg := new (rewardcalculator.DelegateData)
 		dg.Address = pRepList[i].Address
-		dg.Delegate.SetUint64(uint64(i))
+		dg.Delegate.SetUint64(rewardcalculator.MinDelegation)
 		ia.Delegations = append(ia.Delegations, dg)
 	}
 	ia.Address = *addr

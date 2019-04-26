@@ -17,8 +17,8 @@ import (
 const (
 	writeBatchCount = 10
 
-	minRewardRep     = 200
-	minDelegation    = 788400
+	minRewardRep  = 200
+	MinDelegation = 788400
 
 	blocksPerYear    = 15768000
 	gvDivider        = 10000
@@ -99,7 +99,7 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 
 	var totalReward common.HexInt
 	for _, dg := range ia.Delegations {
-		if minDelegation > dg.Delegate.Uint64() {
+		if MinDelegation > dg.Delegate.Uint64() {
 			// not enough delegation
 			continue
 		}

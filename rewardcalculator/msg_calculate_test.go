@@ -37,7 +37,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	iconist := *common.NewAddressFromString("hx11")
 
 	// TX 0: Add new delegation at block height 10
-	// hx11 delegates minDelegation to prepA and delegates 2 * minDelegation to prepB
+	// hx11 delegates MinDelegation to prepA and delegates 2 * MinDelegation to prepB
 	tx := new(IISSTX)
 	tx.Index = 0
 	tx.BlockHeight = 10
@@ -49,12 +49,12 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 	dgData := make([]interface{}, 0)
 	dgData = append(dgData, &prepA.Address)
-	dgData = append(dgData, minDelegation)
+	dgData = append(dgData, MinDelegation)
 	delegation = append(delegation, dgData)
 
 	dgData = make([]interface{}, 0)
 	dgData = append(dgData, &prepB.Address)
-	dgData = append(dgData, 2 * minDelegation)
+	dgData = append(dgData, 2 * MinDelegation)
 	delegation = append(delegation, dgData)
 
 	var err error
@@ -66,7 +66,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	tests = append(tests, tx)
 
 	// TX 1: Modify delegation at block height 20
-	// hx11 delegates minDelegation to prepA and delegates minDelegation to iconist
+	// hx11 delegates MinDelegation to prepA and delegates MinDelegation to iconist
 	tx = new(IISSTX)
 	tx.Index = 1
 	tx.BlockHeight = 20
@@ -78,12 +78,12 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 	dgData = make([]interface{}, 0)
 	dgData = append(dgData, &prepA.Address)
-	dgData = append(dgData, minDelegation)
+	dgData = append(dgData, MinDelegation)
 	delegation = append(delegation, dgData)
 
 	dgData = make([]interface{}, 0)
 	dgData = append(dgData, &iconist)
-	dgData = append(dgData, minDelegation)
+	dgData = append(dgData, MinDelegation)
 	delegation = append(delegation, dgData)
 
 	tx.Data, err = common.EncodeAny(delegation)
@@ -115,8 +115,8 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	bs, _ := bucket.Get(iconist.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
 
-	reward := 3 * minDelegation * (20 - 10) * minRewardRep / rewardDivider +
-		minDelegation * (30 - 20) * minRewardRep / rewardDivider
+	reward := 3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
+		MinDelegation * (30 - 20) * minRewardRep / rewardDivider
 
 	//log.Printf("%d , %d", reward, ia.IScore.Uint64())
 	assert.Equal(t, uint64(reward), ia.IScore.Uint64())
@@ -149,7 +149,7 @@ func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 	iconist := *common.NewAddressFromString("hx11")
 
 	// TX 0: Add new delegation at block height 10
-	// hx11 delegates minDelegation to prepA and delegates 2 * minDelegation to prepB
+	// hx11 delegates MinDelegation to prepA and delegates 2 * MinDelegation to prepB
 	tx := new(IISSTX)
 	tx.Index = 0
 	tx.BlockHeight = 10
@@ -162,7 +162,7 @@ func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 	// delegate small value
 	dgData := make([]interface{}, 0)
 	dgData = append(dgData, &prepA.Address)
-	dgData = append(dgData, minDelegation - 1)
+	dgData = append(dgData, MinDelegation - 1)
 	delegation = append(delegation, dgData)
 
 	var err error
