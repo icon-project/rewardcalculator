@@ -174,7 +174,7 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 		}
 	}
 	// delete old value from memory
-	if deleteOld && deleteIndex != -1 {
+	if deleteOld && deleteIndex > 0 {
 		ctx.GV = ctx.GV[deleteIndex:]
 	}
 }
@@ -209,7 +209,7 @@ func (ctx *Context) UpdatePRep(prepList []*PRep) {
 		}
 	}
 	// delete old value from memory
-	if deleteOld && deleteIndex != -1 {
+	if deleteOld && deleteIndex > 0 {
 		ctx.PRep = ctx.PRep[deleteIndex:]
 	}
 }
@@ -239,8 +239,8 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 				continue
 			}
 		case TXDataTypePrepUnReg:
-			pRep := ctx.PRepCandidates[tx.Address]
-			if pRep != nil {
+			pRep, ok := ctx.PRepCandidates[tx.Address]
+			if ok == true {
 				if pRep.End != 0 {
 					log.Printf("P-Rep : %s was unregistered already\n", tx.Address.String())
 					continue

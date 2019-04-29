@@ -18,7 +18,7 @@ func TestMsgClaim_PreCommit(t *testing.T) {
 		{blockHeight: 1, blockHash: []byte("1-2"), address: common.NewAddressFromString("hx12")},
 	}
 
-	ctx := initTest()
+	ctx := initTest(1)
 	defer finalizeTest()
 
 	// Query and add
@@ -106,7 +106,7 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 	alreadyClaimedInCurrentPeriodClaim :=
 		ClaimMessage{BlockHeight: 102, BlockHash: []byte("1-1"), Address: *address}
 
-	ctx := initTest()
+	ctx := initTest(1)
 	defer finalizeTest()
 
 	// write content to Query DB

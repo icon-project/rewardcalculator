@@ -11,7 +11,7 @@ import (
 )
 
 func TestMsgCalc_CalculateIISSTX(t *testing.T) {
-	ctx := initTest()
+	ctx := initTest(1)
 	defer finalizeTest()
 
 	// set GV
@@ -123,7 +123,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 }
 
 func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
-	ctx := initTest()
+	ctx := initTest(1)
 	defer finalizeTest()
 
 	// set GV
@@ -195,7 +195,7 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 		gv1BlockHeight = 10
 	)
 
-	ctx := initTest()
+	ctx := initTest(1)
 	defer finalizeTest()
 
 	// set GV
@@ -312,7 +312,7 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 		DelegationB1     = 6
 	)
 
-	ctx := initTest()
+	ctx := initTest(1)
 	defer finalizeTest()
 
 	prepA := *common.NewAddressFromString("hxaa")
@@ -433,7 +433,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 		addr2DelegationToPRepA = 20
 		addr2DelegationToPRepB = 30
 	)
-	ctx := initTest()
+	ctx := initTest(1)
 	defer finalizeTest()
 
 	// set GV

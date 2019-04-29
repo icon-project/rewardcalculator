@@ -158,7 +158,7 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 
 	iter, err := dbi.GetIterator()
 	if err != nil {
-		return nil, err
+		return gvList, err
 	}
 
 	oldGV := 0
@@ -181,7 +181,7 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 	iter.Release()
 	err = iter.Error()
 	if err != nil {
-		return nil, err
+		return gvList, err
 	}
 
 	// delete old GVs except last one
@@ -213,9 +213,25 @@ type PRepDelegationInfo struct {
 	DelegatedAmount common.HexInt
 }
 
+func (di *PRepDelegationInfo) String() string {
+	b, err := json.Marshal(di)
+	if err != nil {
+		return "Can't covert Message to json"
+	}
+	return string(b)
+}
+
 type PRepData struct {
 	TotalDelegation common.HexInt
 	List []PRepDelegationInfo
+}
+
+func (pd *PRepData) String() string {
+	b, err := json.Marshal(pd)
+	if err != nil {
+		return "Can't covert Message to json"
+	}
+	return string(b)
 }
 
 type PRep struct {
