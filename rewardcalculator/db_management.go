@@ -62,9 +62,9 @@ func (dbi *DBInfo) SetBytes(bs []byte) error {
 	return nil
 }
 
-func NewDBInfo(globalDB db.Database, dbPath string, dbType string, dbName string, dbCount int) (*DBInfo, error) {
+func NewDBInfo(mngDB db.Database, dbPath string, dbType string, dbName string, dbCount int) (*DBInfo, error) {
 	writeToDB := false
-	bucket, err := globalDB.GetBucket(db.PrefixManagement)
+	bucket, err := mngDB.GetBucket(db.PrefixManagement)
 	if err != nil {
 		log.Panicf("Failed to get DB Information bucket\n")
 		return nil, err

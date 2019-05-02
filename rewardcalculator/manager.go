@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	Version uint16 = 1
+	Version uint64 = 1
 	debugAddress   = "/tmp/icon-rc-debug.sock"
 )
 

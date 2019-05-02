@@ -32,6 +32,7 @@ func finalizeTest() {
 func TestContext_NewContext(t *testing.T) {
 	const dbCount int = 16
 	ctx := initTest(dbCount)
+	defer finalizeTest()
 	assert.NotNil(t, ctx)
 
 	assert.NotNil(t, ctx.DB)
