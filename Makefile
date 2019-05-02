@@ -10,6 +10,7 @@ LINUX_BIN_DIR = ./linux
 
 GOBUILD = go build
 GOTEST = go test
+GOTOOL = go tool
 GOBUILD_TAGS =
 GOBUILD_ENVS = CGO_ENABLED=0
 GOBUILD_LDFLAGS =
@@ -96,6 +97,12 @@ linux : $(addsuffix -linux,$(BUILD_TARGETS))
 
 test :
 	$(GOTEST) -test.short ./...
+
+test_cov :
+	$(GOTEST) -coverprofile cp.out ./...
+
+test_cov_view :
+	$(GOTOOL) cover -html=./cp.out
 
 .DEFAULT_GOAL := all
 all : $(BUILD_TARGETS)
