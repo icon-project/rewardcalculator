@@ -1,4 +1,4 @@
-package rewardcalculator
+package core
 
 import (
 	"github.com/icon-project/rewardcalculator/common/db"

@@ -10,7 +10,7 @@ import (
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
-	"github.com/icon-project/rewardcalculator/rewardcalculator"
+	"github.com/icon-project/rewardcalculator/core"
 )
 
 const LastBlock = 1000000000
@@ -30,20 +30,20 @@ func createAddress(prefix []byte) (*common.Address, error) {
 	return addr, nil
 }
 
-func createIScoreData(prefix []byte, pRepList []*rewardcalculator.PRepCandidate) *rewardcalculator.IScoreAccount {
+func createIScoreData(prefix []byte, pRepList []*core.PRepCandidate) *core.IScoreAccount {
 	addr, err := createAddress(prefix)
 	if err != nil {
 		fmt.Printf("Failed to create Address err=%+v\n", err)
 		return nil
 	}
 
-	ia := new(rewardcalculator.IScoreAccount)
+	ia := new(core.IScoreAccount)
 
 	// set delegations
-	for i := 0; i < rewardcalculator.NumDelegate; i++ {
-		dg := new (rewardcalculator.DelegateData)
+	for i := 0; i < core.NumDelegate; i++ {
+		dg := new (core.DelegateData)
 		dg.Address = pRepList[i].Address
-		dg.Delegate.SetUint64(rewardcalculator.MinDelegation)
+		dg.Delegate.SetUint64(core.MinDelegation)
 		ia.Delegations = append(ia.Delegations, dg)
 	}
 	ia.Address = *addr
@@ -53,13 +53,13 @@ func createIScoreData(prefix []byte, pRepList []*rewardcalculator.PRepCandidate)
 	return ia
 }
 
-func createData(bucket db.Bucket, prefix []byte, count int, ctx *rewardcalculator.Context) int {
-	pRepList := make([]*rewardcalculator.PRepCandidate, rewardcalculator.NumDelegate)
+func createData(bucket db.Bucket, prefix []byte, count int, ctx *core.Context) int {
+	pRepList := make([]*core.PRepCandidate, core.NumDelegate)
 	i := 0
 	for _, v := range ctx.PRepCandidates {
 		pRepList[i] = v
 		i++
-		if i == rewardcalculator.NumDelegate {
+		if i == core.NumDelegate {
 			break
 		}
 	}
@@ -78,7 +78,7 @@ func createData(bucket db.Bucket, prefix []byte, count int, ctx *rewardcalculato
 }
 
 
-func createAccountDB(dbDir string, dbCount int, entryCount int, ctx *rewardcalculator.Context) {
+func createAccountDB(dbDir string, dbCount int, entryCount int, ctx *core.Context) {
 	dbEntryCount := entryCount / dbCount
 	totalCount := 0
 
@@ -112,8 +112,8 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 	lvlDB := db.Open(DBDir, DBType, dbName)
 
 	// make governance variable
-	gvList := make([]*rewardcalculator.GovernanceVariable, 0)
-	gv := new(rewardcalculator.GovernanceVariable)
+	gvList := make([]*core.GovernanceVariable, 0)
+	gv := new(core.GovernanceVariable)
 	gv.BlockHeight = 0
 	gv.CalculatedIncentiveRep.SetUint64(1)
 	gv.RewardRep.SetUint64(1)
@@ -128,9 +128,9 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 	}
 
 	// make P-Rep candidate list
-	pRepMap := make(map[common.Address]*rewardcalculator.PRepCandidate)
+	pRepMap := make(map[common.Address]*core.PRepCandidate)
 	for i := 0; i < 100; i++ {
-		pRep := new(rewardcalculator.PRepCandidate)
+		pRep := new(core.PRepCandidate)
 		pRep.Address = *common.NewAccountAddress([]byte{byte(i+1)})
 		pRep.Start = 0
 		pRep.End = 0
@@ -146,12 +146,12 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 	}
 
 	// make P-Rep
-	pRep := new(rewardcalculator.PRep)
+	pRep := new(core.PRep)
 	pRep.BlockHeight = 0
 	pRep.TotalDelegation.SetUint64(100 * 100)
-	pRep.List = make([]rewardcalculator.PRepDelegationInfo, len(pRepMap))
+	pRep.List = make([]core.PRepDelegationInfo, len(pRepMap))
 	for i := 0; i < len(pRep.List); i++ {
-		var dInfo rewardcalculator.PRepDelegationInfo
+		var dInfo core.PRepDelegationInfo
 		dInfo.Address = *common.NewAccountAddress([]byte{byte(i+1)})
 		dInfo.DelegatedAmount.SetUint64(100)
 
@@ -164,7 +164,7 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 
 	lvlDB.Close()
 
-	ctx, _ := rewardcalculator.NewContext(DBDir, DBType, dbName, dbCount)
+	ctx, _ := core.NewContext(DBDir, DBType, dbName, dbCount)
 
 	// create account DB
 	createAccountDB(dbDir, dbCount, entryCount, ctx)

@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"github.com/icon-project/rewardcalculator/rewardcalculator"
+	"github.com/icon-project/rewardcalculator/core"
 	"log"
 	"os"
 )
@@ -14,7 +14,7 @@ var (
 )
 
 func main() {
-	var cfg rewardcalculator.RcConfig
+	var cfg core.RcConfig
 	var generate bool
 
 	log.Printf("Version : %s", version)
@@ -51,11 +51,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	if cfg.DBCount > rewardcalculator.MaxDBCount {
-		log.Printf("Too large -db-count %d. MAX: %d", cfg.DBCount, rewardcalculator.MaxDBCount)
+	if cfg.DBCount > core.MaxDBCount {
+		log.Printf("Too large -db-count %d. MAX: %d", cfg.DBCount, core.MaxDBCount)
 	}
 
-	rcm, err := rewardcalculator.InitManager(&cfg)
+	rcm, err := core.InitManager(&cfg)
 	if err != nil {
 		log.Panicf("Failed to start RewardCalculator manager %+v", err)
 	}

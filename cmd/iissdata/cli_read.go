@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/icon-project/rewardcalculator/rewardcalculator"
+	"github.com/icon-project/rewardcalculator/core"
 )
 
 func (cli *CLI) read(dbDir string, dbName string) {
@@ -19,5 +19,5 @@ func (cli *CLI) read(dbDir string, dbName string) {
 		}
 	}
 
-	rewardcalculator.LoadIISSData(path, true)
+	core.LoadIISSData(path, true)
 }

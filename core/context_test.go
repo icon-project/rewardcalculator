@@ -1,4 +1,4 @@
-package rewardcalculator
+package core
 
 import (
 	"bytes"

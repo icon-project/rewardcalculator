@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common/db"
-	"github.com/icon-project/rewardcalculator/rewardcalculator"
+	"github.com/icon-project/rewardcalculator/core"
 )
 
 func (cli *CLI) governanceVariable(blockHeight uint64, incentive uint64, reward uint64) {
@@ -11,7 +11,7 @@ func (cli *CLI) governanceVariable(blockHeight uint64, incentive uint64, reward 
 
 	bucket, _ := cli.DB.GetBucket(db.PrefixIISSGV)
 
-	gv := new(rewardcalculator.IISSGovernanceVariable)
+	gv := new(core.IISSGovernanceVariable)
 	gv.BlockHeight = blockHeight
 	gv.IncentiveRep = incentive
 	gv.RewardRep = reward

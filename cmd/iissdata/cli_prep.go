@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
-	"github.com/icon-project/rewardcalculator/rewardcalculator"
+	"github.com/icon-project/rewardcalculator/core"
 	"strconv"
 	"strings"
 )
@@ -12,7 +12,7 @@ import (
 func (cli *CLI) bp(blockHeight uint64, generator string, validator string, delete bool) {
 	bucket, _ := cli.DB.GetBucket(db.PrefixIISSBPInfo)
 
-	prep := new(rewardcalculator.IISSBlockProduceInfo)
+	prep := new(core.IISSBlockProduceInfo)
 	prep.BlockHeight = blockHeight
 
 	key := prep.ID()
@@ -41,7 +41,7 @@ func (cli *CLI) bp(blockHeight uint64, generator string, validator string, delet
 func (cli *CLI) prep(blockHeight uint64, preps string, delegations string, delete bool) {
 	bucket, _ := cli.DB.GetBucket(db.PrefixIISSPRep)
 
-	prep := new(rewardcalculator.PRep)
+	prep := new(core.PRep)
 	prep.BlockHeight = blockHeight
 
 	key := prep.ID()
@@ -67,9 +67,9 @@ func (cli *CLI) prep(blockHeight uint64, preps string, delegations string, delet
 		}
 		prep.TotalDelegation.SetUint64(sum)
 
-		prep.List = make([]rewardcalculator.PRepDelegationInfo, 0)
+		prep.List = make([]core.PRepDelegationInfo, 0)
 		for i := 0; i < len(prepList); i++ {
-			prepDGInfo := new(rewardcalculator.PRepDelegationInfo)
+			prepDGInfo := new(core.PRepDelegationInfo)
 			prepDGInfo.Address = *common.NewAddressFromString(prepList[i])
 			v, _ := strconv.ParseUint(delegationList[i], 10, 0)
 			prepDGInfo.DelegatedAmount.SetUint64(v)

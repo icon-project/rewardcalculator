@@ -3,13 +3,13 @@ package main
 import (
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common/db"
-	"github.com/icon-project/rewardcalculator/rewardcalculator"
+	"github.com/icon-project/rewardcalculator/core"
 )
 
 func (cli *CLI) header(version uint64, blockHeight uint64) {
 	bucket, _ := cli.DB.GetBucket(db.PrefixIISSHeader)
 
-	header := new(rewardcalculator.IISSHeader)
+	header := new(core.IISSHeader)
 	header.Version = version
 	header.BlockHeight = blockHeight
 

@@ -5,7 +5,7 @@ import (
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
-	"github.com/icon-project/rewardcalculator/rewardcalculator"
+	"github.com/icon-project/rewardcalculator/core"
 )
 
 func (cli *CLI) transaction(index uint64, address string, blockHeight uint64, dataType uint64,
@@ -13,7 +13,7 @@ func (cli *CLI) transaction(index uint64, address string, blockHeight uint64, da
 
 	bucket, _ := cli.DB.GetBucket(db.PrefixIISSTX)
 
-	tx := new(rewardcalculator.IISSTX)
+	tx := new(core.IISSTX)
 	tx.Address = *common.NewAddressFromString(address)
 	tx.BlockHeight = blockHeight
 	tx.DataType = dataType
@@ -21,7 +21,7 @@ func (cli *CLI) transaction(index uint64, address string, blockHeight uint64, da
 	tx.Index = index
 
 	switch tx.DataType {
-	case rewardcalculator.TXDataTypeDelegate:
+	case core.TXDataTypeDelegate:
 		var delegation []interface{}
 		var dgData []interface{}
 
@@ -35,10 +35,10 @@ func (cli *CLI) transaction(index uint64, address string, blockHeight uint64, da
 		if err != nil {
 			fmt.Printf("Can't encode stake %+v\n", err)
 		}
-	case rewardcalculator.TXDataTypePrepReg:
+	case core.TXDataTypePrepReg:
 		tx.Data.Type = codec.TypeNil
 		tx.Data.Object = []byte("")
-	case rewardcalculator.TXDataTypePrepUnReg:
+	case core.TXDataTypePrepUnReg:
 		tx.Data.Type = codec.TypeNil
 		tx.Data.Object = []byte("")
 	}

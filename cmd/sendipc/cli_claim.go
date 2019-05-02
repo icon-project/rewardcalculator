@@ -4,14 +4,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common/ipc"
-	"github.com/icon-project/rewardcalculator/rewardcalculator"
+	"github.com/icon-project/rewardcalculator/core"
 )
 
 
 
 func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
-	var req rewardcalculator.ClaimMessage
-	var resp rewardcalculator.ResponseClaim
+	var req core.ClaimMessage
+	var resp core.ResponseClaim
 
 	req.Address.SetString(address)
 	req.BlockHeight = blockHeight
@@ -22,8 +22,8 @@ func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
 	cli.id++
 	fmt.Printf("CLAIM command get response: %s\n", Display(resp))
 
-	var commit rewardcalculator.CommitBlock
-	var commitResp rewardcalculator.CommitBlock
+	var commit core.CommitBlock
+	var commitResp core.CommitBlock
 
 	commit.Success = true
 	commit.BlockHash = req.BlockHash
