@@ -1,0 +1,50 @@
+@startuml
+title Query I-Score
+
+participant "ICON Service engine" as IS
+participant "IISS engine" as IISS
+database "state DB" as SDB
+database "IISS data" as ID
+participant "Reward Calculator" as RC
+database "I-Score DB" as ISDB
+
+-> IS: [mq] query
+IS -> IISS: [call] query
+IISS -> RC: [IPC] QUERY
+RC -> RC: check claim pre_commit data
+RC -> ISDB: read I-Score
+RC -> IISS: [IPC] QUERY response
+IISS -> IS: return response
+
+newpage Claim I-Score
+
+group block invoke
+
+-> IS: [mq] block invoke
+IS -> IISS: [call] with TX
+IISS -> RC: [IPC] CLAIM
+RC -> RC: check claim pre_commit data
+alt claimed account
+RC -> RC: set I-Score to zero
+else not claimed account
+RC -> ISDB: read I-Score
+RC -> RC: write account to claim pre_commit data
+end
+RC -> IISS: [IPC] CLAIM response
+IISS -> IISS: write to memory
+IISS -> IS: return response
+
+end
+
+group write_precommit_state
+
+-> IS: [mq] write_precommit_state
+IS -> IISS: commit
+IISS -> SDB: update ICX
+IISS -> RC: [IPC] COMMIT_BLOCK
+RC -> ISDB: write claim pre_commit data
+RC -> IISS : [IPC] COMMIT_BLOCK response
+
+end
+
+@enduml

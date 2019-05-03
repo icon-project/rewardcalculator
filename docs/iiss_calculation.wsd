@@ -1,0 +1,56 @@
+@startuml
+title Calculate I-Score
+
+participant "ICON Service engine" as IS
+participant "IISS engine" as IISS
+database "state DB" as SDB
+database "IISS data" as ID
+participant "Reward Calculator" as RC
+database "I-Score DB" as ISDB
+
+group block invoke
+-> IS: [mq] block_invoke
+IS -> IISS: [call] with TX
+opt I-Score claim
+IISS -> RC: [IPC] CLAIM
+RC -> ISDB: see 'claim I-Score diagram'
+RC -> IISS: [IPC] CLAIM response
+end
+IISS -> IISS: write to memory
+IISS -> IS: return response
+end
+
+group write precommit state
+
+-> IS: [mq] write_precommit_state
+IS -> IISS: [call] commit
+IISS -> IISS: update P-Rep rank
+IISS -> SDB: update
+IISS -> ID: write TX, block height
+IISS -> RC: [IPC] COMMIT_BLOCK
+RC -> IISS : [IPC] COMMIT_BLOCK response
+
+opt every N block
+opt get no previous CALCULATE response
+IISS -> IISS: wait CALCULATE response
+end
+
+IISS -> ID: write block height &\nGovernance Variable
+IISS -> RC: [IPC] CALCULATE
+end alt every N block
+
+IISS -> IS: return response
+
+end group write precommit
+
+group I-Score calculation
+
+RC -> ID: read
+RC -> RC: process IISS data
+RC -> ISDB: calculate & write I-Score
+RC -> ID: delete
+RC -> IISS: [IPC] CALCULATE response
+
+end group
+
+@enduml
