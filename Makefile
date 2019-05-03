@@ -12,7 +12,7 @@ GOBUILD = go build
 GOTEST = go test
 GOTOOL = go tool
 GOBUILD_TAGS =
-GOBUILD_ENVS = CGO_ENABLED=0
+GOBUILD_ENVS = CGO_ENABLED=0 GO111MODULE=on
 GOBUILD_LDFLAGS =
 GOBUILD_FLAGS = -tags "$(GOBUILD_TAGS)" -ldflags "$(GOBUILD_LDFLAGS)"
 GOBUILD_ENVS_LINUX = $(GOBUILD_ENVS) GOOS=linux GOARCH=amd64
@@ -30,7 +30,7 @@ CMDS = $(patsubst cmd/%,%,$(wildcard cmd/*))
 define CMD_template
 $(BIN_DIR)/$(1) : $(1)
 $(1) : GOBUILD_LDFLAGS+=$$($(1)_LDFLAGS)
-$(1) : | vendor
+$(1) :
 	@ \
 	rm -f $(BIN_DIR)/$(1) ; \
 	echo "[#] go build ./cmd/$(1)"
@@ -40,7 +40,7 @@ $(1) : | vendor
 
 $(LINUX_BIN_DIR)/$(1) : $(1)-linux
 $(1)-linux : GOBUILD_LDFLAGS+=$$($(1)_LDFLAGS)
-$(1)-linux : | vendor
+$(1)-linux :
 	@ \
 	rm -f $(LINUX_BIN_DIR)/$(1) ; \
 	echo "[#] go build ./cmd/$(1)"
@@ -53,14 +53,6 @@ $(foreach M,$(CMDS),$(eval $(call CMD_template,$(M))))
 # Build flags for each command
 icon_rc_LDFLAGS = -X 'main.version=$(GL_VERSION)' -X 'main.build=$(BUILD_INFO)'
 BUILD_TARGETS += icon_rc
-
-vendor :
-	@ \
-	$(MAKE) ensure
-ensure :
-	@ \
-	echo "[#] dep ensure"
-	dep ensure
 
 linux : $(addsuffix -linux,$(BUILD_TARGETS))
 
