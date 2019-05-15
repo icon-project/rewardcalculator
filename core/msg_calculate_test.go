@@ -6,7 +6,6 @@ import (
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
-	"log"
 	"testing"
 )
 
@@ -107,7 +106,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	tests = append(tests, tx)
 
 	// calculate IISS TX
-	calculateIISSTX(ctx, tests, 100)
+	stats := calculateIISSTX(ctx, tests, 100)
 
 	// check Calculate DB
 	calcDB := ctx.DB.getCalculateDB(iconist)
@@ -118,8 +117,8 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	reward := 3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
 		MinDelegation * (30 - 20) * minRewardRep / rewardDivider
 
-	//log.Printf("%d , %d", reward, ia.IScore.Uint64())
 	assert.Equal(t, uint64(reward), ia.IScore.Uint64())
+	assert.Equal(t, uint64(reward), stats.Uint64())
 }
 
 func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
@@ -174,7 +173,7 @@ func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 	tests = append(tests, tx)
 
 	// calculate IISS TX
-	calculateIISSTX(ctx, tests, 100)
+	stats := calculateIISSTX(ctx, tests, 100)
 
 	// check Calculate DB
 	calcDB := ctx.DB.getCalculateDB(iconist)
@@ -182,8 +181,8 @@ func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 	bs, _ := bucket.Get(iconist.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
 
-	//log.Printf("%d , %d", reward, ia.IScore.Uint64())
 	assert.Equal(t, uint64(0), ia.IScore.Uint64())
+	assert.Equal(t, uint64(0), stats.Uint64())
 }
 
 func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
@@ -251,12 +250,12 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	tests = append(tests, bp)
 
 	// calculate BP
-	calculateIISSBlockProduce(ctx, tests, 100)
+	stats := calculateIISSBlockProduce(ctx, tests, 100)
 
 	calcDB := ctx.DB.getCalculateDB(iconist)
 	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
 
-	var reward, reward0, reward1, reward2 common.HexInt
+	var reward, reward0, reward1, reward2, totalReward common.HexInt
 
 	// check prepA
 	gv = ctx.getGVByBlockHeight(bp0BlockHeight)
@@ -273,6 +272,8 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	ia, _ := NewIScoreAccountFromBytes(bs)
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 
+	totalReward.Add(&totalReward.Int, &reward.Int)
+
 	// check prepB
 	gv = ctx.getGVByBlockHeight(bp0BlockHeight)
 	reward0.Div(&gv.BlockProduceReward.Int, &common.NewHexIntFromUint64(2).Int)
@@ -285,6 +286,8 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	ia, _ = NewIScoreAccountFromBytes(bs)
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 
+	totalReward.Add(&totalReward.Int, &reward.Int)
+
 	// check prepC
 	gv = ctx.getGVByBlockHeight(bp0BlockHeight)
 	reward0.Div(&gv.BlockProduceReward.Int, &common.NewHexIntFromUint64(2).Int)
@@ -296,6 +299,12 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	bs, _ = bucket.Get(prepC.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
+
+	totalReward.Add(&totalReward.Int, &reward.Int)
+
+	// check stats
+	assert.Equal(t, 0, totalReward.Cmp(&stats.Int))
+
 }
 
 func TestMsgCalc_CalculatePRepReward(t *testing.T) {
@@ -368,12 +377,12 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	ctx.PRep = append(ctx.PRep, prep)
 
 	// calculate P-Rep reward
-	calculatePRepReward(ctx, BlockHeight2)
+	stats := calculatePRepReward(ctx, BlockHeight2)
 
 	calcDB := ctx.DB.getCalculateDB(prepA)
 	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
 
-	var reward, reward0, reward1 common.HexInt
+	var reward, reward0, reward1, totalReward common.HexInt
 
 	// check prepA
 	period := common.NewHexIntFromUint64(BlockHeight1 - BlockHeight0)
@@ -392,9 +401,10 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	bs, _ := bucket.Get(prepA.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
-	log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 	assert.Equal(t, BlockHeight2, ia.BlockHeight)
+
+	totalReward.Add(&totalReward.Int, &reward.Int)
 
 	// check prepB
 	period = common.NewHexIntFromUint64(BlockHeight1 - BlockHeight0)
@@ -413,25 +423,29 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	bs, _ = bucket.Get(prepB.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
-	log.Printf("%s + %s = %s : %s", reward0.String(), reward1.String(), reward.String(), ia.String())
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 	assert.Equal(t, BlockHeight2, ia.BlockHeight)
+
+	totalReward.Add(&totalReward.Int, &reward.Int)
+
+	// check stats
+	assert.Equal(t, 0, totalReward.Cmp(&stats.Int))
 }
 
 func TestMsgCalc_CalculateDB(t *testing.T) {
 	const (
-		rewardRep = 1
+		rewardRep = minRewardRep
 
 		calculateBlockHeight uint64 = 100
 
 		addr1BlockHeight uint64 = 1
 		addr1InitIScore = 100
-		addr1DelegationToPRepA = 10
+		addr1DelegationToPRepA = 10 + MinDelegation
 
 		addr2BlockHeight uint64 = 10
 		addr2InitIScore = 0
-		addr2DelegationToPRepA = 20
-		addr2DelegationToPRepB = 30
+		addr2DelegationToPRepA = 20 + MinDelegation
+		addr2DelegationToPRepB = 30 + MinDelegation
 	)
 	ctx := initTest(1)
 	defer finalizeTest()
@@ -495,9 +509,9 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	bucket.Set(ia.ID(), ia.Bytes())
 
 	// calculate
-	calculateDB(queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
+	count, stats, _ := calculateDB(queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
 
-	var reward uint64
+	var reward, totalReward uint64
 
 	// check - addr1
 	period := calculateBlockHeight - addr1BlockHeight
@@ -512,9 +526,11 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	bucket, _ = calcDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(addr1.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
-	//log.Printf("%d : %d", reward, ia.IScore.Uint64())
 	assert.Equal(t, reward, ia.IScore.Uint64())
 	assert.Equal(t, calculateBlockHeight, ia.BlockHeight)
+
+	totalReward += reward
+	totalReward -= addr1InitIScore
 
 	// check - addr2
 	period = calculateBlockHeight - addr2BlockHeight
@@ -523,11 +539,17 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 		assert.True(t, false)
 		return
 	}
-	reward = gv.RewardRep.Uint64() * period * (addr2DelegationToPRepA + addr2DelegationToPRepB) / rewardDivider
+	reward = gv.RewardRep.Uint64() * period * (addr2DelegationToPRepA + addr2DelegationToPRepB) / rewardDivider + addr2InitIScore
 
 	bs, _ = bucket.Get(addr2.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
-	//log.Printf("%d : %d", reward, ia.IScore.Uint64())
 	assert.Equal(t, reward, ia.IScore.Uint64())
 	assert.Equal(t, calculateBlockHeight, ia.BlockHeight)
+
+	totalReward += reward
+	totalReward -= addr2InitIScore
+
+	// check stats
+	assert.Equal(t, count, stats.Accounts)
+	assert.Equal(t, totalReward, stats.IScore.Uint64())
 }

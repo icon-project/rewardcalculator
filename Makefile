@@ -11,6 +11,7 @@ LINUX_BIN_DIR = ./linux
 GOBUILD = go build
 GOTEST = go test
 GOTOOL = go tool
+GOMOD = go mod
 GOBUILD_TAGS =
 GOBUILD_ENVS = CGO_ENABLED=0 GO111MODULE=on
 GOBUILD_LDFLAGS =
@@ -56,37 +57,6 @@ BUILD_TARGETS += icon_rc
 
 linux : $(addsuffix -linux,$(BUILD_TARGETS))
 
-# TODO support docker
-#DOCKER_IMAGE_TAG ?= latest
-#GOLOOP_ENV_IMAGE = goloop-env:$(GL_TAG)
-#GOCHAIN_IMAGE = gochain:$(GL_TAG)
-#GOCHAIN_DOCKER_DIR = $(BUILD_ROOT)/build/gochain/
-#GOLOOP_BASE_PATH = /work/src/github.com/icon-project/goloop
-#GOLOOP_GOPATH = /work
-#
-#goloop-env-image :
-#	@ \
-#	if [ "`docker images -q $(GOLOOP_ENV_IMAGE)`" == "" ] ; then \
-#	    docker build -t $(GOLOOP_ENV_IMAGE) ./docker/goloop-env/ ; \
-#	fi
-#
-#run-% : goloop-env-image
-#	@ \
-#	docker run -it --rm \
-#	    -v $(BUILD_ROOT):$(GOLOOP_BASE_PATH) \
-#	    -w $(GOLOOP_BASE_PATH) \
-#	    -e "GOPATH=$(GOLOOP_GOPATH)" \
-#	    $(GOLOOP_ENV_IMAGE) \
-#	    make "GL_VERSION=$(GL_VERSION)" "BUILD_INFO=$(BUILD_INFO)" \
-#		$(patsubst run-%,%,$@)
-#
-#gochain-image: run-gochain-linux
-#	@ rm -rf $(GOCHAIN_DOCKER_DIR)
-#	@ mkdir -p $(GOCHAIN_DOCKER_DIR)
-#	@ cp $(BUILD_ROOT)/docker/gochain/* $(GOCHAIN_DOCKER_DIR)
-#	@ cp $(BUILD_ROOT)/linux/gochain $(GOCHAIN_DOCKER_DIR)
-#	@ docker build -t $(GOCHAIN_IMAGE) $(GOCHAIN_DOCKER_DIR)
-
 test :
 	$(GOTEST) -test.short ./...
 
@@ -95,6 +65,9 @@ test_cov :
 
 test_cov_view :
 	$(GOTOOL) cover -html=./cp.out
+
+modules :
+	$(GOMOD) vendor
 
 .DEFAULT_GOAL := all
 all : $(BUILD_TARGETS)
