@@ -6,5 +6,6 @@ cmd/dbtest/dbtest
 cmd/icon_rc/icon_rc
 cmd/iissdata/iissdata
 cmd/sendipc/sendipc
+cmd/rctool/rctool
 linux
 bin

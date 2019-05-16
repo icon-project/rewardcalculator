@@ -7,7 +7,7 @@ import (
 )
 
 func TestStatistics_Set(t *testing.T) {
-	var stats statistics
+	var stats Statistics
 	var err error
 
 	// invalid field name
@@ -35,7 +35,7 @@ func TestStatistics_Increase(t *testing.T) {
 		initIScore uint64 = 1
 	)
 
-	stats := statistics{
+	stats := Statistics {
 		Accounts: initAccounts,
 		IScore: *common.NewHexIntFromUint64(initIScore),
 	}
@@ -58,7 +58,7 @@ func TestStatistics_Decrease(t *testing.T) {
 		initIScore uint64 = 1
 	)
 
-	stats := statistics{
+	stats := Statistics {
 		Accounts: initAccounts,
 		IScore: *common.NewHexIntFromUint64(initIScore),
 	}

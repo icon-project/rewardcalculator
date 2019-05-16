@@ -127,6 +127,8 @@ type Context struct {
 	GV              []*GovernanceVariable
 
 	preCommit       *preCommit
+
+	stats           *Statistics
 }
 
 func (ctx *Context) getGVByBlockHeight(blockHeight uint64) *GovernanceVariable {

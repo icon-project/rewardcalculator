@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	Version uint64 = 1
-	debugAddress   = "/tmp/icon-rc-debug.sock"
+	Version      uint64 = 1
+	DebugAddress        = "/tmp/.icon-rc-monitor.sock"
 )
 
 type RcConfig struct {
@@ -42,9 +42,10 @@ type Manager interface {
 }
 
 type manager struct {
-	clientMode bool
-	server     ipc.Server
-	conn       ipc.Connection
+	clientMode  bool
+	monitorMode bool
+	server      ipc.Server
+	conn        ipc.Connection
 
 	ctx        *Context
 }
@@ -133,18 +134,19 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 
 	// Initialize debug channel
 	if cfg.Monitor == true {
-		debug := new(manager)
-		debug.ctx = m.ctx
+		monitor := new(manager)
+		monitor.ctx = m.ctx
+		monitor.monitorMode = true
 
 		srv := ipc.NewServer()
-		err = srv.Listen("unix", debugAddress)
+		err = srv.Listen("unix", DebugAddress)
 		if err != nil {
 			return nil, err
 		}
-		srv.SetHandler(debug)
-		debug.server = srv
+		srv.SetHandler(monitor)
+		monitor.server = srv
 
-		go debug.Loop()
+		go monitor.Loop()
 	}
 
 	return m, err

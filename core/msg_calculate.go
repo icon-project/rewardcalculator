@@ -128,14 +128,14 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 }
 
 func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVariable,
-	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (uint64, *statistics, []byte) {
+	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (uint64, *Statistics, []byte) {
 
 	iter, _ := readDB.GetIterator()
 	bucket, _ := writeDB.GetBucket(db.PrefixIScore)
 	batch, _ := writeDB.GetBatch()
 	var entries, count uint64 = 0, 0
 	stateHash := make([]byte, 64)
-	stats := new(statistics)
+	stats := new(Statistics)
 
 	batch.New()
 	iter.New(nil, nil)
@@ -149,7 +149,7 @@ func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVa
 		}
 		ia.Address = *common.NewAddress(key)
 
-		// update statistics account
+		// update Statistics account
 		stats.Increase("Accounts", uint64(1))
 
 		// calculate
@@ -177,7 +177,7 @@ func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVa
 		// update stateHash
 		sha3.ShakeSum256(stateHash, ia.BytesForHash())
 
-		// update statistics I-Score
+		// update Statistics I-Score
 		stats.Increase("IScore", *reward)
 
 		count++
@@ -243,7 +243,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	return c.Send(msgCalculate, id, &resp)
 }
 
-func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *statistics, []byte) {
+func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics, []byte) {
 	iScoreDB := ctx.DB
 	blockHeight := req.BlockHeight
 
@@ -286,7 +286,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *statistics
 	// Calculate I-Score @ Account DB
 	//
 
-	// calculate deletation reward
+	// calculate delegation reward
 	var totalCount uint64
 	var wait sync.WaitGroup
 	wait.Add(iScoreDB.info.DBCount)
@@ -294,7 +294,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *statistics
 	queryDBList := iScoreDB.getQueryDBList()
 	calcDBList := iScoreDB.GetCalcDBList()
 	stateHashList := make([][]byte, iScoreDB.info.DBCount)
-	statsList := make([]*statistics, iScoreDB.info.DBCount)
+	statsList := make([]*Statistics, iScoreDB.info.DBCount)
 	for i, cDB := range calcDBList {
 		go func(read db.Database, write db.Database) {
 			defer wait.Done()
@@ -309,8 +309,8 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *statistics
 	}
 	wait.Wait()
 
-	// update statistics
-	stats := new(statistics)
+	// update Statistics
+	stats := new(Statistics)
 	for _, s := range statsList {
 		if s == nil {
 			continue
@@ -333,6 +333,8 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *statistics
 	reward = calculatePRepReward(ctx, blockHeight)
 	stats.Increase("IScore", *reward)
 
+	ctx.stats = stats
+
 	// make stateHash
 	stateHash := make([]byte, 64)
 	for _, hash := range stateHashList {
@@ -346,7 +348,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *statistics
 	// set blockHeight
 	ctx.DB.setBlockHeight(blockHeight)
 
-	return true, blockHeight, stats, stateHash
+	return true, blockHeight, ctx.stats, stateHash
 }
 
 // Update I-Score of account in TX list
@@ -387,7 +389,7 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) *common
 				// reset I-Score to tx.BlockHeight
 				newIA.IScore.Sub(&newIA.IScore.Int, &ia.IScore.Int)
 
-				// statistics
+				// Statistics
 				stats.Sub(&stats.Int, &ia.IScore.Int)
 			}
 
@@ -398,7 +400,7 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) *common
 			}
 			//log.Printf("[IISSTX] %s", newIA.String())
 
-			// statistics
+			// Statistics
 			stats.Add(&stats.Int, &reward.Int)
 
 			// write to account DB
