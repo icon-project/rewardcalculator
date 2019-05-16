@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	msgVERSION   uint = 0
-	msgClaim          = 1
-	msgQuery          = 2
-	msgCalculate      = 3
-	msgCommitBlock    = 4
+	msgVERSION     uint = 0
+	msgClaim            = 1
+	msgQuery            = 2
+	msgCalculate        = 3
+	msgCommitBlock      = 4
+	MsgDebug            = 100
 )
 
 type ResponseQuery struct {
@@ -34,10 +35,14 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 	}
 
 	c.SetHandler(msgVERSION, handler)
-	c.SetHandler(msgClaim, handler)
 	c.SetHandler(msgQuery, handler)
-	c.SetHandler(msgCalculate, handler)
-	c.SetHandler(msgCommitBlock, handler)
+	if m.monitorMode == true {
+		c.SetHandler(MsgDebug, handler)
+	} else {
+		c.SetHandler(msgClaim, handler)
+		c.SetHandler(msgCalculate, handler)
+		c.SetHandler(msgCommitBlock, handler)
+	}
 
 	return handler, nil
 }
@@ -54,6 +59,8 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 		go mh.calculate(c, id, data)
 	case msgCommitBlock:
 		go mh.commitBlock(c, id, data)
+	case MsgDebug:
+		go mh.debug(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}

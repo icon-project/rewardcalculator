@@ -2,26 +2,47 @@ package core
 
 import (
 	"fmt"
+	"github.com/icon-project/rewardcalculator/common/codec"
+	"log"
 	"reflect"
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/oleiade/reflections"
 )
 
-type statistics struct {
+type Statistics struct {
 	Accounts uint64
 	IScore   common.HexInt
 }
 
-func (stats *statistics) String() string {
+func (stats *Statistics) String() string {
 	return fmt.Sprintf("Accounts: %d IScore: %s", stats.Accounts, stats.IScore.String())
 }
 
-func (stats *statistics) Set(field string, value interface{}) error {
+func (stats *Statistics) Bytes() []byte {
+	var bytes []byte
+	if bs, err := codec.MarshalToBytes(stats); err != nil {
+		log.Panicf("Failed to marshal Statistics %+v. err=%+v", stats, err)
+		return nil
+	} else {
+		bytes = bs
+	}
+	return bytes
+}
+
+func (stats *Statistics) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, stats)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (stats *Statistics) Set(field string, value interface{}) error {
 	return reflections.SetField(stats, field, value)
 }
 
-func (stats *statistics) Increase(field string, value interface{}) error {
+func (stats *Statistics) Increase(field string, value interface{}) error {
 	org, err := reflections.GetField(stats, field)
 	if err != nil {
 		return err
@@ -46,7 +67,7 @@ func (stats *statistics) Increase(field string, value interface{}) error {
 	return nil
 }
 
-func (stats *statistics) Decrease(field string, value interface{}) error {
+func (stats *Statistics) Decrease(field string, value interface{}) error {
 	org, err := reflections.GetField(stats, field)
 	if err != nil {
 		return err
