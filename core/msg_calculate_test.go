@@ -33,14 +33,15 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 	// set IISS TX
 	tests := make([]*IISSTX, 0)
-	iconist := *common.NewAddressFromString("hx11")
+	iconistA := *common.NewAddressFromString("hx11")
+	iconistB := *common.NewAddressFromString("hx22")
 
 	// TX 0: Add new delegation at block height 10
-	// hx11 delegates MinDelegation to prepA and delegates 2 * MinDelegation to prepB
+	// iconistA delegates MinDelegation to prepA and delegates 2 * MinDelegation to prepB
 	tx := new(IISSTX)
 	tx.Index = 0
 	tx.BlockHeight = 10
-	tx.Address = iconist
+	tx.Address = iconistA
 	tx.DataType = TXDataTypeDelegate
 	tx.Data = new(codec.TypedObj)
 
@@ -65,11 +66,11 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	tests = append(tests, tx)
 
 	// TX 1: Modify delegation at block height 20
-	// hx11 delegates MinDelegation to prepA and delegates MinDelegation to iconist
+	// iconistA delegates MinDelegation to prepA and delegates MinDelegation to iconistA
 	tx = new(IISSTX)
 	tx.Index = 1
 	tx.BlockHeight = 20
-	tx.Address = iconist
+	tx.Address = iconistA
 	tx.DataType = TXDataTypeDelegate
 	tx.Data = new(codec.TypedObj)
 
@@ -81,7 +82,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	delegation = append(delegation, dgData)
 
 	dgData = make([]interface{}, 0)
-	dgData = append(dgData, &iconist)
+	dgData = append(dgData, &iconistA)
 	dgData = append(dgData, MinDelegation)
 	delegation = append(delegation, dgData)
 
@@ -97,7 +98,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 	tx.Index = 2
 	tx.BlockHeight = 30
-	tx.Address = iconist
+	tx.Address = iconistA
 	tx.DataType = TXDataTypeDelegate
 	tx.Data = new(codec.TypedObj)
 	tx.Data.Type = codec.TypeNil
@@ -105,20 +106,73 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 	tests = append(tests, tx)
 
+	// TX 3: Add new delegation at block height 40
+	// iconistB delegates MinDelegation to prepA
+	tx = new(IISSTX)
+	tx.Index = 3
+	tx.BlockHeight = 40
+	tx.Address = iconistB
+	tx.DataType = TXDataTypeDelegate
+	tx.Data = new(codec.TypedObj)
+
+	delegation = make([]interface{}, 0)
+
+	dgData = make([]interface{}, 0)
+	dgData = append(dgData, &prepA.Address)
+	dgData = append(dgData, MinDelegation)
+	delegation = append(delegation, dgData)
+
+	tx.Data, err = common.EncodeAny(delegation)
+	if err != nil {
+		fmt.Printf("Can't encode delegation. err=%+v\n", err)
+		return
+	}
+	tests = append(tests, tx)
+
+	// TX 4: register iconistB to prep candidate
+	tx = new(IISSTX)
+	tx.Index = 4
+	tx.BlockHeight = 50
+	tx.Address = iconistB
+	tx.DataType = TXDataTypePRepReg
+
+	tests = append(tests, tx)
+
+	// TX 5: unregister iconistB from prep candidate
+	tx = new(IISSTX)
+	tx.Index = 5
+	tx.BlockHeight = 90
+	tx.Address = iconistB
+	tx.DataType = TXDataTypePRepUnReg
+
+	tests = append(tests, tx)
+
 	// calculate IISS TX
 	stats := calculateIISSTX(ctx, tests, 100)
 
-	// check Calculate DB
-	calcDB := ctx.DB.getCalculateDB(iconist)
+	// check I-Score of iconstA in Calculate DB
+	calcDB := ctx.DB.getCalculateDB(iconistA)
 	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
-	bs, _ := bucket.Get(iconist.Bytes())
+	bs, _ := bucket.Get(iconistA.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
 
-	reward := 3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
+	rewardA := 3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
 		MinDelegation * (30 - 20) * minRewardRep / rewardDivider
 
-	assert.Equal(t, uint64(reward), ia.IScore.Uint64())
-	assert.Equal(t, uint64(reward), stats.Uint64())
+	assert.Equal(t, uint64(rewardA), ia.IScore.Uint64())
+
+	// check I-Score of iconstB in Calculate DB
+	calcDB = ctx.DB.getCalculateDB(iconistB)
+	bucket, _ = calcDB.GetBucket(db.PrefixIScore)
+	bs, _ = bucket.Get(iconistB.Bytes())
+	ia, _ = NewIScoreAccountFromBytes(bs)
+
+	rewardB := MinDelegation * ((50 - 40) + (100 - 90)) * minRewardRep / rewardDivider
+
+	assert.Equal(t, uint64(rewardB), ia.IScore.Uint64())
+
+	// check statistics
+	assert.Equal(t, uint64(rewardA + rewardB), stats.Uint64())
 }
 
 func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
@@ -446,6 +500,8 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 		addr2InitIScore = 0
 		addr2DelegationToPRepA = 20 + MinDelegation
 		addr2DelegationToPRepB = 30 + MinDelegation
+
+		prepAInitIScore uint64 = 0
 	)
 	ctx := initTest(1)
 	defer finalizeTest()
@@ -473,10 +529,9 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 
 	// set Query DB for read
 	queryDB := ctx.DB.getQueryDB(addr1)
-	calcDB := ctx.DB.getCalculateDB(addr1)
 	bucket, _ := queryDB.GetBucket(db.PrefixIScore)
 
-	/// addr1
+	// addr1
 	ia := new(IScoreAccount)
 	ia.Address = addr1
 	ia.BlockHeight = addr1BlockHeight
@@ -492,7 +547,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	ia.Delegations = append(ia.Delegations, delegation)
 	bucket.Set(ia.ID(), ia.Bytes())
 
-	/// addr2
+	// addr2
 	ia = new(IScoreAccount)
 	ia.Address = addr2
 	ia.BlockHeight = addr2BlockHeight
@@ -508,7 +563,20 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	ia.Delegations = append(ia.Delegations, delegation)
 	bucket.Set(ia.ID(), ia.Bytes())
 
+	// PrepA
+	ia = new(IScoreAccount)
+	ia.Address = prepA.Address
+	ia.BlockHeight = addr1BlockHeight
+	ia.IScore.SetUint64(prepAInitIScore)
+	ia.Delegations = make([]*DelegateData, 0)
+	delegation = new(DelegateData)
+	delegation.Address = prepA.Address
+	delegation.Delegate.SetUint64(addr1DelegationToPRepA)
+	ia.Delegations = append(ia.Delegations, delegation)
+	bucket.Set(ia.ID(), ia.Bytes())
+
 	// calculate
+	calcDB := ctx.DB.getCalculateDB(addr1)
 	count, stats, _ := calculateDB(queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
 
 	var reward, totalReward uint64
@@ -548,6 +616,13 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 
 	totalReward += reward
 	totalReward -= addr2InitIScore
+
+	// check - prepA
+	bs, _ = bucket.Get(prepA.Address.Bytes())
+	ia, _ = NewIScoreAccountFromBytes(bs)
+	// P-Rep can't get delegation reward
+	assert.Equal(t, prepAInitIScore, ia.IScore.Uint64())
+	assert.Equal(t, calculateBlockHeight, ia.BlockHeight)
 
 	// check stats
 	assert.Equal(t, count, stats.Accounts)

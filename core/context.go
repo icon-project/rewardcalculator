@@ -221,7 +221,7 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 	for _, tx := range txList {
 		switch tx.DataType {
 		case TXDataTypeDelegate:
-		case TXDataTypePrepReg:
+		case TXDataTypePRepReg:
 			pRep := ctx.PRepCandidates[tx.Address]
 			if pRep == nil {
 				p := new(PRepCandidate)
@@ -232,7 +232,7 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 				// write to memory
 				ctx.PRepCandidates[tx.Address] = p
 
-				// write to global DB
+				// write to management DB
 				bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRepCandidate)
 				data, _ := p.Bytes()
 				bucket.Set(p.ID(), data)
@@ -240,7 +240,7 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 				log.Printf("P-Rep : '%s' was registered already\n", tx.Address.String())
 				continue
 			}
-		case TXDataTypePrepUnReg:
+		case TXDataTypePRepUnReg:
 			pRep, ok := ctx.PRepCandidates[tx.Address]
 			if ok == true {
 				if pRep.End != 0 {
@@ -251,13 +251,29 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 				// write to memory
 				pRep.End = tx.BlockHeight
 
-				// write to global DB
+				// write to management DB
 				bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRepCandidate)
 				data, _ := pRep.Bytes()
 				bucket.Set(pRep.ID(), data)
 			} else {
 				log.Printf("P-Rep :  %s was not registered\n", tx.Address.String())
 				continue
+			}
+		}
+	}
+}
+
+func (ctx *Context) garbageCollectPRepCandidate(txList []*IISSTX) {
+	for _, tx := range txList {
+		if tx.DataType == TXDataTypePRepUnReg {
+			pRep, ok := ctx.PRepCandidates[tx.Address]
+			if ok == true {
+				// delete from management DB
+				bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRepCandidate)
+				bucket.Delete(pRep.ID())
+
+				// delete from memory
+				delete(ctx.PRepCandidates, tx.Address)
 			}
 		}
 	}
@@ -339,7 +355,7 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 }
 
 func CloseIScoreDB(isDB *IScoreDB) {
-	log.Printf("Close 1 global DB and %d account DBs\n", len(isDB.Account0) + len(isDB.Account1))
+	log.Printf("Close 1 management DB and %d account DBs\n", len(isDB.Account0) + len(isDB.Account1))
 
 	// close management DB
 	isDB.management.Close()
