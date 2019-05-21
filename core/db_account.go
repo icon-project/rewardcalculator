@@ -76,35 +76,36 @@ func NewIScoreAccountFromBytes(bs []byte) (*IScoreAccount, error) {
 }
 
 func NewIScoreAccountFromIISS(iisstx *IISSTX) *IScoreAccount {
+	if iisstx.DataType != TXDataTypeDelegate {
+		return nil
+	}
+
 	ia := new(IScoreAccount)
 	ia.Address = iisstx.Address
 	ia.BlockHeight = iisstx.BlockHeight
 
-	switch iisstx.DataType {
-	case TXDataTypeDelegate:
-		data, _ := common.DecodeAny(iisstx.Data)
-		dList1, ok := data.([]interface{})
-		if ok {
-			ia.Delegations = make([]*DelegateData, len(dList1))
-			for i, v := range dList1 {
-				dg := new(DelegateData)
-				dList2, ok := v.([]interface{})
-				if ok {
-					if len(dList2) != 2 {
-						continue
-					}
-					for _, v2 := range dList2 {
-						switch v2.(type) {
-						case *common.Address:
-							dg.Address = *v2.(*common.Address)
-						case *common.HexInt:
-							dg.Delegate = *v2.(*common.HexInt)
-						}
-					}
-					ia.Delegations[i] = dg
-				} else {
-					return nil
+	data, _ := common.DecodeAny(iisstx.Data)
+	dList1, ok := data.([]interface{})
+	if ok {
+		ia.Delegations = make([]*DelegateData, len(dList1))
+		for i, v := range dList1 {
+			dg := new(DelegateData)
+			dList2, ok := v.([]interface{})
+			if ok {
+				if len(dList2) != 2 {
+					continue
 				}
+				for _, v2 := range dList2 {
+					switch v2.(type) {
+					case *common.Address:
+						dg.Address = *v2.(*common.Address)
+					case *common.HexInt:
+						dg.Delegate = *v2.(*common.HexInt)
+					}
+				}
+				ia.Delegations[i] = dg
+			} else {
+				return nil
 			}
 		}
 	}

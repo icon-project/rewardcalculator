@@ -69,7 +69,6 @@ func TestDBAccount_NewIScoreAccountFromBytes(t *testing.T) {
 }
 
 func TestDBAccount_NewIScoreAccountFromIISS(t *testing.T) {
-	// set delegation
 	tx := new(IISSTX)
 	tx.Index = 0
 	tx.BlockHeight = iaBlockHeight
@@ -98,32 +97,4 @@ func TestDBAccount_NewIScoreAccountFromIISS(t *testing.T) {
 	assert.Equal(t, 1, len(ia.Delegations))
 	assert.True(t, ia.Delegations[0].Address.Equal(common.NewAddressFromString(delegationAddress)))
 	assert.Equal(t, uint64(MinDelegation), ia.Delegations[0].Delegate.Uint64())
-
-	// register P-Rep
-	tx = new(IISSTX)
-	tx.Index = 0
-	tx.BlockHeight = iaBlockHeight
-	tx.Address = *common.NewAddressFromString(iaAddress)
-	tx.DataType = TXDataTypePRepReg
-
-	ia = NewIScoreAccountFromIISS(tx)
-
-	assert.True(t, ia.Address.Equal(common.NewAddressFromString(iaAddress)))
-	assert.Equal(t, uint64(0), ia.IScore.Uint64())
-	assert.Equal(t, iaBlockHeight, ia.BlockHeight)
-	assert.Nil(t, ia.Delegations)
-
-	// unregister P-Rep
-	tx = new(IISSTX)
-	tx.Index = 0
-	tx.BlockHeight = iaBlockHeight
-	tx.Address = *common.NewAddressFromString(iaAddress)
-	tx.DataType = TXDataTypePRepUnReg
-
-	ia = NewIScoreAccountFromIISS(tx)
-
-	assert.True(t, ia.Address.Equal(common.NewAddressFromString(iaAddress)))
-	assert.Equal(t, uint64(0), ia.IScore.Uint64())
-	assert.Equal(t, iaBlockHeight, ia.BlockHeight)
-	assert.Nil(t, ia.Delegations)
 }

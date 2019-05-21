@@ -291,11 +291,11 @@ func writeIISSTX(dbDir string, dbName string) ([]*IISSTX, db.Database) {
 	txList := make([]*IISSTX, 0)
 	tx := makeIISSTX(TXDataTypeDelegate)
 	txList = append(txList, tx)
-	tx = makeIISSTX(TXDataTypePRepReg)
+	tx = makeIISSTX(TXDataTypePrepReg)
 	tx.Index += 1
 	tx.BlockHeight = iaBlockHeight + 100
 	txList = append(txList, tx)
-	tx = makeIISSTX(TXDataTypePRepUnReg)
+	tx = makeIISSTX(TXDataTypePrepUnReg)
 	tx.Index += 2
 	tx.BlockHeight = iaBlockHeight + 200
 	txList = append(txList, tx)

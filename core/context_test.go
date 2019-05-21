@@ -209,7 +209,7 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 	txList := make([]*IISSTX, 0)
 	tx := new(IISSTX)
 	tx.Index = 0
-	tx.DataType = TXDataTypePRepReg
+	tx.DataType = TXDataTypePrepReg
 	tx.BlockHeight = regPRepABH
 	tx.Address = *pRepA
 	txList = append(txList, tx)
@@ -233,7 +233,7 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 	txList = make([]*IISSTX, 0)
 	tx = new(IISSTX)
 	tx.Index = 0
-	tx.DataType = TXDataTypePRepReg
+	tx.DataType = TXDataTypePrepReg
 	tx.BlockHeight = regPRepABH + 1
 	tx.Address = *pRepA
 	txList = append(txList, tx)
@@ -256,7 +256,7 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 	txList = make([]*IISSTX, 0)
 	tx = new(IISSTX)
 	tx.Index = 0
-	tx.DataType = TXDataTypePRepUnReg
+	tx.DataType = TXDataTypePrepUnReg
 	tx.BlockHeight = unRegPRepABH
 	tx.Address = *pRepA
 	txList = append(txList, tx)
@@ -279,7 +279,7 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 	txList = make([]*IISSTX, 0)
 	tx = new(IISSTX)
 	tx.Index = 0
-	tx.DataType = TXDataTypePRepUnReg
+	tx.DataType = TXDataTypePrepUnReg
 	tx.BlockHeight = unRegPRepABH + 1
 	tx.Address = *pRepA
 	txList = append(txList, tx)
@@ -298,22 +298,11 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 	assert.Equal(t, regPRepABH, pRep.Start)
 	assert.Equal(t, unRegPRepABH, pRep.End)
 
-	// garbage collection
-	ctx.garbageCollectPRepCandidate(txList)
-
-	// check - in memory
-	_, ok := ctx.PRepCandidates[tx.Address]
-	assert.False(t, ok)
-
-	// check - in DB
-	bs, _ = bucket.Get(pRepA.Bytes())
-	assert.Nil(t, bs)
-
 	// 5. unregister PRep candidate B
 	txList = make([]*IISSTX, 0)
 	tx = new(IISSTX)
 	tx.Index = 0
-	tx.DataType = TXDataTypePRepUnReg
+	tx.DataType = TXDataTypePrepUnReg
 	tx.BlockHeight = unRegPRepABH
 	tx.Address = *common.NewAddressFromString("hxb")
 	txList = append(txList, tx)
@@ -322,7 +311,7 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 	ctx.UpdatePRepCandidate(txList)
 
 	// check - in memory
-	_, ok = ctx.PRepCandidates[tx.Address]
+	_, ok := ctx.PRepCandidates[tx.Address]
 	assert.False(t, ok)
 
 	// check - in DB

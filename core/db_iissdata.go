@@ -201,8 +201,8 @@ func loadIISSBlockProduceInfo(iissDB db.Database) ([]*IISSBlockProduceInfo, erro
 
 const (
 	TXDataTypeDelegate  = 0
-	TXDataTypePRepReg   = 1
-	TXDataTypePRepUnReg = 2
+	TXDataTypePrepReg   = 1
+	TXDataTypePrepUnReg = 2
 )
 
 type IISSTXData struct {
