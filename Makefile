@@ -7,6 +7,10 @@
 BUILD_ROOT = $(abspath ./)
 BIN_DIR = ./bin
 LINUX_BIN_DIR = ./linux
+DST_DIR = /usr/local/bin
+
+UNAME = $(shell uname)
+INSTALL = install
 
 GOBUILD = go build
 GOTEST = go test
@@ -68,6 +72,13 @@ test_cov_view :
 
 modules :
 	$(GOMOD) vendor
+
+install :
+ifeq ($(UNAME),Darwin)
+	$(INSTALL) -m 644 $(BIN_DIR)/$(BUILD_TARGETS) $(DST_DIR)
+else
+	$(INSTALL) -m 644 $(LINUX_BIN_DIR)/$(BUILD_TARGETS) $(DST_DIR)
+endif
 
 .DEFAULT_GOAL := all
 all : $(BUILD_TARGETS)
