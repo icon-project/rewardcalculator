@@ -116,11 +116,6 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 		}
 		m.OnConnect(conn)
 		m.conn = conn
-
-		// send VERSION message to server
-		if m.clientMode {
-			m.conn.Send(msgVERSION, 0, Version)
-		}
 	} else {
 		// IPC Server
 		srv := ipc.NewServer()

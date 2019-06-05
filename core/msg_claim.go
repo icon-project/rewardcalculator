@@ -301,5 +301,6 @@ func (pc *preCommit) writeClaimToDB(ctx *Context, blockHeight uint64, blockHash 
 			return true
 		}
 	}
-	return false
+
+	return true
 }

@@ -17,12 +17,6 @@ const (
 	MsgDebug            = 100
 )
 
-type ResponseQuery struct {
-	Address common.Address
-	IScore  common.HexInt
-	BlockHeight uint64
-}
-
 type msgHandler struct {
 	mgr  *manager
 	conn ipc.Connection
@@ -44,13 +38,16 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 		c.SetHandler(msgCommitBlock, handler)
 	}
 
-	return handler, nil
+	// send VERSION message to peer
+	err := handler.version(c, 0)
+
+	return handler, err
 }
 
 func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data []byte) error {
 	switch msg {
 	case msgVERSION:
-		go mh.version(c, id, data)
+		go mh.version(c, id)
 	case msgClaim:
 		go mh.claim(c, id, data)
 	case msgQuery:
@@ -67,10 +64,24 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 	return nil
 }
 
-func (mh *msgHandler) version(c ipc.Connection, id uint32, data []byte) error {
-	mh.mgr.ctx.Print()
+type ResponseVersion struct {
+	Version uint64
+	BlockHeight uint64
+}
 
-	return c.Send(msgVERSION, id, Version)
+func (mh *msgHandler) version(c ipc.Connection, id uint32) error {
+	resp := ResponseVersion{
+		Version: Version,
+		BlockHeight: mh.mgr.ctx.DB.info.BlockHeight,
+	}
+
+	return c.Send(msgVERSION, 0, resp)
+}
+
+type ResponseQuery struct {
+	Address common.Address
+	IScore  common.HexInt
+	BlockHeight uint64
 }
 
 func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
