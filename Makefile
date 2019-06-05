@@ -75,9 +75,9 @@ modules :
 
 install :
 ifeq ($(UNAME),Darwin)
-	$(INSTALL) -m 644 $(BIN_DIR)/$(BUILD_TARGETS) $(DST_DIR)
+	$(INSTALL) -m 755 $(BIN_DIR)/$(BUILD_TARGETS) $(DST_DIR)
 else
-	$(INSTALL) -m 644 $(LINUX_BIN_DIR)/$(BUILD_TARGETS) $(DST_DIR)
+	$(INSTALL) -m 755 $(LINUX_BIN_DIR)/$(BUILD_TARGETS) $(DST_DIR)
 endif
 
 .DEFAULT_GOAL := all
