@@ -6,6 +6,7 @@ import (
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"github.com/pkg/errors"
+	"log"
 )
 
 const (
@@ -38,8 +39,18 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 		c.SetHandler(msgCommitBlock, handler)
 	}
 
+	// send IISS data reload result
+	err := sendReloadIISSDataResult(m.ctx, c)
+	if err != nil {
+		log.Printf("Failed to send IISSData reload result")
+		return nil, err
+	}
+
 	// send VERSION message to peer
-	err := handler.version(c, 0)
+	err = handler.version(c, 0)
+	if err != nil {
+		log.Printf("Failed to send VERSION messag")
+	}
 
 	return handler, err
 }
