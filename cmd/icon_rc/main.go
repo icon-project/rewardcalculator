@@ -27,8 +27,9 @@ func main() {
 	flag.StringVar(&cfg.FileName, "config", "rc_config.json", "Reward Calculator configuration file")
 	flag.BoolVar(&cfg.ClientMode, "client", false, "Connect to ICON Service")
 	flag.BoolVar(&cfg.Monitor, "monitor", false, "Open monitoring channel")
-	cfg.DBCount = *flag.Int("db-count", 2, "The number of Account DB (MAX:256")
+	flag.IntVar(&cfg.DBCount, "db-count", 2, "The number of Account DB (MAX:256)")
 	flag.BoolVar(&generate, "gen", false, "Generate configuration file")
+
 	flag.Parse()
 	cfg.Print()
 
