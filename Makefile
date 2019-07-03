@@ -22,6 +22,12 @@ GOBUILD_LDFLAGS =
 GOBUILD_FLAGS = -mod vendor -tags "$(GOBUILD_TAGS)" -ldflags "$(GOBUILD_LDFLAGS)"
 GOBUILD_ENVS_LINUX = $(GOBUILD_ENVS) GOOS=linux GOARCH=amd64
 
+ifeq ($(UNAME),Darwin)
+    INSTALL_DIR = $(BIN_DIR)
+else
+    INSTALL_DIR = $(LINUX_BIN_DIR)
+endif
+
 # Build flags
 GL_VERSION ?= $(shell git describe --always --tags --dirty)
 GL_TAG ?= latest
@@ -57,7 +63,6 @@ $(foreach M,$(CMDS),$(eval $(call CMD_template,$(M))))
 
 # Build flags for each command
 icon_rc_LDFLAGS = -X 'main.version=$(GL_VERSION)' -X 'main.build=$(BUILD_INFO)'
-rctool_LDFLAGS = -X 'main.version=$(GL_VERSION)' -X 'main.build=$(BUILD_INFO)'
 BUILD_TARGETS += icon_rc rctool
 
 linux : $(addsuffix -linux,$(BUILD_TARGETS))
@@ -75,11 +80,11 @@ modules :
 	$(GOMOD) vendor
 
 install :
-ifeq ($(UNAME),Darwin)
-	$(INSTALL) -m 755 $(BIN_DIR)/$(BUILD_TARGETS) $(DST_DIR)
-else
-	$(INSTALL) -m 755 $(LINUX_BIN_DIR)/$(BUILD_TARGETS) $(DST_DIR)
-endif
+	@ \
+    for target in $(BUILD_TARGETS); do \
+        echo "[#] install $$target to $(DST_DIR)"; \
+        $(INSTALL) -m 755 $(INSTALL_DIR)/$$target $(DST_DIR); \
+    done
 
 .DEFAULT_GOAL := all
 all : $(BUILD_TARGETS)
