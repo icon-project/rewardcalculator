@@ -58,75 +58,103 @@ func (cli *CLI) Run() {
 
 	cli.conn = conn
 
+	// get VERSION message
+	var m core.ResponseVersion
+	cli.conn.Receive(m)
+
 	// Send message to server
 	switch cmd {
 	case "stats":
-		cli.stats()
+		err = cli.stats()
 	case "dbinfo":
-		cli.DBInfo()
+		err = cli.DBInfo()
 	case "prep":
-		cli.PRep()
+		err = cli.PRep()
 	case "prepcandidate":
-		cli.PRepCandidate()
+		err = cli.PRepCandidate()
 	case "gv":
-		cli.gv()
+		err = cli.gv()
 	case "logctx":
-		cli.logCtx()
+		err = cli.logCtx()
 	default:
 		cli.printUsage()
 		os.Exit(1)
 	}
+
+	if err != nil {
+		fmt.Printf("Failed to handle command. (%+v)\n", err)
+	}
 }
 
-func (cli *CLI) stats() {
+func (cli *CLI) stats() error {
 	var req core.DebugMessage
 	req.Cmd = core.DebugStatistics
 	var resp core.ResponseDebugStats
 
-	cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
-	fmt.Printf("stats command get response:\n%s\n", Display(resp))
+	err := cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
+	if err == nil {
+		fmt.Printf("stats command get response:\n%s\n", Display(resp))
+	}
+
+	return err
 }
 
-func (cli *CLI) DBInfo() {
+func (cli *CLI) DBInfo() error {
 	var req core.DebugMessage
 	req.Cmd = core.DebugDBInfo
 	var resp core.ResponseDebugDBInfo
 
-	cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
-	fmt.Printf("dbinfo command get response:\n%s\n", Display(resp))
+	err := cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
+	if err == nil {
+		fmt.Printf("dbinfo command get response:\n%s\n", Display(resp))
+	}
+
+	return err
 }
 
-func (cli *CLI) PRep() {
+func (cli *CLI) PRep() error {
 	var req core.DebugMessage
 	req.Cmd = core.DebugPRep
 	var resp core.ResponseDebugPRep
 
-	cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
-	fmt.Printf("prep command get response:\n%s\n", Display(resp))
+	err := cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
+	if err == nil {
+		fmt.Printf("prep command get response:\n%s\n", Display(resp))
+	}
+
+	return err
 }
 
-func (cli *CLI) PRepCandidate() {
+func (cli *CLI) PRepCandidate() error {
 	var req core.DebugMessage
 	req.Cmd = core.DebugPRepCandidate
 	var resp core.ResponseDebugPRepCandidate
 
-	cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
-	fmt.Printf("prepcandidate command get response:\nTotal P-Rep candidate count: %d\n%s\n",
-		len(resp.PRepCandidates), Display(resp))
+	err := cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
+	if err == nil {
+		fmt.Printf("prepcandidate command get response:\nTotal P-Rep candidate count: %d\n%s\n",
+			len(resp.PRepCandidates), Display(resp))
+	}
+
+	return err
 }
 
-func (cli *CLI) gv() {
+func (cli *CLI) gv() error {
 	var req core.DebugMessage
 	req.Cmd = core.DebugGV
 	var resp core.ResponseDebugGV
 
-	cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
-	fmt.Printf("gv command get response:\n%s\n", Display(resp))
+	err := cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
+	if err == nil {
+		fmt.Printf("gv command get response:\n%s\n", Display(resp))
+	}
+
+	return err
 }
 
-func (cli *CLI) logCtx() {
+func (cli *CLI) logCtx() error {
 	var req core.DebugMessage
 	req.Cmd = core.DebugLogCTX
 
-	cli.conn.Send(core.MsgDebug, cli.id, req)
+	return cli.conn.Send(core.MsgDebug, cli.id, req)
 }

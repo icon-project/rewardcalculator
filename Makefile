@@ -57,7 +57,8 @@ $(foreach M,$(CMDS),$(eval $(call CMD_template,$(M))))
 
 # Build flags for each command
 icon_rc_LDFLAGS = -X 'main.version=$(GL_VERSION)' -X 'main.build=$(BUILD_INFO)'
-BUILD_TARGETS += icon_rc
+rctool_LDFLAGS = -X 'main.version=$(GL_VERSION)' -X 'main.build=$(BUILD_INFO)'
+BUILD_TARGETS += icon_rc rctool
 
 linux : $(addsuffix -linux,$(BUILD_TARGETS))
 

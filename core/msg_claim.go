@@ -46,6 +46,10 @@ func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 	return c.Send(msgClaim, id, &resp)
 }
 
+// DoClaim calculates the I-Score that the ICONist in ClaimMessage can get.
+// Writes calculated I-Score and block height to claim DB.
+// It returns the I-Score block height and I-Score. nil I-Score means zero I-Score.
+// In error case, block height is zero and I-Score is nil.
 func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	claim := ctx.preCommit.queryAndAdd(req.BlockHeight, req.BlockHash, req.Address)
 	if claim != nil {

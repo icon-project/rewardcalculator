@@ -73,7 +73,9 @@ type ResponseDebugDBInfo struct {
 func handleDBInfo(c ipc.Connection, id uint32, ctx *Context) error {
 	var resp ResponseDebugDBInfo
 	resp.Cmd = DebugDBInfo
-	resp.DBInfo = *ctx.DB.info
+	if ctx.DB.info != nil {
+		resp.DBInfo = *ctx.DB.info
+	}
 
 	return c.Send(MsgDebug, id, &resp)
 }
@@ -120,9 +122,13 @@ type ResponseDebugGV struct {
 func handleGV(c ipc.Connection, id uint32, ctx *Context) error {
 	var resp ResponseDebugGV
 	resp.Cmd = DebugGV
-	resp.GV = make([]GovernanceVariable, len(ctx.GV))
-	for i, p := range ctx.GV {
-		resp.GV[i] = *p
+	if len(ctx.GV) > 0 {
+		resp.GV = make([]GovernanceVariable, len(ctx.GV))
+		for i, p := range ctx.GV {
+			resp.GV[i] = *p
+		}
+	} else {
+		resp.GV = nil
 	}
 
 	return c.Send(MsgDebug, id, &resp)

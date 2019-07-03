@@ -16,6 +16,7 @@ type MessageHandler interface {
 type Connection interface {
 	Send(msg uint, id uint32, data interface{}) error
 	SendAndReceive(msg uint, id uint32, data interface{}, buf interface{}) error
+	Receive(buf interface{}) error
 	SetHandler(msg uint, handler MessageHandler)
 	HandleMessage() error
 	Close() error
@@ -62,6 +63,13 @@ type messageToReceive struct {
 	Msg  uint
 	Id   uint32
 	Data codec2.Raw
+}
+
+func (c *connection) Receive(buffer interface{}) error {
+	if err := codec.MP.Unmarshal(c.conn, &buffer); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *connection) SendAndReceive(msg uint, id uint32, data interface{}, buffer interface{}) error {
