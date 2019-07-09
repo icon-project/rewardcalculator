@@ -16,14 +16,17 @@ const (
 )
 
 type RcConfig struct {
-	IISSDataDir string `json:"IISSData"`
-	DBDir       string `json:"IScoreDB"`
-	IpcNet      string `json:"IPCNet"`
-	IpcAddr     string `json:"IPCAddress"`
-	ClientMode  bool   `json:"ClientMode"`
-	DBCount     int    `json:"DBCount"`
-	Monitor     bool   `json:"Monitor"`
-	FileName    string
+	IISSDataDir   string `json:"IISSData"`
+	DBDir         string `json:"IScoreDB"`
+	IpcNet        string `json:"IPCNet"`
+	IpcAddr       string `json:"IPCAddress"`
+	ClientMode    bool   `json:"ClientMode"`
+	DBCount       int    `json:"DBCount"`
+	Monitor       bool   `json:"Monitor"`
+	LogFile       string `json:"LogFile"`
+	LogMaxSize    int    `json:"LogMaxSize"`
+	LogMaxBackups int    `json:"LogMaxBackups"`
+	FileName      string
 }
 
 func (cfg *RcConfig) Print() {

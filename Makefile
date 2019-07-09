@@ -77,6 +77,7 @@ test_cov_view :
 	$(GOTOOL) cover -html=./cp.out
 
 modules :
+	$(GOMOD) tidy
 	$(GOMOD) vendor
 
 install :

@@ -3,9 +3,12 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"github.com/icon-project/rewardcalculator/core"
+	"fmt"
 	"log"
 	"os"
+
+	"github.com/icon-project/rewardcalculator/core"
+	"github.com/natefinch/lumberjack"
 )
 
 var (
@@ -17,9 +20,6 @@ func main() {
 	var cfg core.RcConfig
 	var generate bool
 
-	log.Printf("Version : %s", version)
-	log.Printf("Build   : %s", build)
-
 	flag.StringVar(&cfg.IISSDataDir, "iissdata", "./iissdata", "IISS Data directory")
 	flag.StringVar(&cfg.DBDir, "db", ".iscoredb", "I-Score database directory")
 	flag.StringVar(&cfg.IpcNet, "ipc-net", "unix", "IPC channel network type")
@@ -28,9 +28,23 @@ func main() {
 	flag.BoolVar(&cfg.ClientMode, "client", false, "Connect to ICON Service")
 	flag.BoolVar(&cfg.Monitor, "monitor", false, "Open monitoring channel")
 	flag.IntVar(&cfg.DBCount, "db-count", 2, "The number of Account DB (MAX:256)")
+	flag.StringVar(&cfg.LogFile, "log-file", "icon_rc.log", "Log file name")
+	flag.IntVar(&cfg.LogMaxSize, "log-max-size", 10, "MAX size of log file in megabytes")
+	flag.IntVar(&cfg.LogMaxBackups, "log-max-backups", 10, "MAX number of old log files")
 	flag.BoolVar(&generate, "gen", false, "Generate configuration file")
-
 	flag.Parse()
+
+	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
+	log.SetOutput(&lumberjack.Logger{
+		Filename:   cfg.LogFile,
+		MaxSize:    cfg.LogMaxSize,
+		MaxBackups: cfg.LogMaxBackups,
+		LocalTime:  true,
+	})
+
+	log.Printf("Version : %s", version)
+	log.Printf("Build   : %s", build)
+
 	cfg.Print()
 
 	if generate {
@@ -53,7 +67,7 @@ func main() {
 	}
 
 	if cfg.DBCount > core.MaxDBCount {
-		log.Printf("Too large -db-count %d. MAX: %d", cfg.DBCount, core.MaxDBCount)
+		fmt.Printf("Too large -db-count %d. MAX: %d\n", cfg.DBCount, core.MaxDBCount)
 	}
 
 	rcm, err := core.InitManager(&cfg)
@@ -65,6 +79,6 @@ func main() {
 
 	go rcm.Loop()
 
-	log.Println("[*] To exit press CTRL+C")
+	fmt.Printf("[*] To exit press CTRL+C\n")
 	<-forever
 }
