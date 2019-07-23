@@ -277,7 +277,7 @@ func (pc *preCommit) writeClaimToDB(ctx *Context, blockHeight uint64, blockHash 
 	claimDB := ctx.DB.getClaimDB()
 	bucket, _ := claimDB.GetBucket(db.PrefixIScore)
 
-	// find preCommit and write preCommit to preCommitData
+	// find preCommit and write preCommit to claim DB
 	for _, data := range pc.dataList {
 		if data.BlockHeight == blockHeight && bytes.Compare(data.BlockHash, blockHash) == 0 {
 			for _, claim := range data.claimMap {
@@ -287,12 +287,12 @@ func (pc *preCommit) writeClaimToDB(ctx *Context, blockHeight uint64, blockHash 
 
 				bs, _ := bucket.Get(claim.ID())
 				if nil != bs {
-					claim, _ := NewClaimFromBytes(bs)
-					if claim.BlockHeight <= claim.BlockHeight {
+					oldClaim, _ := NewClaimFromBytes(bs)
+					if claim.BlockHeight <= oldClaim.BlockHeight {
 						continue
 					}
 					// update with old I-Score
-					claim.IScore.Add(&claim.IScore.Int, &claim.IScore.Int)
+					claim.IScore.Add(&claim.IScore.Int, &oldClaim.IScore.Int)
 				}
 
 				// write to claim DB
