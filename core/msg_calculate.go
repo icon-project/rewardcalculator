@@ -18,12 +18,13 @@ const (
 	writeBatchCount = 10
 
 	minRewardRep  = 200
-	MinDelegation = 788400
 
-	blocksPerYear    = 15768000
+	blocksPerYear    = 15552000
 	gvDivider        = 10000
 	iScoreMultiplier = 1000
 	rewardDivider    = blocksPerYear * gvDivider / iScoreMultiplier
+
+	MinDelegation = blocksPerYear / iScoreMultiplier * (gvDivider / minRewardRep)
 )
 
 var BigIntRewardDivider = big.NewInt(rewardDivider)
