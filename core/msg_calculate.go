@@ -128,7 +128,7 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 	return true, totalReward
 }
 
-func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVariable,
+func calculateDB(index int, readDB db.Database, writeDB db.Database, gvList []*GovernanceVariable,
 	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (uint64, *Statistics, []byte) {
 
 	iter, _ := readDB.GetIterator()
@@ -200,7 +200,7 @@ func calculateDB(readDB db.Database, writeDB db.Database, gvList []*GovernanceVa
 		log.Printf("There is error while iteration. %+v", err)
 	}
 
-	log.Printf("Calculate : %s, stateHash: %v", stats.String(), stateHash)
+	log.Printf("Calculate %d: %s, stateHash: %v", index, stats.String(), stateHash)
 
 	return count, stats, stateHash
 }
@@ -297,16 +297,16 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 	stateHashList := make([][]byte, iScoreDB.info.DBCount)
 	statsList := make([]*Statistics, iScoreDB.info.DBCount)
 	for i, cDB := range calcDBList {
-		go func(read db.Database, write db.Database) {
+		go func(index int, read db.Database, write db.Database) {
 			defer wait.Done()
 
 			var count uint64
 
 			// Update all Accounts in the calculate DB
-			count, statsList[i], stateHashList[i] = calculateDB(read, write, ctx.GV, ctx.PRepCandidates, blockHeight, writeBatchCount)
+			count, statsList[index], stateHashList[index] = calculateDB(index, read, write, ctx.GV, ctx.PRepCandidates, blockHeight, writeBatchCount)
 
 			totalCount += count
-		} (queryDBList[i], cDB)
+		} (i, queryDBList[i], cDB)
 	}
 	wait.Wait()
 
@@ -396,13 +396,12 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) *common
 
 			// calculate I-Score from tx.BlockHeight to blockHeight with new delegation Info.
 			ok, reward := calculateIScore(newIA, ctx.GV, ctx.PRepCandidates, blockHeight)
-			if ok == false {
-				continue
-			}
-			//log.Printf("[IISSTX] %s", newIA.String())
-
 			// Statistics
-			stats.Add(&stats.Int, &reward.Int)
+			if ok == true {
+				stats.Add(&stats.Int, &reward.Int)
+			}
+
+			//log.Printf("[IISSTX] %s", newIA.String())
 
 			// write to account DB
 			bucket.Set(newIA.ID(), newIA.Bytes())

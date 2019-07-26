@@ -509,7 +509,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	bucket.Set(ia.ID(), ia.Bytes())
 
 	// calculate
-	count, stats, _ := calculateDB(queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
+	count, stats, _ := calculateDB(0, queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
 
 	var reward, totalReward uint64
 
