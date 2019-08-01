@@ -6,7 +6,6 @@
 # Configuration
 BUILD_ROOT = $(abspath ./)
 BIN_DIR = ./bin
-LINUX_BIN_DIR = ./linux
 DST_DIR = /usr/local/bin
 
 UNAME = $(shell uname)
@@ -16,16 +15,13 @@ GOBUILD = go build
 GOTEST = go test
 GOTOOL = go tool
 GOMOD = go mod
-GOBUILD_TAGS =
+GOBUILD_TAGS = -tags ""
 GOBUILD_ENVS = CGO_ENABLED=0 GO111MODULE=on
-GOBUILD_LDFLAGS =
-GOBUILD_FLAGS = -mod vendor -tags "$(GOBUILD_TAGS)" -ldflags "$(GOBUILD_LDFLAGS)"
-GOBUILD_ENVS_LINUX = $(GOBUILD_ENVS) GOOS=linux GOARCH=amd64
+GOBUILD_LDFLAGS = -ldflags ""
+GOBUILD_FLAGS = -mod vendor $(GOBUILD_TAGS) $(GOBUILD_LDFLAGS)
 
-ifeq ($(UNAME),Darwin)
-    INSTALL_DIR = $(BIN_DIR)
-else
-    INSTALL_DIR = $(LINUX_BIN_DIR)
+ifeq ($(UNAME),Linux)
+	GOBUILD_ENVS += GOOS=linux GOARCH=amd64
 endif
 
 # Build flags
@@ -36,36 +32,25 @@ BUILD_INFO = tags($(GOBUILD_TAGS))-$(shell date '+%Y-%m-%d-%H:%M:%S')
 #
 # Build scripts for command binaries.
 #
-CMDS = $(patsubst cmd/%,%,$(wildcard cmd/*))
-.PHONY: $(CMDS)
-define CMD_template
-$(BIN_DIR)/$(1) : $(1)
-$(1) : GOBUILD_LDFLAGS+=$$($(1)_LDFLAGS)
-$(1) :
-	@ \
-	rm -f $(BIN_DIR)/$(1) ; \
-	echo "[#] go build ./cmd/$(1)"
-	$$(GOBUILD_ENVS) \
-	$$(GOBUILD) $$(GOBUILD_FLAGS) \
-	    -o $(BIN_DIR)/$(1) ./cmd/$(1)
-
-$(LINUX_BIN_DIR)/$(1) : $(1)-linux
-$(1)-linux : GOBUILD_LDFLAGS+=$$($(1)_LDFLAGS)
-$(1)-linux :
-	@ \
-	rm -f $(LINUX_BIN_DIR)/$(1) ; \
-	echo "[#] go build ./cmd/$(1)"
-	$$(GOBUILD_ENVS_LINUX) \
-	go build $$(GOBUILD_FLAGS) \
-	    -o $(LINUX_BIN_DIR)/$(1) ./cmd/$(1)
-endef
-$(foreach M,$(CMDS),$(eval $(call CMD_template,$(M))))
+CMDS_DIR = ./cmd
+CMDS = $(patsubst $(CMDS_DIR)/%/., %, $(wildcard $(CMDS_DIR)/*/.))
 
 # Build flags for each command
-icon_rc_LDFLAGS = -X 'main.version=$(GL_VERSION)' -X 'main.build=$(BUILD_INFO)'
-BUILD_TARGETS += icon_rc rctool
+icon_rc_LDFLAGS = -ldflags "-X 'main.version=$(GL_VERSION)' -X 'main.build=$(BUILD_INFO)'"
 
-linux : $(addsuffix -linux,$(BUILD_TARGETS))
+BUILD_TARGETS = icon_rc rctool
+
+.DEFAULT_GOAL := all
+all : clean $(BUILD_TARGETS)
+
+.PHONY: $(CMDS)
+$(CMDS) :
+	$(if $($@_LDFLAGS), \
+		$(eval GOBUILD_LDFLAGS=$($@_LDFLAGS)), \
+		$(eval GOBUILD_LDFLAGS=) \
+	)
+	echo "[#] go build $(CMDS_DIR)/$@"
+	$(GOBUILD_ENVS) $(GOBUILD) $(GOBUILD_FLAGS) -o $(BIN_DIR)/$@ $(CMDS_DIR)/$@
 
 test :
 	$(GOTEST) -test.short ./...
@@ -82,10 +67,10 @@ modules :
 
 install :
 	@ \
-    for target in $(BUILD_TARGETS); do \
-        echo "[#] install $$target to $(DST_DIR)"; \
-        $(INSTALL) -m 755 $(INSTALL_DIR)/$$target $(DST_DIR); \
-    done
+	for target in $(BUILD_TARGETS); do \
+		echo "[#] install $$target to $(DST_DIR)"; \
+		$(INSTALL) -m 755 $(BIN_DIR)/$$target $(DST_DIR); \
+	done
 
-.DEFAULT_GOAL := all
-all : $(BUILD_TARGETS)
+clean :
+	@$(RM) -r $(BIN_DIR)
