@@ -99,6 +99,7 @@ func NewDBInfo(mngDB db.Database, dbPath string, dbType string, dbName string, d
 var BigIntTwo = big.NewInt(2)
 var BigIntNumMainPRep = big.NewInt(numMainPRep)
 var BigIntNumPRep = big.NewInt(numPRep)
+var BigIntIScoreMultiplier = big.NewInt(iScoreMultiplier)
 
 type GVData struct {
 	CalculatedIncentiveRep common.HexInt
@@ -147,10 +148,12 @@ func (gv *GovernanceVariable) SetBytes(bs []byte) error {
 func (gv *GovernanceVariable) setReward() {
 	// block produce reward
 	gv.BlockProduceReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumMainPRep)
+	gv.BlockProduceReward.Mul(&gv.BlockProduceReward.Int, BigIntIScoreMultiplier)
 	gv.BlockProduceReward.Div(&gv.BlockProduceReward.Int, BigIntTwo)
 
 	// Main/Sub P-Rep reward
 	gv.PRepReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumPRep)
+	gv.PRepReward.Mul(&gv.PRepReward.Int, BigIntIScoreMultiplier)
 }
 
 func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVariable, error) {
