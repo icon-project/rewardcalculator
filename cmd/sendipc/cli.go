@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/icon-project/rewardcalculator/common/ipc"
+	"github.com/icon-project/rewardcalculator/core"
 )
 
 const (
@@ -120,6 +121,10 @@ func (cli *CLI) Run() {
 		os.Exit(1)
 	}
 	defer conn.Close()
+
+	// flush VERSION message
+	var m core.ResponseVersion
+	conn.Receive(m)
 
 	// Send message to server
 
