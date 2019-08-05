@@ -551,5 +551,5 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 
 	// check stats
 	assert.Equal(t, count, stats.Accounts)
-	assert.Equal(t, totalReward, stats.IScore.Uint64())
+	assert.Equal(t, totalReward, stats.Beta3.Uint64())
 }

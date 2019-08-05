@@ -24,20 +24,20 @@ func TestStatistics_Set(t *testing.T) {
 	assert.Nil(t, err)
 
 	// IScore
-	err = stats.Set("IScore", *common.NewHexInt(1))
-	assert.Equal(t, uint64(1), stats.IScore.Uint64())
+	err = stats.Set("Beta3", *common.NewHexInt(1))
+	assert.Equal(t, uint64(1), stats.Beta3.Uint64())
 	assert.Nil(t, err)
 }
 
 func TestStatistics_Increase(t *testing.T) {
 	const (
 		initAccounts uint64 = 1
-		initIScore uint64 = 1
+		initIScore int64 = 100
 	)
 
 	stats := Statistics {
 		Accounts: initAccounts,
-		IScore: *common.NewHexIntFromUint64(initIScore),
+		Beta3:    *common.NewHexInt(initIScore),
 	}
 	var err error
 
@@ -47,20 +47,20 @@ func TestStatistics_Increase(t *testing.T) {
 	assert.Nil(t, err)
 
 	// IScore
-	err = stats.Increase("IScore", *common.NewHexIntFromUint64(initIScore))
-	assert.Equal(t, 2*initIScore, stats.IScore.Uint64())
+	err = stats.Increase("Beta3", *common.NewHexInt(initIScore))
+	assert.Equal(t, 2*initIScore, stats.Beta3.Int64())
 	assert.Nil(t, err)
 }
 
 func TestStatistics_Decrease(t *testing.T) {
 	const (
 		initAccounts uint64 = 1
-		initIScore uint64 = 1
+		initIScore int64 = 100
 	)
 
 	stats := Statistics {
 		Accounts: initAccounts,
-		IScore: *common.NewHexIntFromUint64(initIScore),
+		Beta3:    *common.NewHexInt(initIScore),
 	}
 	var err error
 
@@ -69,11 +69,11 @@ func TestStatistics_Decrease(t *testing.T) {
 	assert.Equal(t, uint64(0), stats.Accounts)
 	assert.Nil(t, err)
 
-	// IScore
-	err = stats.Decrease("IScore", *common.NewHexIntFromUint64(initIScore))
-	assert.Equal(t, uint64(0), stats.IScore.Uint64())
+	// Beta3
+	err = stats.Decrease("Beta3", *common.NewHexInt(initIScore))
+	assert.Equal(t, int64(0), stats.Beta3.Int64())
 	assert.Nil(t, err)
-	err = stats.Decrease("IScore", *common.NewHexIntFromUint64(initIScore))
-	assert.Equal(t, int64(-1), stats.IScore.Int64())
+	err = stats.Decrease("Beta3", *common.NewHexInt(initIScore))
+	assert.Equal(t, 0 - initIScore, stats.Beta3.Int64())
 	assert.Nil(t, err)
 }

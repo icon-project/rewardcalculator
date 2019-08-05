@@ -12,11 +12,17 @@ import (
 
 type Statistics struct {
 	Accounts uint64
-	IScore   common.HexInt
+	Beta1    common.HexInt
+	Beta2    common.HexInt
+	Beta3    common.HexInt
 }
 
 func (stats *Statistics) String() string {
-	return fmt.Sprintf("Accounts: %d IScore: %s", stats.Accounts, stats.IScore.String())
+	return fmt.Sprintf("==== Statistics - Accounts: %d, Beta1: %s, Beta2: %s, Beta3: %s",
+		stats.Accounts,
+		stats.Beta1.String(),
+		stats.Beta2.String(),
+		stats.Beta3.String())
 }
 
 func (stats *Statistics) Bytes() []byte {

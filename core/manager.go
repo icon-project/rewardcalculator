@@ -173,7 +173,7 @@ func reloadIISSData(ctx *Context, dir string) {
 		resp.BlockHeight = blockHeight
 		resp.Success = success
 		if stats != nil {
-			resp.IScore.Set(&stats.IScore.Int)
+			resp.IScore.Set(&stats.Beta3.Int)
 		} else {
 			resp.IScore.SetUint64(0)
 		}

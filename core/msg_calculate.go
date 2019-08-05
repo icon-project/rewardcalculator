@@ -178,8 +178,8 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, gvList []*G
 		// update stateHash
 		sha3.ShakeSum256(stateHash, ia.BytesForHash())
 
-		// update Statistics I-Score
-		stats.Increase("IScore", *reward)
+		// update Statistics
+		stats.Increase("Beta3", *reward)
 
 		count++
 	}
@@ -200,7 +200,7 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, gvList []*G
 		log.Printf("There is error while iteration. %+v", err)
 	}
 
-	log.Printf("Calculate %d: %s, stateHash: %v", index, stats.String(), stateHash)
+	log.Printf("Calculate %d: %s, stateHash: %v", index, stats.Beta3.String(), stateHash)
 
 	return count, stats, stateHash
 }
@@ -235,7 +235,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	resp.BlockHeight = blockHeight
 	resp.Success = success
 	if stats != nil {
-		resp.IScore.Set(&stats.IScore.Int)
+		resp.IScore.Set(&stats.Beta3.Int)
 	} else {
 		resp.IScore.SetUint64(0)
 	}
@@ -317,22 +317,22 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 			continue
 		}
 		stats.Increase("Accounts", s.Accounts)
-		stats.Increase("IScore", s.IScore)
+		stats.Increase("Beta3", s.Beta3)
 	}
 
 	reward := new(common.HexInt)
 
 	// Update calculate DB with delegate TX
 	reward = calculateIISSTX(ctx, txList, blockHeight)
-	stats.Increase("IScore", *reward)
+	stats.Increase("Beta3", *reward)
 
 	// Update block produce reward
 	reward = calculateIISSBlockProduce(ctx, bpInfoList, blockHeight)
-	stats.Increase("IScore", *reward)
+	stats.Increase("Beta1", *reward)
 
 	// Update P-Rep reward
 	reward = calculatePRepReward(ctx, blockHeight)
-	stats.Increase("IScore", *reward)
+	stats.Increase("Beta2", *reward)
 
 	ctx.stats = stats
 
@@ -345,6 +345,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 	elapsedTime := time.Since(startTime)
 	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d entries",
 		elapsedTime, ctx.DB.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount)
+	log.Printf("%s", stats.String())
 
 	// set blockHeight
 	ctx.DB.setBlockHeight(blockHeight)
