@@ -4,6 +4,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -246,6 +247,8 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 
 func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics, []byte) {
 	iScoreDB := ctx.DB
+	stateHash := make([]byte, 64)
+
 	blockHeight := req.BlockHeight
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
@@ -321,23 +324,26 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 	}
 
 	reward := new(common.HexInt)
+	var hashValue []byte
 
 	// Update calculate DB with delegate TX
-	reward = calculateIISSTX(ctx, txList, blockHeight)
+	reward, hashValue = calculateIISSTX(ctx, txList, blockHeight)
 	stats.Increase("Beta3", *reward)
+	sha3.ShakeSum256(stateHash, hashValue)
 
 	// Update block produce reward
-	reward = calculateIISSBlockProduce(ctx, bpInfoList, blockHeight)
+	reward, hashValue = calculateIISSBlockProduce(ctx, bpInfoList, blockHeight)
 	stats.Increase("Beta1", *reward)
+	sha3.ShakeSum256(stateHash, hashValue)
 
 	// Update P-Rep reward
-	reward = calculatePRepReward(ctx, blockHeight)
+	reward, hashValue = calculatePRepReward(ctx, blockHeight)
 	stats.Increase("Beta2", *reward)
+	sha3.ShakeSum256(stateHash, hashValue)
 
 	ctx.stats = stats
 
 	// make stateHash
-	stateHash := make([]byte, 64)
 	for _, hash := range stateHashList {
 		sha3.ShakeSum256(stateHash, hash)
 	}
@@ -354,7 +360,8 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 }
 
 // Update I-Score of account in TX list
-func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) *common.HexInt {
+func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) (*common.HexInt, []byte) {
+	stateHash := make([]byte, 64)
 	stats := new(common.HexInt)
 
 	for _, tx := range txList {
@@ -406,16 +413,20 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) *common
 
 			// write to account DB
 			bucket.Set(newIA.ID(), newIA.Bytes())
+
+			// update stateHash
+			sha3.ShakeSum256(stateHash, newIA.BytesForHash())
 		case TXDataTypePrepReg:
 		case TXDataTypePrepUnReg:
 		}
 	}
 
-	return stats
+	return stats, stateHash
 }
 
 // Calculate Block produce reward
-func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo, blockHeight uint64) *common.HexInt {
+func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo, blockHeight uint64) (*common.HexInt, []byte) {
+	stateHash := make([]byte, 64)
 	bpMap := make(map[common.Address]common.HexInt)
 
 	// calculate reward
@@ -449,6 +460,7 @@ func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo,
 	}
 
 	totalReward := new(common.HexInt)
+	iaSlice := make([]*IScoreAccount, 0)
 
 	// write to account DB
 	for addr, reward := range bpMap {
@@ -486,14 +498,26 @@ func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo,
 			bucket.Set(ia.ID(), ia.Bytes())
 
 			totalReward.Add(&totalReward.Int, &reward.Int)
+
+			// for state root hash
+			iaSlice = append(iaSlice, ia)
 		}
 	}
 
-	return totalReward
+	// sort data and make state root hash
+	sort.Slice(iaSlice, func(i, j int) bool {
+		return iaSlice[i].Compare(iaSlice[j]) < 0
+	})
+	for _, ia := range iaSlice {
+		sha3.ShakeSum256(stateHash, ia.BytesForHash())
+	}
+
+	return totalReward, stateHash
 }
 
 // Calculate Main/Sub P-Rep reward
-func calculatePRepReward(ctx *Context, to uint64) *common.HexInt {
+func calculatePRepReward(ctx *Context, to uint64) (*common.HexInt, []byte) {
+	stateHash := make([]byte, 64)
 	start := ctx.DB.info.BlockHeight
 	end := to
 
@@ -521,19 +545,21 @@ func calculatePRepReward(ctx *Context, to uint64) *common.HexInt {
 		}
 
 		// calculate P-Rep reward for Governance variable and write to calculate DB
-		reward := setPRepReward(ctx, s, e, prep)
+		reward, hash := setPRepReward(ctx, s, e, prep)
+		sha3.ShakeSum256(stateHash, hash)
 		totalReward.Add(&totalReward.Int, &reward.Int)
 	}
 
-	return totalReward
+	return totalReward, stateHash
 }
 
-func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) *common.HexInt {
+func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.HexInt, []byte) {
 	type reward struct {
 		iScore      common.HexInt
 		blockHeight uint64
 	}
 	rewards := make([]reward, len(prep.List))
+	stateHash := make([]byte, 64)
 
 	// calculate P-Rep reward for Governance variable
 	for i, gv := range ctx.GV {
@@ -606,9 +632,10 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) *common.H
 			ia.Address = dgInfo.Address
 			//log.Printf("[P-Rep reward] Write to DB %s, increased reward: %s", ia.String(), rewards[i].IScore.String())
 			bucket.Set(ia.ID(), ia.Bytes())
+			sha3.ShakeSum256(stateHash, ia.BytesForHash())
 			totalReward.Add(&totalReward.Int, &rewards[i].iScore.Int)
 		}
 	}
 
-	return totalReward
+	return totalReward, stateHash
 }

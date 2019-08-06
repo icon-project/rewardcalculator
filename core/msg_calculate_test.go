@@ -2,11 +2,14 @@ package core
 
 import (
 	"fmt"
+	"golang.org/x/crypto/sha3"
+	"sort"
+	"testing"
+
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestMsgCalc_CalculateIISSTX(t *testing.T) {
@@ -106,19 +109,23 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	tests = append(tests, tx)
 
 	// calculate IISS TX
-	stats := calculateIISSTX(ctx, tests, 100)
+	stats, hash := calculateIISSTX(ctx, tests, 100)
 
 	// check Calculate DB
 	calcDB := ctx.DB.getCalculateDB(iconist)
 	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(iconist.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
+	ia.Address = iconist
+	stateHash := make([]byte, 64)
+	sha3.ShakeSum256(stateHash, ia.BytesForHash())
 
 	reward := 3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
 		MinDelegation * (30 - 20) * minRewardRep / rewardDivider
 
 	assert.Equal(t, uint64(reward), ia.IScore.Uint64())
 	assert.Equal(t, uint64(reward), stats.Uint64())
+	assert.Equal(t, stateHash, hash)
 }
 
 func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
@@ -173,16 +180,20 @@ func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 	tests = append(tests, tx)
 
 	// calculate IISS TX
-	stats := calculateIISSTX(ctx, tests, 100)
+	stats, hash := calculateIISSTX(ctx, tests, 100)
 
 	// check Calculate DB
 	calcDB := ctx.DB.getCalculateDB(iconist)
 	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(iconist.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
+	ia.Address = iconist
+	stateHash := make([]byte, 64)
+	sha3.ShakeSum256(stateHash, ia.BytesForHash())
 
 	assert.Equal(t, uint64(0), ia.IScore.Uint64())
 	assert.Equal(t, uint64(0), stats.Uint64())
+	assert.Equal(t, stateHash, hash)
 }
 
 func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
@@ -250,12 +261,14 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	tests = append(tests, bp)
 
 	// calculate BP
-	stats := calculateIISSBlockProduce(ctx, tests, 100)
+	stats, hash := calculateIISSBlockProduce(ctx, tests, 100)
 
 	calcDB := ctx.DB.getCalculateDB(iconist)
 	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
 
 	var reward, reward0, reward1, reward2, totalReward common.HexInt
+	stateHash := make([]byte, 64)
+	iaSlice := make([]*IScoreAccount, 0)
 
 	// check prepA
 	gv = ctx.getGVByBlockHeight(bp0BlockHeight)
@@ -270,6 +283,8 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 
 	bs, _ := bucket.Get(prepA.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
+	ia.Address = prepA
+	iaSlice = append(iaSlice, ia)
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 
 	totalReward.Add(&totalReward.Int, &reward.Int)
@@ -284,6 +299,8 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 
 	bs, _ = bucket.Get(prepB.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
+	ia.Address = prepB
+	iaSlice = append(iaSlice, ia)
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 
 	totalReward.Add(&totalReward.Int, &reward.Int)
@@ -298,12 +315,24 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 
 	bs, _ = bucket.Get(prepC.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
+	ia.Address = prepC
+	iaSlice = append(iaSlice, ia)
 	assert.Equal(t, 0, reward.Cmp(&ia.IScore.Int))
 
 	totalReward.Add(&totalReward.Int, &reward.Int)
 
 	// check stats
 	assert.Equal(t, 0, totalReward.Cmp(&stats.Int))
+
+	// check state hash
+	// sort data and make state root hash
+	sort.Slice(iaSlice, func(i, j int) bool {
+		return iaSlice[i].Compare(iaSlice[j]) < 0
+	})
+	for _, ia := range iaSlice {
+		sha3.ShakeSum256(stateHash, ia.BytesForHash())
+	}
+	assert.Equal(t, stateHash, hash)
 
 }
 
@@ -377,7 +406,7 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	ctx.PRep = append(ctx.PRep, prep)
 
 	// calculate P-Rep reward
-	stats := calculatePRepReward(ctx, BlockHeight2)
+	stats, hash := calculatePRepReward(ctx, BlockHeight2)
 
 	calcDB := ctx.DB.getCalculateDB(prepA)
 	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
@@ -391,6 +420,8 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	reward0.Mul(&reward0.Int, &common.NewHexIntFromUint64(DelegationA0).Int)
 	reward0.Div(&reward0.Int, &common.NewHexIntFromUint64(TotalDelegation0).Int)
 
+	iaPRepA1 := newIScoreAccount(prepA, BlockHeight1, reward0)
+
 	period = common.NewHexIntFromUint64(BlockHeight2 - BlockHeight1)
 	gv = ctx.getGVByBlockHeight(BlockHeight2)
 	reward1.Mul(&gv.PRepReward.Int, &period.Int)
@@ -398,6 +429,8 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	reward1.Div(&reward1.Int, &common.NewHexIntFromUint64(TotalDelegation1).Int)
 
 	reward.Add(&reward0.Int, &reward1.Int)
+
+	iaPRepA2 := newIScoreAccount(prepA, BlockHeight2, reward)
 
 	bs, _ := bucket.Get(prepA.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
@@ -413,6 +446,8 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	reward0.Mul(&reward0.Int, &common.NewHexIntFromUint64(DelegationB0).Int)
 	reward0.Div(&reward0.Int, &common.NewHexIntFromUint64(TotalDelegation0).Int)
 
+	iaPRepB1 := newIScoreAccount(prepB, BlockHeight1, reward0)
+
 	period = common.NewHexIntFromUint64(BlockHeight2 - BlockHeight1)
 	gv = ctx.getGVByBlockHeight(BlockHeight2)
 	reward1.Mul(&gv.PRepReward.Int, &period.Int)
@@ -420,6 +455,8 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	reward1.Div(&reward1.Int, &common.NewHexIntFromUint64(TotalDelegation1).Int)
 
 	reward.Add(&reward0.Int, &reward1.Int)
+
+	iaPRepB2 := newIScoreAccount(prepB, BlockHeight2, reward)
 
 	bs, _ = bucket.Get(prepB.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
@@ -430,6 +467,19 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	// check stats
 	assert.Equal(t, 0, totalReward.Cmp(&stats.Int))
+
+	// check state root hash
+	stateHash1 := make([]byte, 64)
+	sha3.ShakeSum256(stateHash1, iaPRepA1.BytesForHash())
+	sha3.ShakeSum256(stateHash1, iaPRepB1.BytesForHash())
+
+	stateHash2 := make([]byte, 64)
+	sha3.ShakeSum256(stateHash2, iaPRepA2.BytesForHash())
+	sha3.ShakeSum256(stateHash2, iaPRepB2.BytesForHash())
+
+	sha3.ShakeSum256(stateHash1, stateHash2)
+
+	assert.Equal(t, stateHash1, hash)
 }
 
 func TestMsgCalc_CalculateDB(t *testing.T) {
@@ -509,9 +559,10 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	bucket.Set(ia.ID(), ia.Bytes())
 
 	// calculate
-	count, stats, _ := calculateDB(0, queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
+	count, stats, hash := calculateDB(0, queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
 
 	var reward, totalReward uint64
+	stateHash := make([]byte, 64)
 
 	// check - addr1
 	period := calculateBlockHeight - addr1BlockHeight
@@ -532,6 +583,9 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	totalReward += reward
 	totalReward -= addr1InitIScore
 
+	ia.Address = addr1
+	sha3.ShakeSum256(stateHash, ia.BytesForHash())
+
 	// check - addr2
 	period = calculateBlockHeight - addr2BlockHeight
 	gv = ctx.getGVByBlockHeight(addr2BlockHeight)
@@ -549,7 +603,22 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	totalReward += reward
 	totalReward -= addr2InitIScore
 
+	ia.Address = addr2
+	sha3.ShakeSum256(stateHash, ia.BytesForHash())
+
 	// check stats
 	assert.Equal(t, count, stats.Accounts)
 	assert.Equal(t, totalReward, stats.Beta3.Uint64())
+
+	// check state root hash
+	assert.Equal(t, stateHash, hash)
+}
+
+func newIScoreAccount(addr common.Address, blockHeight uint64, reward common.HexInt) *IScoreAccount {
+	ia := new(IScoreAccount)
+	ia.Address = addr
+	ia.BlockHeight = blockHeight
+	ia.IScore.Set(&reward.Int)
+
+	return ia
 }

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 
@@ -64,6 +65,10 @@ func (ia *IScoreAccount) SetBytes(bs []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (ia *IScoreAccount) Compare(b *IScoreAccount) int {
+	return bytes.Compare(ia.ID(), b.ID())
 }
 
 func NewIScoreAccountFromBytes(bs []byte) (*IScoreAccount, error) {

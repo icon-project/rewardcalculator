@@ -53,6 +53,18 @@ func TestDBAccount_BytesAndSetBytes(t *testing.T) {
 	assert.Equal(t, ia.Bytes(), iaNew.Bytes())
 }
 
+func TestDBAccount_Compare(t *testing.T) {
+	ia1 := makeIA()
+	ia2 := makeIA()
+
+	assert.Equal(t, 0, ia1.Compare(ia2))
+
+	ia2.Address = *common.NewAddressFromString("hxb")
+	assert.Equal(t, -1, ia1.Compare(ia2))
+	assert.Equal(t, 1, ia2.Compare(ia1))
+
+}
+
 func TestDBAccount_NewIScoreAccountFromBytes(t *testing.T) {
 	ia := makeIA()
 
