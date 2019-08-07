@@ -236,7 +236,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	resp.BlockHeight = blockHeight
 	resp.Success = success
 	if stats != nil {
-		resp.IScore.Set(&stats.Beta3.Int)
+		resp.IScore.Set(&stats.Total.Int)
 	} else {
 		resp.IScore.SetUint64(0)
 	}
@@ -246,9 +246,10 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 }
 
 func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics, []byte) {
-	iScoreDB := ctx.DB
 	stateHash := make([]byte, 64)
+	stats := new(Statistics)
 
+	iScoreDB := ctx.DB
 	blockHeight := req.BlockHeight
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
@@ -314,13 +315,13 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 	wait.Wait()
 
 	// update Statistics
-	stats := new(Statistics)
 	for _, s := range statsList {
 		if s == nil {
 			continue
 		}
 		stats.Increase("Accounts", s.Accounts)
 		stats.Increase("Beta3", s.Beta3)
+		stats.Increase("Total", s.Beta3)
 	}
 
 	reward := new(common.HexInt)
@@ -329,16 +330,19 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 	// Update calculate DB with delegate TX
 	reward, hashValue = calculateIISSTX(ctx, txList, blockHeight)
 	stats.Increase("Beta3", *reward)
+	stats.Increase("Total", *reward)
 	sha3.ShakeSum256(stateHash, hashValue)
 
 	// Update block produce reward
 	reward, hashValue = calculateIISSBlockProduce(ctx, bpInfoList, blockHeight)
 	stats.Increase("Beta1", *reward)
+	stats.Increase("Total", *reward)
 	sha3.ShakeSum256(stateHash, hashValue)
 
 	// Update P-Rep reward
 	reward, hashValue = calculatePRepReward(ctx, blockHeight)
 	stats.Increase("Beta2", *reward)
+	stats.Increase("Total", *reward)
 	sha3.ShakeSum256(stateHash, hashValue)
 
 	ctx.stats = stats
