@@ -3,7 +3,7 @@ language: go
 go:
   - "1.12"
 
-install: skip
+install: true
 
 script:
   - make test
