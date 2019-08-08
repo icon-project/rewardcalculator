@@ -19,6 +19,7 @@ var (
 func main() {
 	var cfg core.RcConfig
 	var generate bool
+	var optVersion bool
 
 	flag.StringVar(&cfg.IISSDataDir, "iissdata", "./iissdata", "IISS Data directory")
 	flag.StringVar(&cfg.DBDir, "db", ".iscoredb", "I-Score database directory")
@@ -32,6 +33,7 @@ func main() {
 	flag.IntVar(&cfg.LogMaxSize, "log-max-size", 10, "MAX size of log file in megabytes")
 	flag.IntVar(&cfg.LogMaxBackups, "log-max-backups", 10, "MAX number of old log files")
 	flag.BoolVar(&generate, "gen", false, "Generate configuration file")
+	flag.BoolVar(&optVersion, "version", false, "Print version information")
 	flag.Parse()
 
 	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
@@ -42,10 +44,11 @@ func main() {
 		LocalTime:  true,
 	})
 
-	log.Printf("Version : %s", version)
-	log.Printf("Build   : %s", build)
 
-	cfg.Print()
+	if optVersion {
+		fmt.Printf("icon_rc %s, %s\n", version, build)
+		os.Exit(0)
+	}
 
 	if generate {
 		if len(cfg.FileName) == 0 {
@@ -65,6 +68,11 @@ func main() {
 		f.Close()
 		os.Exit(0)
 	}
+
+	log.Printf("Version : %s", version)
+	log.Printf("Build   : %s", build)
+
+	cfg.Print()
 
 	if cfg.DBCount > core.MaxDBCount {
 		fmt.Printf("Too large -db-count %d. MAX: %d\n", cfg.DBCount, core.MaxDBCount)
