@@ -3,8 +3,13 @@ language: go
 go:
   - "1.12"
 
+# clone the most recent commit only
+git:
+  depth: 1
+
 install: true
 
+# run test
 script:
   - make test
 
