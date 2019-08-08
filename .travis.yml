@@ -1,0 +1,17 @@
+language: go
+
+go:
+  - "1.12"
+
+install: skip
+
+script:
+  - make test
+
+branches:
+  only:
+  - master
+  - develop
+  - /^release-.*$/
+
+# no deploy
