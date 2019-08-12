@@ -57,13 +57,13 @@ func main() {
 		f, err := os.OpenFile(cfg.FileName,
 			os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 		if err != nil {
-			log.Panicf("Fail to open file=%s err=%+v", cfg.FileName, err)
+			log.Panicf("Failed to open file=%s err=%+v", cfg.FileName, err)
 		}
 
 		enc := json.NewEncoder(f)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(&cfg); err != nil {
-			log.Panicf("Fail to generate JSON for %+v", cfg)
+			log.Panicf("Failed to generate JSON for %+v", cfg)
 		}
 		f.Close()
 		os.Exit(0)

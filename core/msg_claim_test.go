@@ -21,11 +21,14 @@ func TestMsgClaim_PreCommit(t *testing.T) {
 	ctx := initTest(1)
 	defer finalizeTest()
 
+	var claim *Claim
+
 	// Query and add
 	for _, tt := range tests {
-		claim := ctx.preCommit.queryAndAdd(tt.blockHeight, tt.blockHash, *tt.address)
+		claim = ctx.preCommit.queryAndAdd(tt.blockHeight, tt.blockHash, *tt.address)
 		assert.Nil(t, claim)
 		claim = ctx.preCommit.queryAndAdd(tt.blockHeight, tt.blockHash, *tt.address)
+		assert.NotNil(t, claim)
 		assert.True(t, tt.address.Equal(&claim.Address))
 	}
 
@@ -36,6 +39,11 @@ func TestMsgClaim_PreCommit(t *testing.T) {
 	ia.IScore.SetUint64(100)
 	err := ctx.preCommit.update(tests[0].blockHeight, tests[0].blockHash, ia)
 	assert.NoError(t, err)
+	claim = ctx.preCommit.queryAndAdd(tests[0].blockHeight, tests[0].blockHash, ia.Address)
+	assert.NotNil(t, claim)
+	assert.Equal(t, ia.IScore.Uint64(), claim.Data.IScore.Uint64())
+	assert.Equal(t, ia.BlockHeight, claim.Data.BlockHeight)
+	assert.False(t, claim.Confirmed)
 
 	// update - invalid block height
 	err = ctx.preCommit.update(0, tests[0].blockHash, ia)
@@ -44,6 +52,24 @@ func TestMsgClaim_PreCommit(t *testing.T) {
 	// update - invalid address
 	ia.Address = *common.NewAddressFromString("hx22")
 	err = ctx.preCommit.update(tests[0].blockHeight, tests[0].blockHash, ia)
+	assert.Error(t, err)
+	ia.Address = *tests[0].address
+
+	// revert
+	err = ctx.preCommit.revert(tests[0].blockHeight, tests[0].blockHash, ia.Address)
+	assert.NoError(t, err)
+	claim = ctx.preCommit.queryAndAdd(tests[0].blockHeight, tests[0].blockHash, ia.Address)
+	assert.NotNil(t, claim)
+	assert.Equal(t, uint64(0), claim.Data.IScore.Uint64())
+	assert.Equal(t, uint64(0), claim.Data.BlockHeight)
+	assert.True(t, claim.Confirmed)
+
+	// revert - invalid block height
+	err = ctx.preCommit.revert(0, tests[0].blockHash, ia.Address)
+	assert.Error(t, err)
+
+	// revert - invalid address
+	err = ctx.preCommit.revert(tests[0].blockHeight, tests[0].blockHash, *common.NewAddressFromString("hx22"))
 	assert.Error(t, err)
 
 	// delete
@@ -65,17 +91,50 @@ func TestMsgClaim_PreCommit(t *testing.T) {
 		ctx.preCommit.queryAndAdd(tt.blockHeight, tt.blockHash, *tt.address)
 		err = ctx.preCommit.update(tt.blockHeight, tt.blockHash, ia)
 	}
-	// write to claim DB
+
+	// write to claim DB without commit - there is no data to write
 	ctx.preCommit.writeClaimToDB(ctx, tests[0].blockHeight, tests[0].blockHash)
 	claimDB := ctx.DB.getClaimDB()
 	bucket, _ := claimDB.GetBucket(db.PrefixIScore)
 	bs, err := bucket.Get(tests[0].address.Bytes())
 	assert.NoError(t, err)
+	assert.Nil(t, bs)
+
+	// make data for commit & write test
+	ia.Address = *tests[0].address
+	for _, tt := range tests {
+		ctx.preCommit.queryAndAdd(tt.blockHeight, tt.blockHash, *tt.address)
+		err = ctx.preCommit.update(tt.blockHeight, tt.blockHash, ia)
+	}
+
+	// commit
+	err = ctx.preCommit.commit(tests[0].blockHeight, tests[0].blockHash, ia.Address)
+	assert.NoError(t, err)
+	claim = ctx.preCommit.queryAndAdd(tests[0].blockHeight, tests[0].blockHash, ia.Address)
+	assert.NotNil(t, claim)
+	assert.Equal(t, uint64(0), claim.PrevData.IScore.Uint64())
+	assert.Equal(t, uint64(0), claim.PrevData.BlockHeight)
+	assert.True(t, claim.Confirmed)
+
+	// commit - block height
+	err = ctx.preCommit.commit(0, tests[0].blockHash, ia.Address)
+	assert.Error(t, err)
+
+	// commit - invalid address
+	err = ctx.preCommit.commit(tests[0].blockHeight, tests[0].blockHash, *common.NewAddressFromString("hx22"))
+	assert.Error(t, err)
+
+	// write to claim DB
+	ctx.preCommit.writeClaimToDB(ctx, tests[0].blockHeight, tests[0].blockHash)
+	claimDB = ctx.DB.getClaimDB()
+	bucket, _ = claimDB.GetBucket(db.PrefixIScore)
+	bs, err = bucket.Get(tests[0].address.Bytes())
+	assert.NoError(t, err)
 	assert.NotNil(t, bs)
-	var claim Claim
+
 	claim.SetBytes(bs)
-	assert.Equal(t, tests[0].blockHeight, claim.BlockHeight)
-	assert.Equal(t, 0, claim.IScore.Int.Cmp(&ia.IScore.Int))
+	assert.Equal(t, tests[0].blockHeight, claim.Data.BlockHeight)
+	assert.Equal(t, 0, claim.Data.IScore.Int.Cmp(&ia.IScore.Int))
 	assert.Equal(t, 0, len(ctx.preCommit.dataList))
 }
 
@@ -101,7 +160,7 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 		ClaimMessage {BlockHeight: 101, BlockHash: []byte("1-1"), Address: *address}
 
 	invalidAddressClaim :=
-		ClaimMessage{BlockHeight: 101, BlockHash: []byte("1-1"), Address: *common.NewAddressFromString("hx33")}
+		ClaimMessage {BlockHeight: 101, BlockHash: []byte("1-1"), Address: *common.NewAddressFromString("hx33")}
 
 	alreadyClaimedInCurrentPeriodClaim :=
 		ClaimMessage{BlockHeight: 102, BlockHash: []byte("1-1"), Address: *address}
@@ -114,7 +173,7 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 	bucket, _ := queryDB.GetBucket(db.PrefixIScore)
 	bucket.Set(dbContent0.ID(), dbContent0.Bytes())
 
-	//// claim I-Score less than 1000
+	// claim I-Score less than 1000
 	blockHeight, iScore := DoClaim(ctx, &claim)
 	assert.Equal(t, uint64(0), blockHeight)
 	assert.Nil(t, iScore)
@@ -127,12 +186,17 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 	assert.Equal(t, dbContent1.BlockHeight, blockHeight)
 	assert.Equal(t, uint64(db1IScore - (db1IScore % claimMinIScore)), iScore.Uint64())
 
+	// commit claim - true
+	commit :=
+		CommitClaim{Success:true, Address: claim.Address, BlockHeight:claim.BlockHeight, BlockHash:claim.BlockHash}
+	DoCommitClaim(ctx, &commit)
+
 	// already claimed in current block
 	blockHeight, iScore = DoClaim(ctx, &claim)
 	assert.Equal(t, dbContent1.BlockHeight, blockHeight)
 	assert.Nil(t, iScore)
 
-	// commit claim
+	// write claim to DB
 	ctx.preCommit.writeClaimToDB(ctx, claim.BlockHeight, claim.BlockHash)
 
 	// invalid address

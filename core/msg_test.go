@@ -15,6 +15,7 @@ func TestMsg_DoQuery(t *testing.T) {
 	dbContent0.IScore.SetUint64(claimMinIScore + 100)
 
 	claim := ClaimMessage{BlockHeight: 101, BlockHash: []byte("1-1"), Address: *address}
+	commit := CommitClaim{Success:true, BlockHeight:claim.BlockHeight, BlockHash:claim.BlockHash, Address:claim.Address}
 
 	ctx := initTest(1)
 	defer finalizeTest()
@@ -38,6 +39,14 @@ func TestMsg_DoQuery(t *testing.T) {
 	assert.Equal(t, 0, dbContent0.IScore.Cmp(&resp.IScore.Int))
 
 	// commit claim
+	DoCommitClaim(ctx, &commit)
+
+	// Query to claimed Account before commit to claim DB
+	resp = DoQuery(ctx, *address)
+	assert.Equal(t, dbContent0.BlockHeight, resp.BlockHeight)
+	assert.Equal(t, 0, dbContent0.IScore.Cmp(&resp.IScore.Int))
+
+	// commit to claim DB
 	ctx.preCommit.writeClaimToDB(ctx, claim.BlockHeight, claim.BlockHash)
 
 	// Query to claimed Account after commit

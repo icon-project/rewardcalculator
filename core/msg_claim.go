@@ -54,7 +54,7 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	claim := ctx.preCommit.queryAndAdd(req.BlockHeight, req.BlockHash, req.Address)
 	if claim != nil {
 		// already claimed in current block
-		return claim.BlockHeight, nil
+		return claim.Data.BlockHeight, nil
 	}
 
 	var ia *IScoreAccount = nil
@@ -80,27 +80,27 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	if bs != nil {
 		ia, err = NewIScoreAccountFromBytes(bs)
 		if nil != err {
-			goto ERROR
+			goto NoReward
 		}
 		ia.Address = req.Address
 	} else {
 		// No Info. about account
-		goto ERROR
+		goto NoReward
 	}
 
 	if claim != nil {
-		if ia.BlockHeight == claim.BlockHeight {
+		if ia.BlockHeight == claim.Data.BlockHeight {
 			// already claimed in current period
 			ctx.preCommit.delete(req.BlockHeight, req.BlockHash, req.Address)
 			return ia.BlockHeight, nil
 		}
 		// subtract claimed I-Score
-		ia.IScore.Sub(&ia.IScore.Int, &claim.IScore.Int)
+		ia.IScore.Sub(&ia.IScore.Int, &claim.Data.IScore.Int)
 	}
 
 	// Can't claim an I-Score less than 1000
 	if ia.IScore.Cmp(BigIntClaimMinIScore) == -1 {
-		goto ERROR
+		goto NoReward
 	} else {
 		var remain common.HexInt
 		remain.Mod(&ia.IScore.Int, BigIntClaimMinIScore)
@@ -111,14 +111,51 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	err = ctx.preCommit.update(req.BlockHeight, req.BlockHash, ia)
 	if err != nil {
 		log.Printf("Failed to update preCommit. err=%+v", err)
-		goto ERROR
+		goto NoReward
 	}
 
 	return ia.BlockHeight, &ia.IScore
 
-ERROR:
+NoReward:
 	ctx.preCommit.delete(req.BlockHeight, req.BlockHash, req.Address)
 	return 0, nil
+}
+
+type CommitClaim struct {
+	Success     bool
+	Address     common.Address
+	BlockHeight uint64
+	BlockHash   []byte
+}
+
+func (mh *msgHandler) commitClaim(c ipc.Connection, id uint32, data []byte) error {
+	var req CommitClaim
+	var err error
+
+	if _, err = codec.MP.UnmarshalFromBytes(data, &req); nil != err {
+		return err
+	}
+
+	err = DoCommitClaim(mh.mgr.ctx, &req)
+
+	return err
+}
+
+func DoCommitClaim(ctx *Context, req *CommitClaim) error {
+	var err error
+
+	if req.Success == true {
+		err = ctx.preCommit.commit(req.BlockHeight, req.BlockHash, req.Address)
+	} else {
+		err = ctx.preCommit.revert(req.BlockHeight, req.BlockHash, req.Address)
+	}
+
+	if err != nil {
+		log.Printf("Failed to commit claim. err=%+v", err)
+	}
+
+	// do not return error
+	return nil
 }
 
 type CommitBlock struct {
@@ -210,14 +247,65 @@ func (pc *preCommit) update(blockHeight uint64, blockHash []byte, ia *IScoreAcco
 		if data.BlockHeight == blockHeight && bytes.Compare(data.BlockHash, blockHash) == 0 {
 			claim, ok := data.claimMap[ia.Address]
 			if false == ok {
-				return fmt.Errorf("Failed to update preCommit: preCommit is nil\n")
+				goto NoEntry
 			}
-			claim.BlockHeight = ia.BlockHeight
-			claim.IScore.Set(&ia.IScore.Int)
+			if claim.Confirmed == true {
+				claim.PrevData = claim.Data
+				claim.Confirmed = false
+			}
+			claim.Data.BlockHeight = ia.BlockHeight
+			claim.Data.IScore.Set(&ia.IScore.Int)
 			return nil
 		}
 	}
-	return fmt.Errorf("There is no preCommit\n")
+NoEntry:
+	return fmt.Errorf("There is no preCommit data for blockHeight:%d, blockHash:%v, address:%s\n",
+		blockHeight, blockHash, ia.Address.String())
+}
+
+func (pc *preCommit) commit(blockHeight uint64, blockHash []byte, address common.Address) error {
+	pc.lock.Lock()
+	defer pc.lock.Unlock()
+
+	// find preCommitData and commit claim
+	for _, data := range pc.dataList {
+		if data.BlockHeight == blockHeight && bytes.Compare(data.BlockHash, blockHash) == 0 {
+			claim, ok := data.claimMap[address]
+			if false == ok {
+				goto NoEntry
+			}
+			claim.Confirmed = true
+			claim.PrevData.BlockHeight = 0
+			claim.PrevData.IScore.SetUint64(uint64(0))
+			return nil
+		}
+	}
+NoEntry:
+	return fmt.Errorf("There is no preCommit data for blockHeight:%d, blockHash:%v, address:%s\n",
+		blockHeight, blockHash, address.String())
+}
+
+func (pc *preCommit) revert(blockHeight uint64, blockHash []byte, address common.Address) error {
+	pc.lock.Lock()
+	defer pc.lock.Unlock()
+
+	// find preCommitData and revert claim
+	for _, data := range pc.dataList {
+		if data.BlockHeight == blockHeight && bytes.Compare(data.BlockHash, blockHash) == 0 {
+			claim, ok := data.claimMap[address]
+			if false == ok {
+				goto NoEntry
+			}
+			claim.Data = claim.PrevData
+			claim.Confirmed = true
+			claim.PrevData.BlockHeight = 0
+			claim.PrevData.IScore.SetUint64(uint64(0))
+			return nil
+		}
+	}
+NoEntry:
+	return fmt.Errorf("There is no preCommit data for blockHeight:%d, blockHash:%v, address:%s\n",
+		blockHeight, blockHash, address.String())
 }
 
 func (pc *preCommit) delete(blockHeight uint64, blockHash []byte, address common.Address) bool {
@@ -281,18 +369,18 @@ func (pc *preCommit) writeClaimToDB(ctx *Context, blockHeight uint64, blockHash 
 	for _, data := range pc.dataList {
 		if data.BlockHeight == blockHeight && bytes.Compare(data.BlockHash, blockHash) == 0 {
 			for _, claim := range data.claimMap {
-				if claim.IScore.Sign() == 0 {
+				if claim.Confirmed == false || claim.Data.IScore.Sign() == 0 {
 					continue
 				}
 
 				bs, _ := bucket.Get(claim.ID())
 				if nil != bs {
 					oldClaim, _ := NewClaimFromBytes(bs)
-					if claim.BlockHeight <= oldClaim.BlockHeight {
+					if claim.Data.BlockHeight <= oldClaim.Data.BlockHeight {
 						continue
 					}
 					// update with old I-Score
-					claim.IScore.Add(&claim.IScore.Int, &oldClaim.IScore.Int)
+					claim.Data.IScore.Add(&claim.Data.IScore.Int, &oldClaim.Data.IScore.Int)
 				}
 
 				// write to claim DB
