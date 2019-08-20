@@ -19,6 +19,17 @@ Reward calculator daemon. Do following functions.
 ### rctool
 Query debugging information of icon_rc.
 
+## Build
+```
+# compile binaries
+$ make              # for OSX
+or
+$ make linux        # for linux
+
+# install binaries to system
+$ make install
+```
+
 ## References
  - [ICON Service](https://github.com/icon-project/icon-service)
  - [IISS Yellowpaper](https://icon.foundation/download/IISS_Paper_v2.0_EN.pdf)
