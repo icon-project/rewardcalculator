@@ -15,6 +15,7 @@ const (
 	msgQuery            = 2
 	msgCalculate        = 3
 	msgCommitBlock      = 4
+	msgCommitClaim      = 5
 	MsgDebug            = 100
 )
 
@@ -37,6 +38,7 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 		c.SetHandler(msgClaim, handler)
 		c.SetHandler(msgCalculate, handler)
 		c.SetHandler(msgCommitBlock, handler)
+		c.SetHandler(msgCommitClaim, handler)
 	}
 
 	// send IISS data reload result
@@ -69,6 +71,8 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 		go mh.commitBlock(c, id, data)
 	case MsgDebug:
 		go mh.debug(c, id, data)
+	case msgCommitClaim:
+		go mh.commitClaim(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}
@@ -136,7 +140,7 @@ func DoQuery(ctx *Context, addr common.Address) *ResponseQuery {
 
 	if claim != nil {
 		// subtract claimed I-Score
-		ia.IScore.Sub(&ia.IScore.Int, &claim.IScore.Int)
+		ia.IScore.Sub(&ia.IScore.Int, &claim.Data.IScore.Int)
 	}
 
 	// set calculated I-Score to response

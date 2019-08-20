@@ -59,7 +59,7 @@ func (m *manager) Loop() error {
 		for {
 			err := m.conn.HandleMessage()
 			if err != nil {
-				log.Printf("Fail to handle message err=%+v", err)
+				log.Printf("Failed to handle message err=%+v", err)
 				m.Close()
 				return err
 			}

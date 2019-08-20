@@ -17,8 +17,8 @@ func makeClaim() *Claim {
 	claim := new(Claim)
 
 	claim.Address = *common.NewAddressFromString(claimAddress)
-	claim.IScore.SetUint64(claimIScore)
-	claim.BlockHeight = claimBlockHeight
+	claim.Data.IScore.SetUint64(claimIScore)
+	claim.Data.BlockHeight = claimBlockHeight
 
 	return claim
 }
@@ -36,19 +36,19 @@ func TestDBClaim_BytesAndSetBytes(t *testing.T) {
 
 	claimNew.SetBytes(claim.Bytes())
 
-	assert.Equal(t, 0, claim.IScore.Cmp(&claimNew.IScore.Int))
-	assert.Equal(t, claim.BlockHeight, claimNew.BlockHeight)
+	assert.Equal(t, 0, claim.Data.IScore.Cmp(&claimNew.Data.IScore.Int))
+	assert.Equal(t, claim.Data.BlockHeight, claimNew.Data.BlockHeight)
 	assert.Equal(t, claim.Bytes(), claimNew.Bytes())
 }
 
 func TestDBClaim_NewClaimFromBytes(t *testing.T) {
 	claim := makeClaim()
 
-	iaNew, err := NewClaimFromBytes(claim.Bytes())
+	newClaim, err := NewClaimFromBytes(claim.Bytes())
 
 	assert.Nil(t, err)
 
-	assert.Equal(t, 0, claim.IScore.Cmp(&iaNew.IScore.Int))
-	assert.Equal(t, claim.BlockHeight, iaNew.BlockHeight)
-	assert.Equal(t, claim.Bytes(), iaNew.Bytes())
+	assert.Equal(t, 0, claim.Data.IScore.Cmp(&newClaim.Data.IScore.Int))
+	assert.Equal(t, claim.Data.BlockHeight, newClaim.Data.BlockHeight)
+	assert.Equal(t, claim.Bytes(), newClaim.Bytes())
 }

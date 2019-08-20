@@ -2,6 +2,7 @@
 .iscoredb
 **/.DS_Store
 **/*.iml
+*log
 cmd/dbtest/dbtest
 cmd/icon_rc/icon_rc
 cmd/iissdata/iissdata

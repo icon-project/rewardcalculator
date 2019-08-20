@@ -14,8 +14,10 @@ type ClaimData struct {
 }
 
 type Claim struct {
-	Address common.Address
-	ClaimData
+	Address  common.Address
+	PrevData ClaimData
+	Confirmed bool
+	Data     ClaimData
 }
 
 func (c *Claim) ID() []byte {
@@ -24,7 +26,7 @@ func (c *Claim) ID() []byte {
 
 func (c *Claim) Bytes() []byte {
 	var bytes []byte
-	if bs, err := codec.MarshalToBytes(&c.ClaimData); err != nil {
+	if bs, err := codec.MarshalToBytes(&c.Data); err != nil {
 		log.Panicf("Failed to marshal claim data=%+v. err=%+v", c, err)
 		return nil
 	} else {
@@ -42,7 +44,7 @@ func (c *Claim) String() string {
 }
 
 func (c *Claim) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, &c.ClaimData)
+	_, err := codec.UnmarshalFromBytes(bs, &c.Data)
 	if err != nil {
 		return err
 	}
