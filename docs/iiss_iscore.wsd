@@ -31,7 +31,12 @@ RC -> ISDB: read I-Score
 RC -> RC: write account to claim pre_commit data
 end
 RC -> IISS: [IPC] CLAIM response
+alt succeeded to claim
+IISS -> RC: [IPC] COMMIT_CLAIM with success
 IISS -> IISS: write to memory
+else failed to claim
+IISS -> RC: [IPC] COMMIT_CLAIM with failure
+end
 IISS -> IS: return response
 
 end
