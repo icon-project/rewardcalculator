@@ -19,6 +19,8 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	// set GV
 	gv := new(GovernanceVariable)
 	gv.BlockHeight = 0
+	gv.MainPRepCount.SetUint64(NumMainPRep)
+	gv.SubPRepCount.SetUint64(NumSubPRep)
 	gv.CalculatedIncentiveRep.SetUint64(1)
 	gv.RewardRep.SetUint64(minRewardRep)
 	gv.setReward()
@@ -135,6 +137,8 @@ func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 	// set GV
 	gv := new(GovernanceVariable)
 	gv.BlockHeight = 0
+	gv.MainPRepCount.SetUint64(NumMainPRep)
+	gv.SubPRepCount.SetUint64(NumSubPRep)
 	gv.CalculatedIncentiveRep.SetUint64(1)
 	gv.RewardRep.SetUint64(minRewardRep)
 	gv.setReward()
@@ -211,6 +215,8 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	// set GV
 	gv := new(GovernanceVariable)
 	gv.BlockHeight = gv0BlockHeight
+	gv.MainPRepCount.SetUint64(NumMainPRep)
+	gv.SubPRepCount.SetUint64(NumSubPRep)
 	gv.CalculatedIncentiveRep.SetUint64(1)
 	gv.RewardRep.SetUint64(1)
 	gv.setReward()
@@ -218,6 +224,8 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 
 	gv = new(GovernanceVariable)
 	gv.BlockHeight = gv1BlockHeight
+	gv.MainPRepCount.SetUint64(NumMainPRep)
+	gv.SubPRepCount.SetUint64(NumSubPRep)
 	gv.CalculatedIncentiveRep.SetUint64(10)
 	gv.RewardRep.SetUint64(1)
 	gv.setReward()
@@ -359,6 +367,8 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	// set GV
 	gv := new(GovernanceVariable)
 	gv.BlockHeight = BlockHeight0
+	gv.MainPRepCount.SetUint64(NumMainPRep)
+	gv.SubPRepCount.SetUint64(NumSubPRep)
 	gv.CalculatedIncentiveRep.SetUint64(1)
 	gv.RewardRep.SetUint64(1)
 	gv.setReward()
@@ -366,6 +376,8 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	gv = new(GovernanceVariable)
 	gv.BlockHeight = BlockHeight1
+	gv.MainPRepCount.SetUint64(NumMainPRep)
+	gv.SubPRepCount.SetUint64(NumSubPRep)
 	gv.CalculatedIncentiveRep.SetUint64(2)
 	gv.RewardRep.SetUint64(1)
 	gv.setReward()
@@ -503,6 +515,8 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	// set GV
 	gv := new(GovernanceVariable)
 	gv.BlockHeight = 0
+	gv.MainPRepCount.SetUint64(NumMainPRep)
+	gv.SubPRepCount.SetUint64(NumSubPRep)
 	gv.CalculatedIncentiveRep.SetUint64(1)
 	gv.RewardRep.SetUint64(rewardRep)
 	gv.setReward()

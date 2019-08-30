@@ -115,6 +115,8 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 	gvList := make([]*core.GovernanceVariable, 0)
 	gv := new(core.GovernanceVariable)
 	gv.BlockHeight = 0
+	gv.MainPRepCount.SetUint64(core.NumMainPRep)
+	gv.SubPRepCount.SetUint64(core.NumSubPRep)
 	gv.CalculatedIncentiveRep.SetUint64(1)
 	gv.RewardRep.SetUint64(1)
 	gvList = append(gvList, gv)

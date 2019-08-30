@@ -75,10 +75,12 @@ func TestDBMNGDBInfo_NewDBInfo(t *testing.T) {
 }
 
 
-func makeGV() *GovernanceVariable {
+func makeGV(blockHeight uint64) *GovernanceVariable {
 	gv := new(GovernanceVariable)
 
-	gv.BlockHeight = iaBlockHeight
+	gv.BlockHeight = blockHeight
+	gv.MainPRepCount.SetUint64(NumMainPRep)
+	gv.SubPRepCount.SetUint64(NumSubPRep)
 	gv.CalculatedIncentiveRep.SetUint64(1)
 	gv.RewardRep.SetUint64(2)
 	gv.setReward()
@@ -87,19 +89,21 @@ func makeGV() *GovernanceVariable {
 }
 
 func TestDBMNGGV_ID(t *testing.T) {
-	gv := makeGV()
+	gv := makeGV(iaBlockHeight)
 
 	assert.Equal(t, common.Uint64ToBytes(gv.BlockHeight), gv.ID())
 }
 
 func TestDBMNGGV_BytesAndSetBytes(t *testing.T) {
-	gv := makeGV()
+	gv := makeGV(iaBlockHeight)
 
 	var gvNew GovernanceVariable
 
 	bs, _ := gv.Bytes()
 	gvNew.SetBytes(bs)
 
+	assert.Equal(t, 0, gv.MainPRepCount.Cmp(&gvNew.MainPRepCount.Int))
+	assert.Equal(t, 0, gv.SubPRepCount.Cmp(&gvNew.SubPRepCount.Int))
 	assert.Equal(t, 0, gv.BlockProduceReward.Cmp(&gvNew.BlockProduceReward.Int))
 	assert.Equal(t, 0, gv.PRepReward.Cmp(&gvNew.PRepReward.Int))
 	assert.Equal(t, 0, gv.CalculatedIncentiveRep.Cmp(&gvNew.CalculatedIncentiveRep.Int))
@@ -116,13 +120,11 @@ func TestDBMNGGV_LoadGovernanceVariable(t *testing.T) {
 
 	// write governance variable to DB
 	gvList := make([]*GovernanceVariable, 0)
-	gv := makeGV()
+	gv := makeGV(iaBlockHeight)
 	gvList = append(gvList, gv)
-	gv = makeGV()
-	gv.BlockHeight = iaBlockHeight + 100
+	gv = makeGV(iaBlockHeight + 100)
 	gvList = append(gvList, gv)
-	gv = makeGV()
-	gv.BlockHeight = iaBlockHeight + 200
+	gv = makeGV(iaBlockHeight + 200)
 	gvList = append(gvList, gv)
 
 	for _, gv = range gvList {
@@ -144,6 +146,8 @@ func TestDBMNGGV_NewGVFromIISS(t *testing.T) {
 	gv := NewGVFromIISS(iissGV)
 
 	assert.Equal(t, iissGV.BlockHeight, gv.BlockHeight)
+	assert.Equal(t, iissGV.MainPRepCount, gv.MainPRepCount.Uint64())
+	assert.Equal(t, iissGV.SubPRepCount, gv.SubPRepCount.Uint64())
 	assert.Equal(t, iissGV.IncentiveRep, gv.CalculatedIncentiveRep.Uint64())
 	assert.Equal(t, iissGV.RewardRep, gv.RewardRep.Uint64())
 }
