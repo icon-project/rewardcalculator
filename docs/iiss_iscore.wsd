@@ -37,6 +37,7 @@ IISS -> IISS: write to memory
 else failed to claim
 IISS -> RC: [IPC] COMMIT_CLAIM with failure
 end
+RC -> IISS: [IPC] COMMIT_CLAIM response
 IISS -> IS: return response
 
 end

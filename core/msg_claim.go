@@ -43,7 +43,7 @@ func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 		resp.IScore.Set(&IScore.Int)
 	}
 
-	return c.Send(msgClaim, id, &resp)
+	return c.Send(MsgClaim, id, &resp)
 }
 
 // DoClaim calculates the I-Score that the ICONist in ClaimMessage can get.
@@ -136,6 +136,10 @@ func (mh *msgHandler) commitClaim(c ipc.Connection, id uint32, data []byte) erro
 		return err
 	}
 
+	if err = c.Send(MsgCommitClaim, id, nil); err != nil {
+		return err
+	}
+
 	err = DoCommitClaim(mh.mgr.ctx, &req)
 
 	return err
@@ -181,7 +185,7 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 	resp = req
 	resp.Success = ret
 
-	return c.Send(msgCommitBlock, id, &resp)
+	return c.Send(MsgCommitBlock, id, &resp)
 }
 
 

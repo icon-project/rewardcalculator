@@ -8,18 +8,6 @@ database "IISS data" as ID
 participant "Reward Calculator" as RC
 database "I-Score DB" as ISDB
 
-group block invoke
--> IS: [mq] block_invoke
-IS -> IISS: [call] with TX
-opt I-Score claim
-IISS -> RC: [IPC] CLAIM
-RC -> ISDB: see 'claim I-Score diagram'
-RC -> IISS: [IPC] CLAIM response
-end
-IISS -> IISS: write to memory
-IISS -> IS: return response
-end
-
 group write precommit state
 
 -> IS: [mq] write_precommit_state
@@ -31,25 +19,26 @@ IISS -> RC: [IPC] COMMIT_BLOCK
 RC -> IISS : [IPC] COMMIT_BLOCK response
 
 opt every N block
-opt get no previous CALCULATE response
-IISS -> IISS: wait CALCULATE response
+opt get no CALCULATE_DONE for previous CALCULATE
+IISS x<-- IISS: exit
 end
 
 IISS -> ID: write block height &\nGovernance Variable
 IISS -> RC: [IPC] CALCULATE
+RC -> IISS : [IPC] CALCULATE response
 end alt every N block
 
 IISS -> IS: return response
 
 end group write precommit
 
-group I-Score calculation
+group I-Score calculation - got CALCULATE
 
 RC -> ID: read
 RC -> RC: process IISS data
 RC -> ISDB: calculate & write I-Score
 RC -> ID: delete
-RC -> IISS: [IPC] CALCULATE response
+RC -> IISS: [IPC] CALCULATE_DONE
 
 end group
 

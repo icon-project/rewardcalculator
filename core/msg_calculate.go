@@ -35,7 +35,7 @@ type CalculateRequest struct {
 	BlockHeight uint64
 }
 
-type CalculateResponse struct {
+type CalculateDone struct {
 	Success     bool
 	BlockHeight uint64
 	IScore      common.HexInt
@@ -222,6 +222,12 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 		return err
 	}
 
+	// send acknowledge of CALCULATE
+	if err := c.Send(MsgCalculate, id, nil); err != nil {
+		return err
+	}
+
+	// do calculation
 	success, blockHeight, stats, stateHash := DoCalculate(mh.mgr.ctx, &req)
 
 	// remove IISS data DB
@@ -231,8 +237,8 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 		os.Rename(req.Path, req.Path + "_failed")
 	}
 
-	// send response
-	var resp CalculateResponse
+	// send CALCULATE_DONE
+	var resp CalculateDone
 	resp.BlockHeight = blockHeight
 	resp.Success = success
 	if stats != nil {
@@ -242,7 +248,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	}
 	resp.StateHash = stateHash
 
-	return c.Send(msgCalculate, id, &resp)
+	return c.Send(MsgCalculateDone, 0, &resp)
 }
 
 func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics, []byte) {
