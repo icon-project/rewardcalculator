@@ -221,8 +221,10 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
+	log.Printf("\t CALCULATE request: %s", MsgDataToString(req))
 
 	// send acknowledge of CALCULATE
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgClaim), id, "ack")
 	if err := c.Send(MsgCalculate, id, nil); err != nil {
 		return err
 	}
@@ -248,6 +250,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	}
 	resp.StateHash = stateHash
 
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCalculateDone), 0, MsgDataToString(resp))
 	return c.Send(MsgCalculateDone, 0, &resp)
 }
 

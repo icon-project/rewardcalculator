@@ -25,7 +25,7 @@ end
 
 IISS -> ID: write block height &\nGovernance Variable
 IISS -> RC: [IPC] CALCULATE
-RC -> IISS : [IPC] CALCULATE response
+RC -> IISS : [IPC] CALCULATE acknowledge
 end alt every N block
 
 IISS -> IS: return response

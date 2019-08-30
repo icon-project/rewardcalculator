@@ -33,6 +33,7 @@ func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 		log.Printf("Failed to deserialize CLAIM message. err=%+v", err)
 		return err
 	}
+	log.Printf("\t CLAIM request: %s", MsgDataToString(req))
 
 	blockHeight, IScore := DoClaim(mh.mgr.ctx, &req)
 
@@ -43,6 +44,7 @@ func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 		resp.IScore.Set(&IScore.Int)
 	}
 
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgClaim), id, MsgDataToString(resp))
 	return c.Send(MsgClaim, id, &resp)
 }
 
@@ -135,7 +137,9 @@ func (mh *msgHandler) commitClaim(c ipc.Connection, id uint32, data []byte) erro
 	if _, err = codec.MP.UnmarshalFromBytes(data, &req); nil != err {
 		return err
 	}
+	log.Printf("\t COMMIT_CLAIM request: %s", MsgDataToString(req))
 
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCommitClaim), id, "ack")
 	if err = c.Send(MsgCommitClaim, id, nil); err != nil {
 		return err
 	}
@@ -173,6 +177,7 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); nil != err {
 		return err
 	}
+	log.Printf("\t COMMIT_BLOCK request: %s", MsgDataToString(req))
 
 	ret := true
 	if req.Success == true {
@@ -185,6 +190,7 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 	resp = req
 	resp.Success = ret
 
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCommitBlock), id, MsgDataToString(resp))
 	return c.Send(MsgCommitBlock, id, &resp)
 }
 
