@@ -83,6 +83,8 @@ func makeIISSGV() *IISSGovernanceVariable {
 	gv := new(IISSGovernanceVariable)
 
 	gv.BlockHeight = iaBlockHeight
+	gv.MainPRepCount = NumMainPRep
+	gv.SubPRepCount = NumSubPRep
 	gv.IncentiveRep = gvIncentiveRep
 	gv.RewardRep = gvRewardRep
 
@@ -106,6 +108,8 @@ func TestDBIISSGovernanceVariable_BytesAndSetBytes(t *testing.T) {
 	bs, _ := gv.Bytes()
 	gvNew.SetBytes(bs)
 
+	assert.Equal(t, gv.MainPRepCount, gvNew.MainPRepCount)
+	assert.Equal(t, gv.SubPRepCount, gvNew.SubPRepCount)
 	assert.Equal(t, gv.RewardRep, gvNew.RewardRep)
 	assert.Equal(t, gv.IncentiveRep, gvNew.IncentiveRep)
 	bsNew, _ := gvNew.Bytes()
@@ -145,6 +149,8 @@ func TestDBIISSGovernanceVariable_loadIISSGovernanceVariable(t *testing.T) {
 	assert.Equal(t, len(gvList), len(gvListNew))
 	for i := range gvListNew {
 		assert.Equal(t, gvList[i].BlockHeight, gvListNew[i].BlockHeight)
+		assert.Equal(t, gvList[i].MainPRepCount, gvListNew[i].MainPRepCount)
+		assert.Equal(t, gvList[i].SubPRepCount, gvListNew[i].SubPRepCount)
 		assert.Equal(t, gvList[i].RewardRep, gvListNew[i].RewardRep)
 		assert.Equal(t, gvList[i].IncentiveRep, gvListNew[i].IncentiveRep)
 		bs, _ := gvList[i].Bytes()

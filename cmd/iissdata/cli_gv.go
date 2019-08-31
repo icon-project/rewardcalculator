@@ -13,6 +13,8 @@ func (cli *CLI) governanceVariable(blockHeight uint64, incentive uint64, reward 
 
 	gv := new(core.IISSGovernanceVariable)
 	gv.BlockHeight = blockHeight
+	gv.MainPRepCount = core.NumMainPRep
+	gv.SubPRepCount = core.NumSubPRep
 	gv.IncentiveRep = incentive
 	gv.RewardRep = reward
 

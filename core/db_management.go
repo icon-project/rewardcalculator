@@ -16,8 +16,8 @@ import (
 const (
 	MaxDBCount  = 256
 
-	numMainPRep = 22
-	numPRep = 100
+	NumMainPRep = 22
+	NumSubPRep  = 78
 )
 
 type DBInfoData struct {
@@ -97,11 +97,11 @@ func NewDBInfo(mngDB db.Database, dbPath string, dbType string, dbName string, d
 }
 
 var BigIntTwo = big.NewInt(2)
-var BigIntNumMainPRep = big.NewInt(numMainPRep)
-var BigIntNumPRep = big.NewInt(numPRep)
 var BigIntIScoreMultiplier = big.NewInt(iScoreMultiplier)
 
 type GVData struct {
+	MainPRepCount          common.HexInt
+	SubPRepCount           common.HexInt
 	CalculatedIncentiveRep common.HexInt
 	RewardRep              common.HexInt
 }
@@ -147,12 +147,14 @@ func (gv *GovernanceVariable) SetBytes(bs []byte) error {
 
 func (gv *GovernanceVariable) setReward() {
 	// block produce reward
-	gv.BlockProduceReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumMainPRep)
+	gv.BlockProduceReward.Mul(&gv.CalculatedIncentiveRep.Int, &gv.MainPRepCount.Int)
 	gv.BlockProduceReward.Mul(&gv.BlockProduceReward.Int, BigIntIScoreMultiplier)
 	gv.BlockProduceReward.Div(&gv.BlockProduceReward.Int, BigIntTwo)
 
 	// Main/Sub P-Rep reward
-	gv.PRepReward.Mul(&gv.CalculatedIncentiveRep.Int, BigIntNumPRep)
+	var numPRep common.HexInt
+	numPRep.Add(&gv.MainPRepCount.Int, &gv.SubPRepCount.Int)
+	gv.PRepReward.Mul(&gv.CalculatedIncentiveRep.Int, &numPRep.Int)
 	gv.PRepReward.Mul(&gv.PRepReward.Int, BigIntIScoreMultiplier)
 }
 
@@ -204,6 +206,8 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 func NewGVFromIISS(iiss *IISSGovernanceVariable) *GovernanceVariable {
 	gv := new(GovernanceVariable)
 	gv.BlockHeight = iiss.BlockHeight
+	gv.MainPRepCount.SetUint64(iiss.MainPRepCount)
+	gv.SubPRepCount.SetUint64(iiss.SubPRepCount)
 	gv.CalculatedIncentiveRep.SetUint64(iiss.IncentiveRep)
 	gv.RewardRep.SetUint64(iiss.RewardRep)
 	gv.setReward()

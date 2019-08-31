@@ -70,6 +70,8 @@ func loadIISSHeader(iissDB db.Database) (*IISSHeader, error) {
 }
 
 type IISSGVData struct {
+	MainPRepCount uint64
+	SubPRepCount  uint64
 	IncentiveRep  uint64
 	RewardRep     uint64
 }
@@ -178,7 +180,7 @@ func (bp *IISSBlockProduceInfo) SetBytes(bs []byte) error {
 }
 
 func loadIISSBlockProduceInfo(iissDB db.Database) ([]*IISSBlockProduceInfo, error) {
-	bpInfoList := make([]*IISSBlockProduceInfo, 0, numMainPRep)
+	bpInfoList := make([]*IISSBlockProduceInfo, 0, NumMainPRep)
 	iter, err := iissDB.GetIterator()
 	if err != nil {
 		return nil, err
