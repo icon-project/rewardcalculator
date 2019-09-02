@@ -14,10 +14,10 @@ import (
 
 
 const (
-	MaxDBCount  = 256
+	MaxDBCount  int    = 256
 
-	NumMainPRep = 22
-	NumSubPRep  = 78
+	NumMainPRep uint64 = 22
+	NumSubPRep  uint64 = 78
 )
 
 type DBInfoData struct {

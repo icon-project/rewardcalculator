@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/icon-project/rewardcalculator/common/db"
+	"github.com/icon-project/rewardcalculator/core"
 )
 
 const (
@@ -68,6 +69,8 @@ func (cli *CLI) Run() {
 	gvBlockHeight := gvCmd.Uint64("blockheight", 0, "Block height of Governance variable")
 	gvIncentive := gvCmd.Uint64("incentive", 1, "P-Rep incentive in %")
 	gvReward := gvCmd.Uint64("reward", 1, "P-Rep reward in %")
+	gvMainPRepCount := gvCmd.Uint64("mainprepcount", core.NumMainPRep, "Main P-Rep count")
+	gvSubPRepCount := gvCmd.Uint64("subprepcount", core.NumSubPRep, "Sub P-Rep count")
 
 	bpBlockHeight := bpCmd.Uint64("blockheight", 0, "Block height of Block produce Info.")
 	bpGenerator := bpCmd.String("generator", "", "Address of block generator")
@@ -165,7 +168,7 @@ func (cli *CLI) Run() {
 	}
 
 	if gvCmd.Parsed() {
-		cli.governanceVariable(*gvBlockHeight, *gvIncentive, *gvReward)
+		cli.governanceVariable(*gvBlockHeight, *gvIncentive, *gvReward, *gvMainPRepCount, *gvSubPRepCount)
 		return
 	}
 
