@@ -15,6 +15,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+const IISSDataVersion = 2
+
 type IISSHeader struct {
 	Version     uint64
 	BlockHeight uint64
@@ -70,10 +72,10 @@ func loadIISSHeader(iissDB db.Database) (*IISSHeader, error) {
 }
 
 type IISSGVData struct {
-	MainPRepCount uint64
-	SubPRepCount  uint64
 	IncentiveRep  uint64
 	RewardRep     uint64
+	MainPRepCount uint64
+	SubPRepCount  uint64
 }
 
 type IISSGovernanceVariable struct {
@@ -106,15 +108,21 @@ func (gv *IISSGovernanceVariable) String() string {
 	return string(b)
 }
 
-func (gv *IISSGovernanceVariable) SetBytes(bs []byte) error {
+func (gv *IISSGovernanceVariable) SetBytes(bs []byte, version uint64) error {
 	_, err := codec.UnmarshalFromBytes(bs, &gv.IISSGVData)
 	if err != nil {
 		return err
 	}
+
+	if version == 1 {
+		gv.MainPRepCount = NumMainPRep
+		gv.SubPRepCount = NumSubPRep
+	}
+
 	return nil
 }
 
-func loadIISSGovernanceVariable(iissDB db.Database) ([]*IISSGovernanceVariable, error) {
+func loadIISSGovernanceVariable(iissDB db.Database, version uint64) ([]*IISSGovernanceVariable, error) {
 	gvList := make([]*IISSGovernanceVariable, 0)
 	iter, err := iissDB.GetIterator()
 	if err != nil {
@@ -124,7 +132,7 @@ func loadIISSGovernanceVariable(iissDB db.Database) ([]*IISSGovernanceVariable, 
 	iter.New(prefix.Start, prefix.Limit)
 	for entries := 0; iter.Next(); entries++ {
 		gv := new(IISSGovernanceVariable)
-		err = gv.SetBytes(iter.Value())
+		err = gv.SetBytes(iter.Value(), version)
 		if err != nil {
 			return nil, err
 		}
@@ -288,7 +296,7 @@ func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVa
 	}
 
 	// Governance Variable
-	gvList, err := loadIISSGovernanceVariable(iissDB)
+	gvList, err := loadIISSGovernanceVariable(iissDB, header.Version)
 	if err != nil {
 		log.Printf("Failed to read governance variable from IISS Data. err=%+v\n", err)
 		return nil, nil, nil, nil, nil

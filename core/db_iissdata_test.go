@@ -106,7 +106,7 @@ func TestDBIISSGovernanceVariable_BytesAndSetBytes(t *testing.T) {
 	var gvNew IISSGovernanceVariable
 
 	bs, _ := gv.Bytes()
-	gvNew.SetBytes(bs)
+	gvNew.SetBytes(bs, IISSDataVersion)
 
 	assert.Equal(t, gv.MainPRepCount, gvNew.MainPRepCount)
 	assert.Equal(t, gv.SubPRepCount, gvNew.SubPRepCount)
@@ -142,7 +142,7 @@ func TestDBIISSGovernanceVariable_loadIISSGovernanceVariable(t *testing.T) {
 	defer os.RemoveAll(testDBDir)
 
 	// load IISS governance variable
-	gvListNew, err := loadIISSGovernanceVariable(iissDB)
+	gvListNew, err := loadIISSGovernanceVariable(iissDB, IISSDataVersion)
 
 	// check
 	assert.Nil(t, err)
@@ -157,6 +157,37 @@ func TestDBIISSGovernanceVariable_loadIISSGovernanceVariable(t *testing.T) {
 		bsNew, _ := gvListNew[i].Bytes()
 		assert.Equal(t, bs, bsNew)
 	}
+}
+
+type IISSGVDataV1 struct {
+	IncentiveRep uint64
+	RewardRep    uint64
+}
+
+func (gv *IISSGVDataV1) Bytes() ([]byte, error) {
+	var bytes []byte
+	if bs, err := codec.MarshalToBytes(gv); err != nil {
+		return nil, err
+	} else {
+		bytes = bs
+	}
+	return bytes, nil
+}
+
+func TestDBIISSGovernanceVariable_BackwardCompatibility(t *testing.T) {
+	var gvV1 IISSGVDataV1
+	gvV1.IncentiveRep = 123
+	gvV1.RewardRep = 456
+
+	bs, err := gvV1.Bytes()
+	assert.Nil(t, err)
+
+	var gv IISSGovernanceVariable
+	gv.SetBytes(bs, 1)
+	assert.Equal(t, gvV1.IncentiveRep, gv.IncentiveRep)
+	assert.Equal(t, gvV1.RewardRep, gv.RewardRep)
+	assert.Equal(t, NumMainPRep, gv.MainPRepCount)
+	assert.Equal(t, NumSubPRep, gv.SubPRepCount)
 }
 
 const (
