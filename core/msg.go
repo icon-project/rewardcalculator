@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
@@ -10,14 +11,46 @@ import (
 )
 
 const (
-	msgVERSION     uint = 0
-	msgClaim            = 1
-	msgQuery            = 2
-	msgCalculate        = 3
-	msgCommitBlock      = 4
-	msgCommitClaim      = 5
-	MsgDebug            = 100
+	MsgVersion     uint = 0
+	MsgClaim            = 1
+	MsgQuery            = 2
+	MsgCalculate        = 3
+	MsgCommitBlock      = 4
+	MsgCommitClaim      = 5
+
+	MsgNotify           = 100
+	MsgReady            = MsgNotify + 0
+	MsgCalculateDone    = MsgNotify + 1
+
+	MsgDebug            = 1000
 )
+
+func MsgToString(msg uint) string{
+	switch msg {
+	case MsgVersion:
+		return "VERSION"
+	case MsgClaim:
+		return "CLAIM"
+	case MsgQuery:
+		return "QUERY"
+	case MsgCalculate:
+		return "CALCULATE"
+	case MsgCommitBlock:
+		return "COMMIT_BLOCK"
+	case MsgCommitClaim:
+		return "COMMIT_CLAIM"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func MsgDataToString(data interface{}) string {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return "Can't covert Message to json"
+	}
+	return string(b)
+}
 
 type msgHandler struct {
 	mgr  *manager
@@ -30,15 +63,15 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 		conn: c,
 	}
 
-	c.SetHandler(msgVERSION, handler)
-	c.SetHandler(msgQuery, handler)
+	c.SetHandler(MsgVersion, handler)
+	c.SetHandler(MsgQuery, handler)
 	if m.monitorMode == true {
 		c.SetHandler(MsgDebug, handler)
 	} else {
-		c.SetHandler(msgClaim, handler)
-		c.SetHandler(msgCalculate, handler)
-		c.SetHandler(msgCommitBlock, handler)
-		c.SetHandler(msgCommitClaim, handler)
+		c.SetHandler(MsgClaim, handler)
+		c.SetHandler(MsgCalculate, handler)
+		c.SetHandler(MsgCommitBlock, handler)
+		c.SetHandler(MsgCommitClaim, handler)
 	}
 
 	// send IISS data reload result
@@ -48,30 +81,31 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 		return nil, err
 	}
 
-	// send VERSION message to peer
-	err = handler.version(c, 0)
+	// send READY message to peer
+	err = sendVersion(c, MsgReady, 0, handler.mgr.ctx.DB.info.BlockHeight)
 	if err != nil {
-		log.Printf("Failed to send VERSION messag")
+		log.Printf("Failed to send READY message")
 	}
 
 	return handler, err
 }
 
 func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data []byte) error {
+	log.Printf("Get message. (msg:%s, id:%d)", MsgToString(msg), id)
 	switch msg {
-	case msgVERSION:
+	case MsgVersion:
 		go mh.version(c, id)
-	case msgClaim:
+	case MsgClaim:
 		go mh.claim(c, id, data)
-	case msgQuery:
+	case MsgQuery:
 		go mh.query(c, id, data)
-	case msgCalculate:
+	case MsgCalculate:
 		go mh.calculate(c, id, data)
-	case msgCommitBlock:
+	case MsgCommitBlock:
 		go mh.commitBlock(c, id, data)
 	case MsgDebug:
 		go mh.debug(c, id, data)
-	case msgCommitClaim:
+	case MsgCommitClaim:
 		go mh.commitClaim(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
@@ -85,12 +119,17 @@ type ResponseVersion struct {
 }
 
 func (mh *msgHandler) version(c ipc.Connection, id uint32) error {
+	return sendVersion(c, MsgVersion, id, mh.mgr.ctx.DB.info.BlockHeight)
+}
+
+func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64) error {
 	resp := ResponseVersion{
 		Version: Version,
-		BlockHeight: mh.mgr.ctx.DB.info.BlockHeight,
+		BlockHeight: blockHeight,
 	}
 
-	return c.Send(msgVERSION, 0, resp)
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(msg), id, MsgDataToString(resp))
+	return c.Send(msg, id, resp)
 }
 
 type ResponseQuery struct {
@@ -104,9 +143,12 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 	if _, err := codec.MP.UnmarshalFromBytes(data, &addr); err != nil {
 		return err
 	}
+	log.Printf("\t QUERY request: address: %s", addr.String())
 
 	resp := DoQuery(mh.mgr.ctx, addr)
-	return c.Send(msgQuery, id, &resp)
+
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQuery), id, MsgDataToString(resp))
+	return c.Send(MsgQuery, id, &resp)
 }
 
 func DoQuery(ctx *Context, addr common.Address) *ResponseQuery {

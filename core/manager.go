@@ -152,7 +152,7 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 }
 
 func reloadIISSData(ctx *Context, dir string) {
-	respSlice := make([]*CalculateResponse, 0)
+	respSlice := make([]*CalculateDone, 0)
 	for _, iissData := range findIISSData(dir) {
 		var req CalculateRequest
 		req.Path = filepath.Join(dir, iissData.Name())
@@ -169,7 +169,7 @@ func reloadIISSData(ctx *Context, dir string) {
 		}
 
 		// save result
-		resp := new(CalculateResponse)
+		resp := new(CalculateDone)
 		resp.BlockHeight = blockHeight
 		resp.Success = success
 		if stats != nil {
@@ -190,7 +190,7 @@ func sendReloadIISSDataResult(ctx *Context, c ipc.Connection) error {
 
 	// send IISS data reload result
 	for _, resp := range ctx.reloadIISS {
-		err = c.Send(msgCalculate, 0, *resp)
+		err = c.Send(MsgCalculate, 0, *resp)
 		if err != nil {
 			log.Printf("Failed to send IISS data reload result. (%+v)", resp)
 			break

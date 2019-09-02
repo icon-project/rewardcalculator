@@ -58,9 +58,14 @@ func (cli *CLI) Run() {
 
 	cli.conn = conn
 
-	// get VERSION message
-	var m core.ResponseVersion
-	cli.conn.Receive(m)
+	// flush READY message
+	for true {
+		var m core.ResponseVersion
+		msg, _, _ := cli.conn.Receive(m)
+		if msg == core.MsgReady {
+			break
+		}
+	}
 
 	// Send message to server
 	switch cmd {

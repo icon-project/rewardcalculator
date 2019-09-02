@@ -11,14 +11,6 @@ import (
 	"github.com/icon-project/rewardcalculator/core"
 )
 
-const (
-	msgVERSION   uint = 0
-	msgClaim          = 1
-	msgQuery          = 2
-	msgCalculate      = 3
-	msgCommitBlock    = 4
-)
-
 type CLI struct {
 	id uint32
 }
@@ -51,6 +43,7 @@ func (cli *CLI) validateArgs() {
 		cli.printUsage()
 		os.Exit(1)
 	}
+	cli.id = 1
 }
 
 func (cli *CLI) Run() {
@@ -122,14 +115,19 @@ func (cli *CLI) Run() {
 	}
 	defer conn.Close()
 
-	// flush VERSION message
-	var m core.ResponseVersion
-	conn.Receive(m)
+	// flush READY message
+	for true {
+		var m core.ResponseVersion
+		msg, _, _ := conn.Receive(m)
+		if msg == core.MsgReady {
+			break
+		}
+	}
 
 	// Send message to server
 
 	if versionCmd.Parsed() {
-		// send calculate message
+		// send VERSION message
 		cli.version(conn)
 	}
 
@@ -140,7 +138,7 @@ func (cli *CLI) Run() {
 		}
 		start := time.Now()
 
-		// send claim message
+		// send CLAIM message
 		cli.claim(conn, *claimAddress, *claimBlockHeight)
 
 		end := time.Now()
@@ -155,7 +153,7 @@ func (cli *CLI) Run() {
 		}
 		start := time.Now()
 
-		// send query message
+		// send QUERY message
 		cli.query(conn, *queryAddress)
 
 		end := time.Now()
@@ -170,7 +168,7 @@ func (cli *CLI) Run() {
 		}
 		start := time.Now()
 
-		// send calculate message
+		// send CALCULATE message
 		cli.calculate(conn, *calculateIISSData, *calculateBlockHeight)
 
 		end := time.Now()

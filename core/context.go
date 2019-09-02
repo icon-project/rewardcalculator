@@ -130,7 +130,7 @@ type Context struct {
 
 	stats           *Statistics
 
-	reloadIISS		[]*CalculateResponse
+	reloadIISS		[]*CalculateDone
 }
 
 func (ctx *Context) getGVByBlockHeight(blockHeight uint64) *GovernanceVariable {
