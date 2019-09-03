@@ -47,6 +47,7 @@ func TestContext_NewContext(t *testing.T) {
 	assert.NotNil(t, ctx.GV)
 	assert.NotNil(t, ctx.PRep)
 	assert.NotNil(t, ctx.PRepCandidates)
+	assert.NotNil(t, ctx.calculateStatus)
 	assert.NotNil(t, ctx.preCommit)
 }
 

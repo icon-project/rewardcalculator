@@ -636,3 +636,28 @@ func newIScoreAccount(addr common.Address, blockHeight uint64, reward common.Hex
 
 	return ia
 }
+
+func TestMsgQueryCalc_DoQueryCalculateStatus(t *testing.T) {
+	ctx := initTest(1)
+	var resp QueryCalculateStatusResponse
+
+	DoQueryCalculateStatus(ctx, &resp)
+	assert.Equal(t, CalculationDone, resp.Status)
+	assert.Equal(t, uint64(0), resp.BlockHeight)
+
+	// start calculation
+	calcBH := uint64(1000)
+	ctx.calculateStatus.set(true, calcBH)
+
+	DoQueryCalculateStatus(ctx, &resp)
+	assert.Equal(t, CalculationDoing, resp.Status)
+	assert.Equal(t, calcBH, resp.BlockHeight)
+
+	// end calculation
+	ctx.calculateStatus.reset()
+	ctx.DB.setBlockHeight(calcBH)
+
+	DoQueryCalculateStatus(ctx, &resp)
+	assert.Equal(t, CalculationDone, resp.Status)
+	assert.Equal(t, calcBH, resp.BlockHeight)
+}
