@@ -35,6 +35,7 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("\t calculate IISSDATA BLOCKHEIGHT     Send a CALCULATE message to update I-Score DB\n")
 	fmt.Printf("\t       IISSDATA                     IISS data DB path(Required)\n")
 	fmt.Printf("\t       BLOCKHEIGHT                  Block height to calculate. Set 0 if you want current block+1\n")
+	fmt.Printf("\t query_calculate                    Send a QUERY_CALCULATE_STATUS message\n")
 	fmt.Printf("\t monitor CONFIG                     Monitor account in configuration file\n")
 }
 
@@ -69,6 +70,8 @@ func (cli *CLI) Run() {
 	monitorConfig := monitorCmd.String("config", "./monitor.json", "Monitoring configuration file path")
 	monitorURL := monitorCmd.String("url", "http://localhost:9091", "Push URL")
 
+	queryCalculateStatusCmd := flag.NewFlagSet("query_calculate", flag.ExitOnError)
+
 	// Parse the CLI
 	switch cmd {
 	case "version":
@@ -99,6 +102,12 @@ func (cli *CLI) Run() {
 		err := monitorCmd.Parse(os.Args[3:])
 		if err != nil {
 			monitorCmd.PrintDefaults()
+			os.Exit(1)
+		}
+	case "query_calculate":
+		err := queryCalculateStatusCmd.Parse(os.Args[3:])
+		if err != nil {
+			queryCalculateStatusCmd.PrintDefaults()
 			os.Exit(1)
 		}
 	default:
@@ -174,6 +183,10 @@ func (cli *CLI) Run() {
 		end := time.Now()
 		diff := end.Sub(start)
 		fmt.Printf("Duration : %v\n", diff)
+	}
+
+	if queryCalculateStatusCmd.Parsed() {
+		cli.queryCalculateStatus(conn)
 	}
 
 	if monitorCmd.Parsed() {

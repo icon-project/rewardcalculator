@@ -17,6 +17,7 @@ const (
 	MsgCalculate        = 3
 	MsgCommitBlock      = 4
 	MsgCommitClaim      = 5
+	MsgQueryCalculateStatus = 6
 
 	MsgNotify           = 100
 	MsgReady            = MsgNotify + 0
@@ -39,6 +40,14 @@ func MsgToString(msg uint) string{
 		return "COMMIT_BLOCK"
 	case MsgCommitClaim:
 		return "COMMIT_CLAIM"
+	case MsgQueryCalculateStatus:
+		return "QUERY_CALCULATE_STATUS"
+	case MsgReady:
+		return "READY"
+	case MsgCalculateDone:
+		return "CALCULATE_DONE"
+	case MsgDebug:
+		return "DEBUG"
 	default:
 		return "UNKNOWN"
 	}
@@ -65,6 +74,7 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 
 	c.SetHandler(MsgVersion, handler)
 	c.SetHandler(MsgQuery, handler)
+	c.SetHandler(MsgQueryCalculateStatus, handler)
 	if m.monitorMode == true {
 		c.SetHandler(MsgDebug, handler)
 	} else {
@@ -107,6 +117,8 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 		go mh.debug(c, id, data)
 	case MsgCommitClaim:
 		go mh.commitClaim(c, id, data)
+	case MsgQueryCalculateStatus:
+		go mh.queryCalculateStatus(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}

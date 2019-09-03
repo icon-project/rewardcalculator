@@ -26,3 +26,12 @@ func (cli *CLI) calculate(conn ipc.Connection, iissData string, blockHeight uint
 	}
 
 }
+
+func (cli *CLI) queryCalculateStatus(conn ipc.Connection) {
+	var resp core.QueryCalculateStatusResponse
+
+	// Send QUERY_CALCULATE_STATUS and get response
+	conn.SendAndReceive(core.MsgQueryCalculateStatus, cli.id, nil, &resp)
+
+	fmt.Printf("QUERY_CALCULATE_STATUS command get response: %s\n", Display(resp))
+}

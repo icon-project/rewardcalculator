@@ -126,6 +126,8 @@ type Context struct {
 	PRepCandidates  map[common.Address]*PRepCandidate
 	GV              []*GovernanceVariable
 
+	calculateStatus *CalculateStatus
+
 	preCommit       *preCommit
 
 	stats           *Statistics
@@ -333,6 +335,9 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 
 	// Open claim DB
 	isDB.claim = db.Open(isDB.info.DBRoot, isDB.info.DBType, "claim")
+
+	// Init CalculationStatus
+	ctx.calculateStatus = new(CalculateStatus)
 
 	// Init preCommit
 	ctx.preCommit = new(preCommit)

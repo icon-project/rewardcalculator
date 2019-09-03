@@ -30,6 +30,20 @@ const (
 
 var BigIntRewardDivider = big.NewInt(rewardDivider)
 
+type CalculateStatus struct {
+	Doing       bool
+	BlockHeight uint64
+}
+
+func (cs *CalculateStatus) set(start bool, blockHeight uint64) {
+	cs.Doing = start
+	cs.BlockHeight = blockHeight
+}
+
+func (cs *CalculateStatus) reset() {
+	cs.set(false, 0)
+}
+
 type CalculateRequest struct {
 	Path        string
 	BlockHeight uint64
@@ -260,6 +274,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 
 	iScoreDB := ctx.DB
 	blockHeight := req.BlockHeight
+	ctx.calculateStatus.set(true, req.BlockHeight)
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
 
@@ -280,6 +295,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 	if blockHeight != 0 && blockHeight <= iScoreDB.info.BlockHeight {
 		log.Printf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
 			blockHeight, iScoreDB.info.BlockHeight)
+		ctx.calculateStatus.reset()
 		return false, blockHeight, nil, nil
 	}
 
@@ -368,6 +384,8 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 
 	// set blockHeight
 	ctx.DB.setBlockHeight(blockHeight)
+
+	ctx.calculateStatus.reset()
 
 	return true, blockHeight, ctx.stats, stateHash
 }
@@ -651,4 +669,36 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.
 	}
 
 	return totalReward, stateHash
+}
+
+const (
+	CalculationDone  uint64 = 0
+	CalculationDoing uint64 = 1
+)
+
+type QueryCalculateStatusResponse struct {
+	Status      uint64
+	BlockHeight uint64
+}
+
+func (mh *msgHandler) queryCalculateStatus(c ipc.Connection, id uint32, data []byte) error {
+	ctx := mh.mgr.ctx
+
+	// send QUERY_CALCULATE_STATUS
+	var resp QueryCalculateStatusResponse
+
+	DoQueryCalculateStatus(ctx, &resp)
+
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateStatus), 0, MsgDataToString(resp))
+	return c.Send(MsgQueryCalculateStatus, id, &resp)
+}
+
+func DoQueryCalculateStatus(ctx *Context, resp *QueryCalculateStatusResponse) {
+	if ctx.calculateStatus.Doing {
+		resp.Status = CalculationDoing
+		resp.BlockHeight = ctx.calculateStatus.BlockHeight
+	} else {
+		resp.Status = CalculationDone
+		resp.BlockHeight = ctx.DB.info.BlockHeight
+	}
 }
