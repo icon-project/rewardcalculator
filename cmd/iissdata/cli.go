@@ -63,7 +63,8 @@ func (cli *CLI) Run() {
 	prepCmd := flag.NewFlagSet("prep", flag.ExitOnError)
 	txCmd := flag.NewFlagSet("tx", flag.ExitOnError)
 
-	headerVersion := headerCmd.Uint64("version", 1, "Version of IISS data")
+	headerVersion := headerCmd.Uint64("version", core.IISSDataVersion, "Version of IISS data")
+	headerRevision := headerCmd.Uint64("revision", core.IISSDataRevisionDefault, "Revision of ICON Service")
 	headerBlockHeight := headerCmd.Uint64("blockheight", 1, "Block height of IISS data")
 
 	gvBlockHeight := gvCmd.Uint64("blockheight", 0, "Block height of Governance variable")
@@ -163,7 +164,7 @@ func (cli *CLI) Run() {
 	defer cli.DB.Close()
 
 	if headerCmd.Parsed() {
-		cli.header(*headerVersion, *headerBlockHeight)
+		cli.header(*headerVersion, *headerBlockHeight, *headerRevision)
 		return
 	}
 

@@ -2,15 +2,18 @@ package core
 
 import (
 	"encoding/json"
+	"log"
+
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"github.com/pkg/errors"
-	"log"
 )
 
 const (
+	IPCVersion   uint64 = 2
+
 	MsgVersion     uint = 0
 	MsgClaim            = 1
 	MsgQuery            = 2
@@ -136,7 +139,7 @@ func (mh *msgHandler) version(c ipc.Connection, id uint32) error {
 
 func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64) error {
 	resp := ResponseVersion{
-		Version: Version,
+		Version: IPCVersion,
 		BlockHeight: blockHeight,
 	}
 

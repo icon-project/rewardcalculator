@@ -19,8 +19,9 @@ const (
 func makeHeader() *IISSHeader {
 	header := new(IISSHeader)
 
-	header.Version = Version
+	header.Version = IISSDataVersion
 	header.BlockHeight = iaBlockHeight
+	header.Revision = IISSDataRevisionDefault
 
 	return header
 }
@@ -39,7 +40,7 @@ func TestDBIISSHeader_BytesAndSetBytes(t *testing.T) {
 	bs, _ := header.Bytes()
 	headerNew.SetBytes(bs)
 
-	assert.Equal(t, Version, headerNew.Version)
+	assert.Equal(t, IISSDataVersion, headerNew.Version)
 	assert.Equal(t, header.BlockHeight, headerNew.BlockHeight)
 	bsNew, _ := headerNew.Bytes()
 	assert.Equal(t, bs, bsNew)
@@ -49,7 +50,7 @@ func writeHeader(dbDir string, dbName string) (*IISSHeader, db.Database) {
 	header := makeHeader()
 
 	// write IISS header
-	iissDB := db.Open(testDBDir, string(db.GoLevelDBBackend), testDB)
+	iissDB := db.Open(dbDir, string(db.GoLevelDBBackend), dbName)
 	bucket, _ := iissDB.GetBucket(db.PrefixIISSHeader)
 	bs, _ := header.Bytes()
 	bucket.Set(header.ID(), bs)
@@ -72,6 +73,36 @@ func TestDBIISSHeader_loadIISSHeader(t *testing.T) {
 	bs, _ := header.Bytes()
 	bsNew, _ := headerNew.Bytes()
 	assert.Equal(t, bs, bsNew)
+}
+
+type IISSHeaderV1 struct {
+	Version     uint64
+	BlockHeight uint64
+}
+
+func (ih *IISSHeaderV1) Bytes() ([]byte, error) {
+	var bytes []byte
+	if bs, err := codec.MarshalToBytes(ih); err != nil {
+		return nil, err
+	} else {
+		bytes = bs
+	}
+	return bytes, nil
+}
+
+func TestDBIISSHeader_BackwardCompatibility(t *testing.T) {
+	var headerV1 IISSHeaderV1
+	headerV1.Version = 1
+	headerV1.BlockHeight = 2345
+
+	bs, err := headerV1.Bytes()
+	assert.Nil(t, err)
+
+	var ih IISSHeader
+	ih.SetBytes(bs)
+	assert.Equal(t, headerV1.Version, ih.Version)
+	assert.Equal(t, headerV1.BlockHeight, ih.BlockHeight)
+	assert.Equal(t, IISSDataRevisionDefault, ih.Revision)
 }
 
 const (

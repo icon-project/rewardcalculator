@@ -15,11 +15,16 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-const IISSDataVersion = 2
+const (
+	IISSDataVersion         uint64 = 2
+
+	IISSDataRevisionDefault uint64 = 1
+)
 
 type IISSHeader struct {
-	Version     uint64
+	Version     uint64		// version of RC data
 	BlockHeight uint64
+	Revision    uint64		// revision of ICON Service
 }
 
 func (ih *IISSHeader) ID() []byte {
@@ -49,6 +54,12 @@ func (ih *IISSHeader) SetBytes(bs []byte) error {
 	if err != nil {
 		return err
 	}
+
+	// for backward compatibility
+	if ih.Version == 1 {
+		ih.Revision = IISSDataRevisionDefault
+	}
+
 	return nil
 }
 
@@ -114,6 +125,7 @@ func (gv *IISSGovernanceVariable) SetBytes(bs []byte, version uint64) error {
 		return err
 	}
 
+	// for backward compatibility
 	if version == 1 {
 		gv.MainPRepCount = NumMainPRep
 		gv.SubPRepCount = NumSubPRep
