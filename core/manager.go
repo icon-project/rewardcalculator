@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	Version      uint64 = 1
 	DebugAddress        = "/tmp/.icon-rc-monitor.sock"
 )
 
