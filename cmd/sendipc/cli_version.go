@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/icon-project/rewardcalculator/core"
 	"github.com/icon-project/rewardcalculator/common/ipc"
+	"github.com/icon-project/rewardcalculator/core"
 )
 
 func (cli *CLI) version(conn ipc.Connection) {

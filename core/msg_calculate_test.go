@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"fmt"
 	"golang.org/x/crypto/sha3"
 	"sort"
@@ -639,6 +640,7 @@ func newIScoreAccount(addr common.Address, blockHeight uint64, reward common.Hex
 
 func TestMsgQueryCalc_DoQueryCalculateStatus(t *testing.T) {
 	ctx := initTest(1)
+	defer finalizeTest()
 	var resp QueryCalculateStatusResponse
 
 	DoQueryCalculateStatus(ctx, &resp)
@@ -660,4 +662,41 @@ func TestMsgQueryCalc_DoQueryCalculateStatus(t *testing.T) {
 	DoQueryCalculateStatus(ctx, &resp)
 	assert.Equal(t, CalculationDone, resp.Status)
 	assert.Equal(t, calcBH, resp.BlockHeight)
+}
+
+func TestMsgQueryCalc_DoQueryCalculateResult(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest()
+	var resp QueryCalculateResultResponse
+	var blockHeight uint64 = 1000
+	var iScore uint64 = 10
+
+	DoQueryCalculateResult(ctx, blockHeight, &resp)
+	assert.Equal(t, InvalidBH, resp.Status)
+	assert.Equal(t, blockHeight, resp.BlockHeight)
+
+	// start calculation
+	ctx.calculateStatus.set(true, blockHeight)
+
+	DoQueryCalculateResult(ctx, blockHeight, &resp)
+	assert.Equal(t, calcDoing, resp.Status)
+	assert.Equal(t, blockHeight, resp.BlockHeight)
+
+	// end calculation
+	ctx.calculateStatus.reset()
+	ctx.DB.setBlockHeight(blockHeight)
+
+	crDB := ctx.DB.getCalculateResultDB()
+	stats := new(Statistics)
+	stats.TotalReward.SetUint64(iScore)
+	stateHash := make([]byte, 64)
+	binary.BigEndian.PutUint64(stateHash, blockHeight)
+
+	WriteCalculationResult(crDB, blockHeight, stats, stateHash)
+
+	DoQueryCalculateResult(ctx, blockHeight, &resp)
+	assert.Equal(t, calcSucceeded, resp.Status)
+	assert.Equal(t, blockHeight, resp.BlockHeight)
+	assert.Equal(t, 0, resp.IScore.Cmp(&stats.TotalReward.Int))
+	assert.Equal(t, stateHash, resp.StateHash)
 }

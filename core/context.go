@@ -23,7 +23,7 @@ type IScoreDB struct {
 
 	// DB instance
 	management    db.Database
-
+	calcResult    db.Database
 	claim         db.Database
 
 	accountLock   sync.RWMutex
@@ -81,6 +81,10 @@ func (idb *IScoreDB) getQueryDB(address common.Address) db.Database {
 
 func (idb *IScoreDB) getClaimDB() db.Database {
 	return idb.claim
+}
+
+func (idb *IScoreDB) getCalculateResultDB() db.Database {
+	return idb.calcResult
 }
 
 func (idb *IScoreDB) resetCalcDB() {
@@ -334,6 +338,9 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	}
 
 	// Open claim DB
+	isDB.calcResult= db.Open(isDB.info.DBRoot, isDB.info.DBType, "calculation_result")
+
+	// Open claim DB
 	isDB.claim = db.Open(isDB.info.DBRoot, isDB.info.DBType, "claim")
 
 	// Init CalculationStatus
@@ -360,6 +367,9 @@ func CloseIScoreDB(isDB *IScoreDB) {
 		aDB.Close()
 	}
 	isDB.Account1 = nil
+
+	// close calculation result DB
+	isDB.calcResult.Close()
 
 	// close claim DB
 	isDB.claim.Close()

@@ -21,7 +21,7 @@ func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
 
 	conn.SendAndReceive(core.MsgClaim, cli.id, &req, &resp)
 	cli.id++
-	fmt.Printf("CLAIM command get response: %s\n", Display(resp))
+	fmt.Printf("CLAIM command get response: %s\n", resp.String())
 
 	// send COMMIT_CLAIM and get ack
 	var commitClaim core.CommitClaim
@@ -30,7 +30,7 @@ func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
 	commitClaim.BlockHash = req.BlockHash
 	commitClaim.Success = true
 
-	fmt.Printf("Send COMMIT_CLAIM message: %s\n", Display(commitClaim))
+	fmt.Printf("Send COMMIT_CLAIM message: %s\n", commitClaim.String())
 	conn.SendAndReceive(core.MsgClaim, cli.id, &req, &resp)
 	cli.id++
 	fmt.Printf("COMMIT_CLAIM message get ack\n")
@@ -42,7 +42,7 @@ func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
 	commit.BlockHash = req.BlockHash
 	commit.BlockHeight = blockHeight
 
-	fmt.Printf("Send COMMIT_BLOCK message: %s\n", Display(commit))
+	fmt.Printf("Send COMMIT_BLOCK message: %s\n", commit.String())
 	conn.SendAndReceive(core.MsgCommitBlock, cli.id, &commit, &commitResp)
-	fmt.Printf("COMMIT_BLOCK message get response: %s\n", Display(commitResp))
+	fmt.Printf("COMMIT_BLOCK message get response: %s\n", commitResp.String())
 }
