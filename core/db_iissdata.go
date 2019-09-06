@@ -18,7 +18,7 @@ import (
 const (
 	IISSDataVersion         uint64 = 2
 
-	IISSDataRevisionDefault uint64 = 1
+	IISSDataRevisionDefault uint64 = 0
 )
 
 type IISSHeader struct {
@@ -127,8 +127,8 @@ func (gv *IISSGovernanceVariable) SetBytes(bs []byte, version uint64) error {
 
 	// for backward compatibility
 	if version == 1 {
-		gv.MainPRepCount = NumMainPRep
-		gv.SubPRepCount = NumSubPRep
+		gv.MainPRepCount = 0
+		gv.SubPRepCount = 0
 	}
 
 	return nil

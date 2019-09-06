@@ -217,8 +217,8 @@ func TestDBIISSGovernanceVariable_BackwardCompatibility(t *testing.T) {
 	gv.SetBytes(bs, 1)
 	assert.Equal(t, gvV1.IncentiveRep, gv.IncentiveRep)
 	assert.Equal(t, gvV1.RewardRep, gv.RewardRep)
-	assert.Equal(t, NumMainPRep, gv.MainPRepCount)
-	assert.Equal(t, NumSubPRep, gv.SubPRepCount)
+	assert.Equal(t, uint64(0), gv.MainPRepCount)
+	assert.Equal(t, uint64(0), gv.SubPRepCount)
 }
 
 const (
