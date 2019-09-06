@@ -35,8 +35,11 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("\t calculate IISSDATA BLOCKHEIGHT     Send a CALCULATE message to update I-Score DB\n")
 	fmt.Printf("\t       IISSDATA                     IISS data DB path(Required)\n")
 	fmt.Printf("\t       BLOCKHEIGHT                  Block height to calculate. Set 0 if you want current block+1\n")
-	fmt.Printf("\t query_calculate                    Send a QUERY_CALCULATE_STATUS message\n")
+	fmt.Printf("\t query_calculate_status             Send a QUERY_CALCULATE_STATUS message\n")
+	fmt.Printf("\t query_calculate_result BLOCKHEIGHT Send a QUERY_CALCULATE_RESULT message\n")
+	fmt.Printf("\t       BLOCKHEIGHT                  Block height to query\n")
 	fmt.Printf("\t monitor CONFIG                     Monitor account in configuration file\n")
+	fmt.Printf("\t       CONFIG                       Monitoring configuration file\n")
 }
 
 func (cli *CLI) validateArgs() {
@@ -70,7 +73,10 @@ func (cli *CLI) Run() {
 	monitorConfig := monitorCmd.String("config", "./monitor.json", "Monitoring configuration file path")
 	monitorURL := monitorCmd.String("url", "http://localhost:9091", "Push URL")
 
-	queryCalculateStatusCmd := flag.NewFlagSet("query_calculate", flag.ExitOnError)
+	queryCalculateStatusCmd := flag.NewFlagSet("query_calculate_status", flag.ExitOnError)
+
+	queryCRCmd := flag.NewFlagSet("query_calculate_result", flag.ExitOnError)
+	queryCRBlockHeight := queryCRCmd.Uint64("blockheight", 0, "Block height(Required)")
 
 	// Parse the CLI
 	switch cmd {
@@ -104,10 +110,16 @@ func (cli *CLI) Run() {
 			monitorCmd.PrintDefaults()
 			os.Exit(1)
 		}
-	case "query_calculate":
+	case "query_calculate_status":
 		err := queryCalculateStatusCmd.Parse(os.Args[3:])
 		if err != nil {
 			queryCalculateStatusCmd.PrintDefaults()
+			os.Exit(1)
+		}
+	case "query_calculate_result":
+		err := queryCRCmd.Parse(os.Args[3:])
+		if err != nil {
+			queryCRCmd.PrintDefaults()
 			os.Exit(1)
 		}
 	default:
@@ -187,6 +199,10 @@ func (cli *CLI) Run() {
 
 	if queryCalculateStatusCmd.Parsed() {
 		cli.queryCalculateStatus(conn)
+	}
+
+	if queryCRCmd.Parsed() {
+		cli.queryCalculateResult(conn, *queryCRBlockHeight)
 	}
 
 	if monitorCmd.Parsed() {

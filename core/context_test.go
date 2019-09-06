@@ -42,6 +42,7 @@ func TestContext_NewContext(t *testing.T) {
 	assert.False(t, ctx.DB.info.QueryDBIsZero)
 	assert.Equal(t, dbCount, len(ctx.DB.Account0))
 	assert.Equal(t, dbCount, len(ctx.DB.Account1))
+	assert.NotNil(t, ctx.DB.calcResult)
 	assert.NotNil(t, ctx.DB.claim)
 
 	assert.NotNil(t, ctx.GV)
@@ -338,6 +339,20 @@ func TestContext_GetCalcDBList(t *testing.T) {
 	assert.Equal(t, ctx.DB.Account1, ctx.DB.GetCalcDBList())
 	ctx.DB.info.QueryDBIsZero = false
 	assert.Equal(t, ctx.DB.Account0, ctx.DB.GetCalcDBList())
+}
+
+func TestContext_GetClaimDB(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest()
+
+	assert.Equal(t, ctx.DB.claim, ctx.DB.getClaimDB())
+}
+
+func TestContext_GetCalculateResultDB(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest()
+
+	assert.Equal(t, ctx.DB.calcResult, ctx.DB.getCalculateResultDB())
 }
 
 func TestContext_ToggleAccountDB(t *testing.T) {

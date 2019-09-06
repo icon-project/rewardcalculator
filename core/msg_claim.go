@@ -2,9 +2,11 @@ package core
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math/big"
+	"strconv"
 	"sync"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -22,9 +24,24 @@ type ClaimMessage struct {
 	BlockHash   []byte
 }
 
+func (cm *ClaimMessage) String() string {
+	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s",
+		cm.Address.String(),
+		cm.BlockHeight,
+		hex.EncodeToString(cm.BlockHash))
+}
+
 type ResponseClaim struct {
 	ClaimMessage
 	IScore common.HexInt
+}
+
+func (rc *ResponseClaim) String() string {
+	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s, IScore: %s",
+		rc.Address.String(),
+		rc.BlockHeight,
+		hex.EncodeToString(rc.BlockHash),
+		rc.IScore.String())
 }
 
 func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
@@ -130,6 +147,14 @@ type CommitClaim struct {
 	BlockHash   []byte
 }
 
+func (cc *CommitClaim) String() string {
+	return fmt.Sprintf("Success: %s, Address: %s, BlockHeight: %d, BlockHash: %s",
+		strconv.FormatBool(cc.Success),
+		cc.Address.String(),
+		cc.BlockHeight,
+		hex.EncodeToString(cc.BlockHash))
+}
+
 func (mh *msgHandler) commitClaim(c ipc.Connection, id uint32, data []byte) error {
 	var req CommitClaim
 	var err error
@@ -170,6 +195,13 @@ type CommitBlock struct {
 	Success     bool
 	BlockHeight uint64
 	BlockHash   []byte
+}
+
+func (cb *CommitBlock) String() string {
+	return fmt.Sprintf("Success: %s, BlockHeight: %d, BlockHash: %s",
+		strconv.FormatBool(cb.Success),
+		cb.BlockHeight,
+		hex.EncodeToString(cb.BlockHash))
 }
 
 func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) error {

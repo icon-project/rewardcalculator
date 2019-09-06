@@ -12,9 +12,12 @@ type BucketID string
 
 //	Bucket ID
 const (
-	// For I-Score DB
+	// For query and calculation DB
 	// I-Score
 	PrefixIScore BucketID             = ""
+
+	// For calculation result DB
+	PrefixCalcResult BucketID         = ""
 
 	// For global DB
 

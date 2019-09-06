@@ -2,13 +2,13 @@ package core
 
 import (
 	"encoding/json"
-	"log"
-
+	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"github.com/pkg/errors"
+	"log"
 )
 
 const (
@@ -21,6 +21,7 @@ const (
 	MsgCommitBlock      = 4
 	MsgCommitClaim      = 5
 	MsgQueryCalculateStatus = 6
+	MsgQueryCalculateResult = 7
 
 	MsgNotify           = 100
 	MsgReady            = MsgNotify + 0
@@ -45,6 +46,8 @@ func MsgToString(msg uint) string{
 		return "COMMIT_CLAIM"
 	case MsgQueryCalculateStatus:
 		return "QUERY_CALCULATE_STATUS"
+	case MsgQueryCalculateResult:
+		return "QUERY_CALCULATE_RESULT"
 	case MsgReady:
 		return "READY"
 	case MsgCalculateDone:
@@ -78,6 +81,7 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 	c.SetHandler(MsgVersion, handler)
 	c.SetHandler(MsgQuery, handler)
 	c.SetHandler(MsgQueryCalculateStatus, handler)
+	c.SetHandler(MsgQueryCalculateResult, handler)
 	if m.monitorMode == true {
 		c.SetHandler(MsgDebug, handler)
 	} else {
@@ -122,6 +126,8 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 		go mh.commitClaim(c, id, data)
 	case MsgQueryCalculateStatus:
 		go mh.queryCalculateStatus(c, id, data)
+	case MsgQueryCalculateResult:
+		go mh.queryCalculateResult(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}
@@ -151,6 +157,13 @@ type ResponseQuery struct {
 	Address common.Address
 	IScore  common.HexInt
 	BlockHeight uint64
+}
+
+func (rq *ResponseQuery) String() string {
+	return fmt.Sprintf("Address: %s, IScore: %s, BlockHeight: %d",
+		rq.Address.String(),
+		rq.IScore.String(),
+		rq.BlockHeight)
 }
 
 func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {

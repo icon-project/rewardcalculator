@@ -1,10 +1,13 @@
 package core
 
 import (
+	"encoding/hex"
+	"fmt"
 	"log"
 	"math/big"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -48,12 +51,23 @@ type CalculateRequest struct {
 	Path        string
 	BlockHeight uint64
 }
+func (cr *CalculateRequest) String() string {
+	return fmt.Sprintf("Path: %s, BlockHeight: %d", cr.Path, cr.BlockHeight)
+}
 
 type CalculateDone struct {
 	Success     bool
 	BlockHeight uint64
 	IScore      common.HexInt
 	StateHash   []byte
+}
+
+func (cd *CalculateDone) String() string {
+	return fmt.Sprintf("Success: %s, BlockHeight: %d, IScore: %s, StateHash: %s",
+		strconv.FormatBool(cd.Success),
+		cd.BlockHeight,
+		cd.IScore.String(),
+		hex.EncodeToString(cd.StateHash))
 }
 
 func calculateDelegationReward(delegation *common.HexInt, start uint64, end uint64,
@@ -215,7 +229,7 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, gvList []*G
 		log.Printf("There is error while iteration. %+v", err)
 	}
 
-	log.Printf("Calculate %d: %s, stateHash: %v", index, stats.Beta3.String(), stateHash)
+	log.Printf("Calculate %d: %s, stateHash: %v", index, stats.Beta3.String(), hex.EncodeToString(stateHash))
 
 	return count, stats, stateHash
 }
@@ -258,7 +272,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	resp.BlockHeight = blockHeight
 	resp.Success = success
 	if stats != nil {
-		resp.IScore.Set(&stats.Total.Int)
+		resp.IScore.Set(&stats.TotalReward.Int)
 	} else {
 		resp.IScore.SetUint64(0)
 	}
@@ -346,7 +360,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 		}
 		stats.Increase("Accounts", s.Accounts)
 		stats.Increase("Beta3", s.Beta3)
-		stats.Increase("Total", s.Beta3)
+		stats.Increase("TotalReward", s.Beta3)
 	}
 
 	reward := new(common.HexInt)
@@ -355,19 +369,19 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 	// Update calculate DB with delegate TX
 	reward, hashValue = calculateIISSTX(ctx, txList, blockHeight)
 	stats.Increase("Beta3", *reward)
-	stats.Increase("Total", *reward)
+	stats.Increase("TotalReward", *reward)
 	sha3.ShakeSum256(stateHash, hashValue)
 
 	// Update block produce reward
 	reward, hashValue = calculateIISSBlockProduce(ctx, bpInfoList, blockHeight)
 	stats.Increase("Beta1", *reward)
-	stats.Increase("Total", *reward)
+	stats.Increase("TotalReward", *reward)
 	sha3.ShakeSum256(stateHash, hashValue)
 
 	// Update P-Rep reward
 	reward, hashValue = calculatePRepReward(ctx, blockHeight)
 	stats.Increase("Beta2", *reward)
-	stats.Increase("Total", *reward)
+	stats.Increase("TotalReward", *reward)
 	sha3.ShakeSum256(stateHash, hashValue)
 
 	ctx.stats = stats
@@ -381,9 +395,13 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d entries",
 		elapsedTime, ctx.DB.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount)
 	log.Printf("%s", stats.String())
+	log.Printf("stateHash : %s", hex.EncodeToString(stateHash))
 
 	// set blockHeight
 	ctx.DB.setBlockHeight(blockHeight)
+
+	// write calculation result
+	WriteCalculationResult(ctx.DB.getCalculateResultDB(), blockHeight, stats, stateHash)
 
 	ctx.calculateStatus.reset()
 
@@ -681,10 +699,25 @@ type QueryCalculateStatusResponse struct {
 	BlockHeight uint64
 }
 
+func (cs *QueryCalculateStatusResponse) StatusString() string {
+	switch cs.Status {
+	case CalculationDone:
+		return "Calculation Done"
+	case CalculationDoing:
+		return "Calculating"
+	default:
+		return "Unknown status"
+	}
+}
+
+func (cs *QueryCalculateStatusResponse) String() string {
+	return fmt.Sprintf("Status: %s, BlockHeight: %d", cs.StatusString(), cs.BlockHeight)
+}
+
 func (mh *msgHandler) queryCalculateStatus(c ipc.Connection, id uint32, data []byte) error {
 	ctx := mh.mgr.ctx
 
-	// send QUERY_CALCULATE_STATUS
+	// send QUERY_CALCULATE_STATUS response
 	var resp QueryCalculateStatusResponse
 
 	DoQueryCalculateStatus(ctx, &resp)
@@ -700,5 +733,95 @@ func DoQueryCalculateStatus(ctx *Context, resp *QueryCalculateStatusResponse) {
 	} else {
 		resp.Status = CalculationDone
 		resp.BlockHeight = ctx.DB.info.BlockHeight
+	}
+}
+
+const (
+	calcSucceeded uint16 = 0
+	calcFailed    uint16 = 1
+	calcDoing     uint16 = 2
+	InvalidBH     uint16 = 3
+)
+
+type QueryCalculateResultResponse struct {
+	Status      uint16
+	BlockHeight uint64
+	IScore      common.HexInt
+	StateHash   []byte
+}
+
+func (cr *QueryCalculateResultResponse) StatusString() string {
+	switch cr.Status {
+	case calcSucceeded:
+		return "Succeeded"
+	case calcFailed:
+		return "Failed"
+	case calcDoing:
+		return "Calculating"
+	case InvalidBH:
+		return "Invalid block height"
+	default:
+		return "Unknown status"
+	}
+}
+
+func (cr *QueryCalculateResultResponse) String() string {
+	return fmt.Sprintf("Status: %s, BlockHeight: %d, IScore: %s, StateHash: %s",
+		cr.StatusString(),
+		cr.BlockHeight,
+		cr.IScore.String(),
+		hex.EncodeToString(cr.StateHash))
+}
+
+func (mh *msgHandler) queryCalculateResult(c ipc.Connection, id uint32, data []byte) error {
+	var blockHeight uint64
+	if _, err := codec.MP.UnmarshalFromBytes(data, &blockHeight); err != nil {
+		log.Printf("Failed to unmarshal data. err=%+v", err)
+		return err
+	}
+	log.Printf("\t Query calculate result : block height : %d", blockHeight)
+
+	ctx := mh.mgr.ctx
+
+	// send QUERY_CALCULATE_RESULT response
+	var resp QueryCalculateResultResponse
+
+	DoQueryCalculateResult(ctx, blockHeight, &resp)
+
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateResult), 0, MsgDataToString(resp))
+	return c.Send(MsgQueryCalculateResult, id, &resp)
+}
+
+func DoQueryCalculateResult(ctx *Context, blockHeight uint64, resp *QueryCalculateResultResponse) {
+	resp.BlockHeight = blockHeight
+
+	// check doing calculation
+	if blockHeight == ctx.calculateStatus.BlockHeight {
+		if blockHeight == 0 {
+			resp.Status = InvalidBH
+		} else {
+			resp.Status = calcDoing
+		}
+		return
+	}
+
+	// read from calculate result DB
+	crDB := ctx.DB.getCalculateResultDB()
+	bucket, _ := crDB.GetBucket(db.PrefixCalcResult)
+	key := common.Uint64ToBytes(blockHeight)
+	bs, _ := bucket.Get(key)
+	if bs != nil {
+		cr, _ := NewCalculationResultFromBytes(bs)
+		resp.BlockHeight = blockHeight
+		if cr.Success {
+			resp.Status = calcSucceeded
+			resp.IScore.Set(&cr.IScore.Int)
+			resp.StateHash = cr.StateHash
+		} else {
+			resp.Status = calcFailed
+		}
+	} else {
+		// No calculation result
+		resp.Status = InvalidBH
 	}
 }
