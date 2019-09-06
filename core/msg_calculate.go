@@ -722,7 +722,7 @@ func (mh *msgHandler) queryCalculateStatus(c ipc.Connection, id uint32, data []b
 
 	DoQueryCalculateStatus(ctx, &resp)
 
-	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateStatus), 0, MsgDataToString(resp))
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateStatus), id, MsgDataToString(resp))
 	return c.Send(MsgQueryCalculateStatus, id, &resp)
 }
 
@@ -788,7 +788,7 @@ func (mh *msgHandler) queryCalculateResult(c ipc.Connection, id uint32, data []b
 
 	DoQueryCalculateResult(ctx, blockHeight, &resp)
 
-	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateResult), 0, MsgDataToString(resp))
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateResult), id, MsgDataToString(resp))
 	return c.Send(MsgQueryCalculateResult, id, &resp)
 }
 
