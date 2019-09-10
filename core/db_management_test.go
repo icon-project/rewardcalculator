@@ -91,7 +91,10 @@ func makeGV(blockHeight uint64) *GovernanceVariable {
 func TestDBMNGGV_ID(t *testing.T) {
 	gv := makeGV(iaBlockHeight)
 
-	assert.Equal(t, common.Uint64ToBytes(gv.BlockHeight), gv.ID())
+	id := gv.ID()
+
+	assert.Equal(t, iaBlockHeight, common.BytesToUint64(id))
+	assert.Equal(t, 8, len(id))
 }
 
 func TestDBMNGGV_BytesAndSetBytes(t *testing.T) {
