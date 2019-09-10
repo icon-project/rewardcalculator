@@ -158,7 +158,7 @@ func reloadIISSData(ctx *Context, dir string) {
 		req.BlockHeight = 0
 
 		log.Printf("Reload IISS Data. %s", req.Path)
-		success, blockHeight, stats, stateHash := DoCalculate(ctx, &req)
+		success, blockHeight, stats, stateHash := DoCalculate(ctx, &req, nil, 0)
 
 		// remove IISS data DB
 		os.RemoveAll(req.Path)
