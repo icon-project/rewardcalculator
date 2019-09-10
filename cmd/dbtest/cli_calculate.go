@@ -21,5 +21,5 @@ func (cli *CLI) calculate(dbName string, blockHeight uint64, batchCount uint64) 
 	req.BlockHeight = blockHeight
 	req.Path = "noiissdata"
 
-	core.DoCalculate(ctx, &req)
+	core.DoCalculate(ctx, &req, nil, 0)
 }

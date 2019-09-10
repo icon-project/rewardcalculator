@@ -244,6 +244,16 @@ func preCalculate(ctx *Context) {
 	iScoreDB.resetCalcDB()
 }
 
+func sendCalculateACK(c ipc.Connection, id uint32) error {
+	if c != nil {
+		log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCalculate), id, "ack")
+		if err := c.Send(MsgCalculate, id, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error {
 	var req CalculateRequest
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
@@ -251,14 +261,8 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	}
 	log.Printf("\t CALCULATE request: %s", MsgDataToString(req))
 
-	// send acknowledge of CALCULATE
-	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgClaim), id, "ack")
-	if err := c.Send(MsgCalculate, id, nil); err != nil {
-		return err
-	}
-
 	// do calculation
-	success, blockHeight, stats, stateHash := DoCalculate(mh.mgr.ctx, &req)
+	success, blockHeight, stats, stateHash := DoCalculate(mh.mgr.ctx, &req, c, id)
 
 	// remove IISS data DB
 	if success == true {
@@ -282,7 +286,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	return c.Send(MsgCalculateDone, 0, &resp)
 }
 
-func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics, []byte) {
+func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint32) (bool, uint64, *Statistics, []byte) {
 	stateHash := make([]byte, 64)
 	stats := new(Statistics)
 
@@ -310,10 +314,17 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 		log.Printf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
 			blockHeight, iScoreDB.info.BlockHeight)
 		ctx.calculateStatus.reset()
+
+		// send acknowledge of CALCULATE
+		sendCalculateACK(c, id)
+
 		return false, blockHeight, nil, nil
 	}
 
 	preCalculate(ctx)
+
+	// send acknowledge of CALCULATE after preCalculate was finished
+	sendCalculateACK(c, id)
 
 	// Update GV
 	ctx.UpdateGovernanceVariable(gvList)
