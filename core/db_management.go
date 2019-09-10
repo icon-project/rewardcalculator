@@ -115,7 +115,10 @@ type GovernanceVariable struct {
 }
 
 func (gv *GovernanceVariable) ID() []byte {
-	return common.Uint64ToBytes(gv.BlockHeight)
+	bs := make([]byte, 8)
+	id := common.Uint64ToBytes(gv.BlockHeight)
+	copy(bs[len(bs)-len(id):], id)
+	return bs
 }
 
 func (gv *GovernanceVariable) Bytes() ([]byte, error) {
