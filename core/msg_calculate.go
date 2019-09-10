@@ -123,7 +123,7 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 		blockHeight = ia.BlockHeight + 1
 	}
 
-	if blockHeight == ia.BlockHeight {
+	if blockHeight <= ia.BlockHeight {
 		return false, nil
 	}
 
@@ -234,14 +234,82 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, gvList []*G
 	return count, stats, stateHash
 }
 
-func preCalculate(ctx *Context) {
-	iScoreDB := ctx.DB
+func checkToggle(ctx *Context, blockHeight uint64) bool {
+	idb := ctx.DB
+
+	// compare block height of first account of Query/Calc DB
+	qDB := idb.getQueryDBList()
+	var addr common.Address
+	var qBH uint64
+	findQueryEntry := false
+
+	// pick first account from Query DB
+	for _, q := range qDB {
+		iter, _ := q.GetIterator()
+		iter.New(nil, nil)
+		for ; iter.Next(); {
+			key := iter.Key()[len(db.PrefixIScore):]
+			ia, err := NewIScoreAccountFromBytes(iter.Value())
+			if ia == nil || err != nil {
+				continue
+			}
+			qBH = ia.BlockHeight
+			addr.SetBytes(key)
+			findQueryEntry = true
+			break
+		}
+	}
+
+	if findQueryEntry == false {
+		// There is no data. toggle!!
+		return true
+	}
+
+	// read account Info. from Calc DB
+	cDB := idb.getCalculateDB(addr)
+	bucket, _ := cDB.GetBucket(db.PrefixIScore)
+	data, _ := bucket.Get(addr.Bytes())
+	if data == nil {
+		// There is no account in Calc DB. No need to toggle.
+		return false
+	} else {
+		ia, _ := NewIScoreAccountFromBytes(data)
+		if ia != nil {
+			cBH := ia.BlockHeight
+			if qBH == cBH {
+				// is it possible?
+				return false
+			} else if qBH < cBH {
+				// Calc DB has updated data.
+				if cBH == blockHeight {
+					// Calculated for this blockHeight. keep going
+					return false
+				} else {
+					// old data. need toggle
+					return true
+				}
+			} else {
+				// is it possible?
+				return false
+			}
+		}
+		// calc DB was corrupted, overwrite with calculation
+		return false
+	}
+}
+
+func preCalculate(ctx *Context, blockHeight uint64) {
+	if checkToggle(ctx, blockHeight) == false {
+		return
+	}
+
+	idb := ctx.DB
 
 	// change calculate DB to query DB
-	iScoreDB.toggleAccountDB()
+	idb.toggleAccountDB()
 
 	// close and delete old query DB and open new calculate DB
-	iScoreDB.resetCalcDB()
+	idb.resetCalcDB()
 }
 
 func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error {
@@ -313,7 +381,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest) (bool, uint64, *Statistics
 		return false, blockHeight, nil, nil
 	}
 
-	preCalculate(ctx)
+	preCalculate(ctx, blockHeight)
 
 	// Update GV
 	ctx.UpdateGovernanceVariable(gvList)
