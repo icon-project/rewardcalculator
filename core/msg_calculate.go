@@ -298,18 +298,14 @@ func checkToggle(ctx *Context, blockHeight uint64) bool {
 	}
 }
 
-func preCalculate(ctx *Context, blockHeight uint64) {
+func toggleAccountDB(ctx *Context, blockHeight uint64) {
 	if checkToggle(ctx, blockHeight) == false {
 		return
 	}
 
-	idb := ctx.DB
-
 	// change calculate DB to query DB
+	idb := ctx.DB
 	idb.toggleAccountDB()
-
-	// close and delete old query DB and open new calculate DB
-	idb.resetCalcDB()
 }
 
 func sendCalculateACK(c ipc.Connection, id uint32) error {
@@ -389,10 +385,13 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 		return false, blockHeight, nil, nil
 	}
 
-	preCalculate(ctx, blockHeight)
+	toggleAccountDB(ctx, blockHeight)
 
-	// send acknowledge of CALCULATE after preCalculate was finished
+	// send acknowledge of CALCULATE after toggle DB
 	sendCalculateACK(c, id)
+
+	// close and delete old account DB and open new calculate DB
+	ctx.DB.resetCalcDB()
 
 	// Update GV
 	ctx.UpdateGovernanceVariable(gvList)
