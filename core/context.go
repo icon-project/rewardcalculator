@@ -126,6 +126,7 @@ func (idb *IScoreDB) writeToDB() {
 type Context struct {
 	DB              *IScoreDB
 
+	Revision        uint64
 	PRep            []*PRep
 	PRepCandidates  map[common.Address]*PRepCandidate
 	GV              []*GovernanceVariable
@@ -274,6 +275,7 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 func (ctx *Context) Print() {
 	log.Printf("============================================================================")
 	log.Printf("Print context values\n")
+	log.Printf("Revision : %d\n", ctx.Revision)
 	log.Printf("Database Info.: %s\n", ctx.DB.info.String())
 	log.Printf("Governance Variable: %d\n", len(ctx.GV))
 	for i, v := range ctx.GV {
