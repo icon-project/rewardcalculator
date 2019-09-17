@@ -157,13 +157,14 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 	return true, totalReward
 }
 
-func calculateDB(index int, readDB db.Database, writeDB db.Database, gvList []*GovernanceVariable,
+func calculateDB(index int, readDB db.Database, writeDB db.Database, revision uint64, gvList []*GovernanceVariable,
 	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (uint64, *Statistics, []byte) {
 
 	iter, _ := readDB.GetIterator()
 	bucket, _ := writeDB.GetBucket(db.PrefixIScore)
 	batch, _ := writeDB.GetBatch()
 	var entries, count uint64 = 0, 0
+	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(Statistics)
 
@@ -205,7 +206,7 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, gvList []*G
 		}
 
 		// update stateHash
-		sha3.ShakeSum256(stateHash, ia.BytesForHash())
+		makeHash(revision, h, ia.BytesForHash())
 
 		// update Statistics
 		stats.Increase("Beta3", *reward)
@@ -227,6 +228,11 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, gvList []*G
 	err := iter.Error()
 	if err != nil {
 		log.Printf("There is error while iteration. %+v", err)
+	}
+
+	// get stateHash if there is update
+	if count > 0 {
+		h.Read(stateHash)
 	}
 
 	log.Printf("Calculate %d: %s, stateHash: %v", index, stats.Beta3.String(), hex.EncodeToString(stateHash))
@@ -323,7 +329,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
-	log.Printf("\t CALCULATE request: %s", MsgDataToString(req))
+	log.Printf("\t CALCULATE request: %s", req.String())
 
 	// do calculation
 	success, blockHeight, stats, stateHash := DoCalculate(mh.mgr.ctx, &req, c, id)
@@ -346,11 +352,12 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	}
 	resp.StateHash = stateHash
 
-	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCalculateDone), 0, MsgDataToString(resp))
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCalculateDone), 0, resp.String())
 	return c.Send(MsgCalculateDone, 0, &resp)
 }
 
 func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint32) (bool, uint64, *Statistics, []byte) {
+	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(Statistics)
 
@@ -393,6 +400,11 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	// close and delete old account DB and open new calculate DB
 	ctx.DB.resetCalcDB()
 
+	// Update header Info.
+	if header != nil {
+		ctx.Revision = header.Revision
+	}
+
 	// Update GV
 	ctx.UpdateGovernanceVariable(gvList)
 
@@ -424,7 +436,8 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 			var count uint64
 
 			// Update all Accounts in the calculate DB
-			count, statsList[index], stateHashList[index] = calculateDB(index, read, write, ctx.GV, ctx.PRepCandidates, blockHeight, writeBatchCount)
+			count, statsList[index], stateHashList[index] =
+				calculateDB(index, read, write, ctx.Revision, ctx.GV, ctx.PRepCandidates, blockHeight, writeBatchCount)
 
 			totalCount += count
 		} (i, queryDBList[i], cDB)
@@ -448,26 +461,27 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	reward, hashValue = calculateIISSTX(ctx, txList, blockHeight)
 	stats.Increase("Beta3", *reward)
 	stats.Increase("TotalReward", *reward)
-	sha3.ShakeSum256(stateHash, hashValue)
+	makeHash(ctx.Revision, h, hashValue)
 
 	// Update block produce reward
 	reward, hashValue = calculateIISSBlockProduce(ctx, bpInfoList, blockHeight)
 	stats.Increase("Beta1", *reward)
 	stats.Increase("TotalReward", *reward)
-	sha3.ShakeSum256(stateHash, hashValue)
+	makeHash(ctx.Revision, h, hashValue)
 
 	// Update P-Rep reward
 	reward, hashValue = calculatePRepReward(ctx, blockHeight)
 	stats.Increase("Beta2", *reward)
 	stats.Increase("TotalReward", *reward)
-	sha3.ShakeSum256(stateHash, hashValue)
+	makeHash(ctx.Revision, h, hashValue)
 
 	ctx.stats = stats
 
 	// make stateHash
 	for _, hash := range stateHashList {
-		sha3.ShakeSum256(stateHash, hash)
+		makeHash(ctx.Revision, h, hash)
 	}
+	h.Read(stateHash)
 
 	elapsedTime := time.Since(startTime)
 	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d entries",
@@ -488,6 +502,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 
 // Update I-Score of account in TX list
 func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) (*common.HexInt, []byte) {
+	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(common.HexInt)
 
@@ -542,17 +557,21 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) (*commo
 			bucket.Set(newIA.ID(), newIA.Bytes())
 
 			// update stateHash
-			sha3.ShakeSum256(stateHash, newIA.BytesForHash())
+			makeHash(ctx.Revision, h, newIA.BytesForHash())
 		case TXDataTypePrepReg:
 		case TXDataTypePrepUnReg:
 		}
 	}
+
+	// get stateHash
+	h.Read(stateHash)
 
 	return stats, stateHash
 }
 
 // Calculate Block produce reward
 func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo, blockHeight uint64) (*common.HexInt, []byte) {
+	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	bpMap := make(map[common.Address]common.HexInt)
 
@@ -636,14 +655,16 @@ func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo,
 		return iaSlice[i].Compare(iaSlice[j]) < 0
 	})
 	for _, ia := range iaSlice {
-		sha3.ShakeSum256(stateHash, ia.BytesForHash())
+		makeHash(ctx.Revision, h, ia.BytesForHash())
 	}
+	h.Read(stateHash)
 
 	return totalReward, stateHash
 }
 
 // Calculate Main/Sub P-Rep reward
 func calculatePRepReward(ctx *Context, to uint64) (*common.HexInt, []byte) {
+	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	start := ctx.DB.info.BlockHeight
 	end := to
@@ -673,9 +694,12 @@ func calculatePRepReward(ctx *Context, to uint64) (*common.HexInt, []byte) {
 
 		// calculate P-Rep reward for Governance variable and write to calculate DB
 		reward, hash := setPRepReward(ctx, s, e, prep)
-		sha3.ShakeSum256(stateHash, hash)
+		makeHash(ctx.Revision, h, hash)
 		totalReward.Add(&totalReward.Int, &reward.Int)
 	}
+
+	// get stateHash
+	h.Read(stateHash)
 
 	return totalReward, stateHash
 }
@@ -686,6 +710,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.
 		blockHeight uint64
 	}
 	rewards := make([]reward, len(prep.List))
+	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 
 	// calculate P-Rep reward for Governance variable
@@ -759,12 +784,24 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.
 			ia.Address = dgInfo.Address
 			//log.Printf("[P-Rep reward] Write to DB %s, increased reward: %s", ia.String(), rewards[i].IScore.String())
 			bucket.Set(ia.ID(), ia.Bytes())
-			sha3.ShakeSum256(stateHash, ia.BytesForHash())
+			makeHash(ctx.Revision, h, ia.BytesForHash())
 			totalReward.Add(&totalReward.Int, &rewards[i].iScore.Int)
 		}
 	}
 
+	// get stateHash
+	h.Read(stateHash)
+
 	return totalReward, stateHash
+}
+
+func makeHash(revision uint64, h sha3.ShakeHash, data []byte) {
+	if revision == IISSDataRevisionDefault {
+		h.Reset()	// Reset hash for backward compatibility
+		h.Write(data)
+	} else {
+		h.Write(data)
+	}
 }
 
 const (
@@ -800,7 +837,7 @@ func (mh *msgHandler) queryCalculateStatus(c ipc.Connection, id uint32, data []b
 
 	DoQueryCalculateStatus(ctx, &resp)
 
-	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateStatus), id, MsgDataToString(resp))
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateStatus), id, resp.String())
 	return c.Send(MsgQueryCalculateStatus, id, &resp)
 }
 
@@ -866,7 +903,7 @@ func (mh *msgHandler) queryCalculateResult(c ipc.Connection, id uint32, data []b
 
 	DoQueryCalculateResult(ctx, blockHeight, &resp)
 
-	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateResult), id, MsgDataToString(resp))
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateResult), id, resp.String())
 	return c.Send(MsgQueryCalculateResult, id, &resp)
 }
 

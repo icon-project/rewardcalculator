@@ -175,7 +175,7 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 
 	resp := DoQuery(mh.mgr.ctx, addr)
 
-	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQuery), id, MsgDataToString(resp))
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQuery), id, resp.String())
 	return c.Send(MsgQuery, id, &resp)
 }
 

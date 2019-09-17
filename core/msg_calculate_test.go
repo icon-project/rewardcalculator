@@ -574,7 +574,8 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	bucket.Set(ia.ID(), ia.Bytes())
 
 	// calculate
-	count, stats, hash := calculateDB(0, queryDB, calcDB, ctx.GV, ctx.PRepCandidates, calculateBlockHeight, writeBatchCount)
+	count, stats, hash := calculateDB(0, queryDB, calcDB, ctx.Revision, ctx.GV, ctx.PRepCandidates,
+		calculateBlockHeight, writeBatchCount)
 
 	var reward, totalReward uint64
 	stateHash := make([]byte, 64)
@@ -699,4 +700,62 @@ func TestMsgQueryCalc_DoQueryCalculateResult(t *testing.T) {
 	assert.Equal(t, blockHeight, resp.BlockHeight)
 	assert.Equal(t, 0, resp.IScore.Cmp(&stats.TotalReward.Int))
 	assert.Equal(t, stateHash, resp.StateHash)
+}
+
+func Test_MakeHash(t *testing.T) {
+	h := sha3.NewShake256()
+	stateHash := make([]byte, 64)
+	stateHashOld := make([]byte, 64)
+	dataA := []byte("1234567890")
+	dataB := make([]byte, 64)
+
+	// check backward compatibility - reset every write
+	h.Reset()
+	makeHash(IISSDataRevisionDefault, h, dataA)
+	h.Read(stateHashOld)
+	h.Reset()
+	makeHash(IISSDataRevisionDefault, h, dataA)
+	makeHash(IISSDataRevisionDefault, h, dataA)
+	h.Read(stateHash)
+	assert.Equal(t, stateHashOld, stateHash)
+	assert.Equal(t, 64, len(stateHash))
+
+	// check backward compatibility - first write make same result
+	h.Reset()
+	makeHash(IISSDataRevisionDefault, h, dataA)
+	h.Read(stateHashOld)
+	h.Reset()
+	makeHash(IISSDataRevisionDefault+1, h, dataA)
+	h.Read(stateHash)
+	assert.Equal(t, stateHashOld, stateHash)
+	assert.Equal(t, 64, len(stateHash))
+
+	// check accumulation of data
+	h.Reset()
+	makeHash(IISSDataRevisionDefault+1, h, dataA)
+	h.Read(stateHashOld)
+	h.Reset()
+	makeHash(IISSDataRevisionDefault+1, h, dataA)
+	makeHash(IISSDataRevisionDefault+1, h, dataA)
+	h.Read(stateHash)
+	assert.NotEqual(t, stateHashOld, stateHash)
+	assert.Equal(t, 64, len(stateHash))
+
+	// check zero-data write modification
+	h.Reset()
+	h.Read(stateHashOld)
+	h.Reset()
+	makeHash(IISSDataRevisionDefault+1, h, dataB)
+	h.Read(stateHash)
+	assert.NotEqual(t, stateHashOld, stateHash)
+	assert.Equal(t, 64, len(stateHash))
+
+	// check nil write
+	h.Reset()
+	h.Read(stateHashOld)
+	h.Reset()
+	makeHash(IISSDataRevisionDefault+1, h, nil)
+	h.Read(stateHash)
+	assert.Equal(t, stateHashOld, stateHash)
+	assert.Equal(t, 64, len(stateHash))
 }
