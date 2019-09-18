@@ -221,6 +221,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
+	log.Printf("\t CALCULATE request: %s", MsgDataToString(req))
 
 	success, blockHeight, stats, stateHash := DoCalculate(mh.mgr.ctx, &req)
 
@@ -242,6 +243,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	}
 	resp.StateHash = stateHash
 
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(msgCalculate), id, MsgDataToString(resp))
 	return c.Send(msgCalculate, id, &resp)
 }
 

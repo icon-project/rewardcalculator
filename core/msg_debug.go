@@ -28,6 +28,8 @@ func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
 		log.Printf("Failed to deserialize DEBUG message. err=%+v", err)
 		return err
 	}
+	log.Printf("\t DEBUG request: %s", MsgDataToString(req))
+
 	ctx := mh.mgr.ctx
 
 	switch req.Cmd {
