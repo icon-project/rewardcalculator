@@ -332,13 +332,16 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	log.Printf("\t CALCULATE request: %s", req.String())
 
 	// do calculation
-	success, blockHeight, stats, stateHash := DoCalculate(mh.mgr.ctx, &req, c, id)
+	err, blockHeight, stats, stateHash := DoCalculate(mh.mgr.ctx, &req, c, id)
+
+	success := true
 
 	// remove IISS data DB
-	if success == true {
+	if err == nil {
 		os.RemoveAll(req.Path)
 	} else {
 		os.Rename(req.Path, req.Path + "_failed")
+		success = false
 	}
 
 	// send CALCULATE_DONE
@@ -356,17 +359,30 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	return c.Send(MsgCalculateDone, 0, &resp)
 }
 
-func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint32) (bool, uint64, *Statistics, []byte) {
+func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint32) (error, uint64, *Statistics, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(Statistics)
 
 	iScoreDB := ctx.DB
 	blockHeight := req.BlockHeight
-	ctx.calculateStatus.set(true, req.BlockHeight)
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
+	if ctx.calculateStatus.Doing {
+		// send acknowledge of CALCULATE
+		sendCalculateACK(c, id)
 
+
+		errMsg := fmt.Sprintf("Calculating now. Drop this calculate message. blockHeight: %d, IISS data path: %s",
+			blockHeight, req.Path)
+		log.Printf(errMsg)
+		err := fmt.Errorf(errMsg)
+
+		return err, blockHeight, nil, nil
+	}
+
+	ctx.calculateStatus.set(true, req.BlockHeight)
+	defer ctx.calculateStatus.reset()
 	startTime := time.Now()
 
 	// Load IISS Data
@@ -382,14 +398,14 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	}
 
 	if blockHeight != 0 && blockHeight <= iScoreDB.info.BlockHeight {
-		log.Printf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
-			blockHeight, iScoreDB.info.BlockHeight)
-		ctx.calculateStatus.reset()
-
 		// send acknowledge of CALCULATE
 		sendCalculateACK(c, id)
 
-		return false, blockHeight, nil, nil
+		errMsg := fmt.Sprintf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
+			blockHeight, iScoreDB.info.BlockHeight)
+		log.Printf(errMsg)
+		err := fmt.Errorf(errMsg)
+		return err, blockHeight, nil, nil
 	}
 
 	toggleAccountDB(ctx, blockHeight)
@@ -495,9 +511,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	// write calculation result
 	WriteCalculationResult(ctx.DB.getCalculateResultDB(), blockHeight, stats, stateHash)
 
-	ctx.calculateStatus.reset()
-
-	return true, blockHeight, ctx.stats, stateHash
+	return nil, blockHeight, ctx.stats, stateHash
 }
 
 // Update I-Score of account in TX list
