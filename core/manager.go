@@ -105,10 +105,10 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 	// Initialize DB and load context values
 	m.ctx, err = NewContext(cfg.DBDir, string(db.GoLevelDBBackend), "IScore", cfg.DBCount)
 
-	// find IISS data and calculate
-	reloadIISSData(m.ctx, cfg.IISSDataDir)
-
 	m.ctx.Print()
+
+	// find IISS data and reload
+	go reloadIISSData(m.ctx, cfg.IISSDataDir)
 
 	// Initialize ipc channel
 	if m.clientMode {
@@ -151,52 +151,21 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 }
 
 func reloadIISSData(ctx *Context, dir string) {
-	respSlice := make([]*CalculateDone, 0)
 	for _, iissData := range findIISSData(dir) {
 		var req CalculateRequest
 		req.Path = filepath.Join(dir, iissData.Name())
 		req.BlockHeight = 0
 
 		log.Printf("Reload IISS Data. %s", req.Path)
-		success, blockHeight, stats, stateHash := DoCalculate(ctx, &req, nil, 0)
+		err, _, _, _:= DoCalculate(ctx, &req, nil, 0)
 
-		// remove IISS data DB
-		os.RemoveAll(req.Path)
-
-		if success == false {
-			break
-		}
-
-		// save result
-		resp := new(CalculateDone)
-		resp.BlockHeight = blockHeight
-		resp.Success = success
-		if stats != nil {
-			resp.IScore.Set(&stats.Beta3.Int)
-		} else {
-			resp.IScore.SetUint64(0)
-		}
-		resp.StateHash = stateHash
-
-		respSlice = append(respSlice, resp)
-	}
-
-	ctx.reloadIISS = respSlice
-}
-
-func sendReloadIISSDataResult(ctx *Context, c ipc.Connection) error {
-	var err error = nil
-
-	// send IISS data reload result
-	for _, resp := range ctx.reloadIISS {
-		err = c.Send(MsgCalculate, 0, *resp)
 		if err != nil {
-			log.Printf("Failed to send IISS data reload result. (%+v)", resp)
+			log.Printf("Failed to reload IISS Data. %s", req.Path)
 			break
 		} else {
-			log.Printf("Send IISS data reload result. (%+v)", resp)
+			log.Printf("Succeeded to reload IISS Data. %s", req.Path)
+			// remove IISS data DB
+			os.RemoveAll(req.Path)
 		}
 	}
-
-	return err
 }

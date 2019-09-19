@@ -630,6 +630,30 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	assert.Equal(t, stateHash, hash)
 }
 
+func TestMsgCalc_DoCalculate_Error(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest()
+
+	// get CALCULATE message while processing CALCULATE message
+	ctx.calculateStatus.set(true, 50)
+
+	req := CalculateRequest{Path: "test", BlockHeight:100}
+	err, blockHeight, _, _ := DoCalculate(ctx, &req, nil, 0)
+	assert.NotNil(t, err)
+	assert.Error(t, err, "Calculating now. Drop this calculate message. blockHeight: %d, IISS data path: %s",
+		req.BlockHeight, req.Path)
+	assert.Equal(t, req.BlockHeight, blockHeight)
+	ctx.calculateStatus.reset()
+
+	// get CALCULATE message with invalid block height
+	ctx.DB.setBlockHeight(uint64(100))
+	err, blockHeight, _, _ = DoCalculate(ctx, &req, nil, 0)
+	assert.NotNil(t, err)
+	assert.Error(t, err, "Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
+		req.BlockHeight, ctx.DB.info.BlockHeight)
+	assert.Equal(t, req.BlockHeight, blockHeight)
+}
+
 func newIScoreAccount(addr common.Address, blockHeight uint64, reward common.HexInt) *IScoreAccount {
 	ia := new(IScoreAccount)
 	ia.Address = addr

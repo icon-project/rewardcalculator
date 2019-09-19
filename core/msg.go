@@ -91,15 +91,8 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 		c.SetHandler(MsgCommitClaim, handler)
 	}
 
-	// send IISS data reload result
-	err := sendReloadIISSDataResult(m.ctx, c)
-	if err != nil {
-		log.Printf("Failed to send IISSData reload result")
-		return nil, err
-	}
-
 	// send READY message to peer
-	err = sendVersion(c, MsgReady, 0, handler.mgr.ctx.DB.info.BlockHeight)
+	err := sendVersion(c, MsgReady, 0, handler.mgr.ctx.DB.info.BlockHeight)
 	if err != nil {
 		log.Printf("Failed to send READY message")
 	}
