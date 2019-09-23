@@ -24,22 +24,16 @@ func Display(data interface{}) string {
 }
 
 func (cli *CLI) printUsage() {
-	fmt.Printf("Usage: %s [ADDRESS] [COMMAND]\n", os.Args[0])
+	fmt.Printf("Usage: %s [ADDRESS] [COMMAND] [[options]]\n", os.Args[0])
 	fmt.Printf("ADDRESS         Unix domain socket path\n")
 	fmt.Printf("COMMAND\n")
-	fmt.Printf("\t version                            Send a VERSION message\n")
-	fmt.Printf("\t query ACCOUNT                      Send a QUERY message to query I-Score\n")
-	fmt.Printf("\t       ACCOUNT                      Account adddress(Required)\n")
-	fmt.Printf("\t claim ACCOUNT                      Send a CLAIM message to claim I-Score\n")
-	fmt.Printf("\t       ACCOUNT                      Account adddress(Required)\n")
-	fmt.Printf("\t calculate IISSDATA BLOCKHEIGHT     Send a CALCULATE message to update I-Score DB\n")
-	fmt.Printf("\t       IISSDATA                     IISS data DB path(Required)\n")
-	fmt.Printf("\t       BLOCKHEIGHT                  Block height to calculate. Set 0 if you want current block+1\n")
-	fmt.Printf("\t query_calculate_status             Send a QUERY_CALCULATE_STATUS message\n")
-	fmt.Printf("\t query_calculate_result BLOCKHEIGHT Send a QUERY_CALCULATE_RESULT message\n")
-	fmt.Printf("\t       BLOCKHEIGHT                  Block height to query\n")
-	fmt.Printf("\t monitor CONFIG                     Monitor account in configuration file\n")
-	fmt.Printf("\t       CONFIG                       Monitoring configuration file\n")
+	fmt.Printf("\t version                   Send a VERSION message\n")
+	fmt.Printf("\t query                     Send a QUERY message to query I-Score\n")
+	fmt.Printf("\t claim                     Send a CLAIM message to claim I-Score\n")
+	fmt.Printf("\t calculate                 Send a CALCULATE message to update I-Score DB\n")
+	fmt.Printf("\t query_calculate_status    Send a QUERY_CALCULATE_STATUS message\n")
+	fmt.Printf("\t query_calculate_result    Send a QUERY_CALCULATE_RESULT message\n")
+	fmt.Printf("\t monitor                   Monitor account in configuration file\n")
 }
 
 func (cli *CLI) validateArgs() {
@@ -59,11 +53,11 @@ func (cli *CLI) Run() {
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
 
 	queryCmd := flag.NewFlagSet("query", flag.ExitOnError)
-	queryAddress := queryCmd.String("address", "", "Account address(Required)")
+	queryAddress := queryCmd.String("address", "", "Account address")
 
 	claimCmd := flag.NewFlagSet("claim", flag.ExitOnError)
-	claimAddress := claimCmd.String("address", "", "Account address(Required)")
-	claimBlockHeight := claimCmd.Uint64("blockheight", 0, "Block height(Required)")
+	claimAddress := claimCmd.String("address", "", "Account address")
+	claimBlockHeight := claimCmd.Uint64("blockheight", 0, "Block height")
 
 	calculateCmd := flag.NewFlagSet("calculate", flag.ExitOnError)
 	calculateIISSData := calculateCmd.String("iissdata", "", "IISS data DB path(Required)")

@@ -20,25 +20,17 @@ type CLI struct{
 }
 
 func (cli *CLI) printUsage() {
-	fmt.Printf("Usage: %s [db_name] [command]\n", os.Args[0])
-	fmt.Printf("\t db_name     DB name\n")
-	fmt.Printf("\t command     Command\n")
-	fmt.Printf("\n [command]\n")
-	fmt.Printf("\t read                                 Read the IISS data DB\n")
-	fmt.Printf("\t delete                               Delete an IISS data DB\n")
-	fmt.Printf("\t header VERSION BLOCKHEIGHT           Set VERSION and block height in header\n")
-	fmt.Printf("\t gv BLOCKHEIGHT INCENTIVE RERWARD     Set governance variable\n")
-	fmt.Printf("\t bp BLOCKHEIGHT GENERATOR VALIDATOR DELETE Add/delete Block produce Info.\n")
-	fmt.Printf("\t    GENERATOR                         Address of block generator\n")
-	fmt.Printf("\t    VALIDATOR                         Addresses of block validators which seperated by ','\n")
-	fmt.Printf("\t    DELETE                            Delete Block produce Info.\n")
-	fmt.Printf("\t prep BLOCKHEIGHT PREPLIST DELEGATIONLIST DELETE     Add/delete P-Rep list\n")
-	fmt.Printf("\t    PREPLIST                          Addresses of Main/Sub P-Rep which seperated by ','\n")
-	fmt.Printf("\t    DELEGATIONLIST                    Delegation amount list of Main/Sub P-Rep which seperated by ','\n")
-	fmt.Printf("\t    DELETE                            Delete P-Rep list\n")
-	fmt.Printf("\t tx ADDR BLOCKHEIGHT TYPE DATA        Directory where the IISS data DB is located\n")
-	fmt.Printf("\t    DATA                              DATA should be one of followings\n")
-	fmt.Printf("\t        DELEGATE_ADDR DELEGATE        delegation address and delegation amount\n")
+	fmt.Printf("Make IISS data DB")
+	fmt.Printf("Usage: %s [DB] [COMMAND] [[options]]\n", os.Args[0])
+	fmt.Printf("\t DB          DB name\n")
+	fmt.Printf("\t COMMAND     Command\n")
+	fmt.Printf("\t read               Read the IISS data DB\n")
+	fmt.Printf("\t delete             Delete an IISS data DB\n")
+	fmt.Printf("\t header             Set VERSION, revision and block height in header\n")
+	fmt.Printf("\t gv                 Set governance variable\n")
+	fmt.Printf("\t bp                 Add/delete Block produce Info.\n")
+	fmt.Printf("\t prep               Add/delete P-Rep list\n")
+	fmt.Printf("\t tx                 Directory where the IISS data DB is located\n")
 }
 
 func (cli *CLI) validateArgs() {
