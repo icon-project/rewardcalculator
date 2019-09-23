@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"github.com/icon-project/rewardcalculator/core"
@@ -23,19 +24,20 @@ func Display(data interface{}) string {
 }
 
 func (cli *CLI) printUsage() {
-	fmt.Printf("Read Info. from ICON reward calculator\n")
+	fmt.Printf("Read information from ICON reward calculator\n")
 	fmt.Printf("Usage: %s COMMAND\n", os.Args[0])
 	fmt.Printf("COMMAND\n")
-	fmt.Printf("\t stats              Read statistics\n")
-	fmt.Printf("\t dbinfo             Read DB Info.\n")
-	fmt.Printf("\t prep               Read P-Rep\n")
-	fmt.Printf("\t prepcandidate      Read P-Rep Candidate list\n")
-	fmt.Printf("\t gv                 Read governance variable\n")
-	fmt.Printf("\t logctx             Log CTX Info.\n")
+	fmt.Printf("\t stats                         Read statistics\n")
+	fmt.Printf("\t dbinfo                        Read DB Info.\n")
+	fmt.Printf("\t prep                          Read main P-Rep list\n")
+	fmt.Printf("\t prepcandidate                 Read P-Rep Candidate list\n")
+	fmt.Printf("\t gv                            Read governance variable\n")
+	fmt.Printf("\t calculate                     Query Calculation status or result\n")
+	fmt.Printf("\t logctx                        Log context information\n")
 }
 
 func (cli *CLI) validateArgs() {
-	if len(os.Args) != 2 || os.Args[1] == "-h" {
+	if len(os.Args) < 2 || os.Args[1] == "-h" {
 		cli.printUsage()
 		os.Exit(1)
 	}
@@ -79,6 +81,17 @@ func (cli *CLI) Run() {
 		err = cli.PRepCandidate()
 	case "gv":
 		err = cli.gv()
+	case "calculate":
+		var err error
+		blockHeight := uint64(0)
+		if len(os.Args) == 3 {
+			blockHeight, err = strconv.ParseUint(os.Args[2], 10, 64)
+			if err != nil {
+				fmt.Printf("Invalid block height. (%+v)\n", err)
+				os.Exit(1)
+			}
+		}
+		err = cli.calculate(blockHeight)
 	case "logctx":
 		err = cli.logCtx()
 	default:
@@ -152,6 +165,28 @@ func (cli *CLI) gv() error {
 	err := cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
 	if err == nil {
 		fmt.Printf("gv command get response:\n%s\n", Display(resp))
+	}
+
+	return err
+}
+
+func (cli *CLI) calculate(blockHeight uint64) error {
+	var err error
+
+	if blockHeight == 0 {
+		// Send QUERY_CALCULATE_STATUS and get response
+		var resp core.QueryCalculateStatusResponse
+		err = cli.conn.SendAndReceive(core.MsgQueryCalculateStatus, cli.id, nil, &resp)
+		if err == nil {
+			fmt.Printf("QUERY_CALCULATE_STATUS command get response: %s\n", resp.String())
+		}
+	} else {
+		// Send QUERY_CALCULATE_RESULT and get response
+		var resp core.QueryCalculateResultResponse
+		err = cli.conn.SendAndReceive(core.MsgQueryCalculateResult, cli.id, &blockHeight, &resp)
+		if err == nil {
+			fmt.Printf("QUERY_CALCULATE_RESULT command get response: %s\n", resp.String())
+		}
 	}
 
 	return err
