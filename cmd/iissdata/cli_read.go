@@ -19,5 +19,8 @@ func (cli *CLI) read(dbDir string, dbName string) {
 		}
 	}
 
-	core.LoadIISSData(path, true)
+	iissDB := core.OpenIISSData(path)
+	core.LoadIISSData(iissDB)
+	core.ReadIISSBP(iissDB)
+	core.ReadIISSTX(iissDB)
 }

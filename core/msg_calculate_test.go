@@ -2,13 +2,13 @@ package core
 
 import (
 	"encoding/binary"
-	"fmt"
 	"golang.org/x/crypto/sha3"
+	"log"
+	"os"
 	"sort"
 	"testing"
 
 	"github.com/icon-project/rewardcalculator/common"
-	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
 )
@@ -37,91 +37,70 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	prepB.Start = 0
 	ctx.PRepCandidates[prepB.Address] = prepB
 
-	// set IISS TX
-	tests := make([]*IISSTX, 0)
+	// write IISS TX
+	iissDBDir := testDBDir + "/iiss"
+	iissDB := db.Open(iissDBDir, string(db.GoLevelDBBackend), testDB)
+	defer iissDB.Close()
+	defer os.RemoveAll(iissDBDir)
+	bucket, _ := iissDB.GetBucket(db.PrefixIISSTX)
+	txList := make([]*IISSTX, 0)
 	iconist := *common.NewAddressFromString("hx11")
 
 	// TX 0: Add new delegation at block height 10
 	// hx11 delegates MinDelegation to prepA and delegates 2 * MinDelegation to prepB
-	tx := new(IISSTX)
+	dgDataSlice := []DelegateData {
+		{prepA.Address, *common.NewHexIntFromUint64(MinDelegation)},
+		{prepB.Address, *common.NewHexIntFromUint64(MinDelegation * 2)},
+	}
+	tx := makeIISSTX(TXDataTypeDelegate, iconist.String(), dgDataSlice)
 	tx.Index = 0
 	tx.BlockHeight = 10
-	tx.Address = iconist
-	tx.DataType = TXDataTypeDelegate
-	tx.Data = new(codec.TypedObj)
-
-	delegation := make([]interface{}, 0)
-
-	dgData := make([]interface{}, 0)
-	dgData = append(dgData, &prepA.Address)
-	dgData = append(dgData, MinDelegation)
-	delegation = append(delegation, dgData)
-
-	dgData = make([]interface{}, 0)
-	dgData = append(dgData, &prepB.Address)
-	dgData = append(dgData, 2 * MinDelegation)
-	delegation = append(delegation, dgData)
-
-	var err error
-	tx.Data, err = common.EncodeAny(delegation)
-	if err != nil {
-		fmt.Printf("Can't encode delegation. err=%+v\n", err)
-		return
-	}
-	tests = append(tests, tx)
+	txList = append(txList, tx)
 
 	// TX 1: Modify delegation at block height 20
 	// hx11 delegates MinDelegation to prepA and delegates MinDelegation to iconist
-	tx = new(IISSTX)
+	dgDataSlice = []DelegateData {
+		{prepA.Address, *common.NewHexIntFromUint64(MinDelegation)},
+		{iconist, *common.NewHexIntFromUint64(MinDelegation)},
+	}
+	tx = makeIISSTX(TXDataTypeDelegate, iconist.String(), dgDataSlice)
 	tx.Index = 1
 	tx.BlockHeight = 20
-	tx.Address = iconist
-	tx.DataType = TXDataTypeDelegate
-	tx.Data = new(codec.TypedObj)
-
-	delegation = make([]interface{}, 0)
-
-	dgData = make([]interface{}, 0)
-	dgData = append(dgData, &prepA.Address)
-	dgData = append(dgData, MinDelegation)
-	delegation = append(delegation, dgData)
-
-	dgData = make([]interface{}, 0)
-	dgData = append(dgData, &iconist)
-	dgData = append(dgData, MinDelegation)
-	delegation = append(delegation, dgData)
-
-	tx.Data, err = common.EncodeAny(delegation)
-	if err != nil {
-		fmt.Printf("Can't encode delegation. err=%+v\n", err)
-		return
-	}
-	tests = append(tests, tx)
+	txList = append(txList, tx)
 
 	// TX 2: Delete delegation at block height 30
-	tx = new(IISSTX)
-
+	tx = makeIISSTX(TXDataTypeDelegate, iconist.String(), nil)
 	tx.Index = 2
 	tx.BlockHeight = 30
-	tx.Address = iconist
-	tx.DataType = TXDataTypeDelegate
-	tx.Data = new(codec.TypedObj)
-	tx.Data.Type = codec.TypeNil
-	tx.Data.Object = []byte("")
+	txList = append(txList, tx)
 
-	tests = append(tests, tx)
+	// write to IISS data DB
+	writeTX(iissDB, txList)
 
 	// calculate IISS TX
-	stats, hash := calculateIISSTX(ctx, tests, 100)
+	stats, hash := calculateIISSTX(ctx, iissDB, 100, false)
 
 	// check Calculate DB
 	calcDB := ctx.DB.getCalculateDB(iconist)
-	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
+	bucket, _ = calcDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(iconist.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
 	ia.Address = iconist
+	iaHash, _ := NewIScoreAccountFromBytes(bs)
+	iaHash.Address = iconist
+	iaHash.BlockHeight = 100
+
 	stateHash := make([]byte, 64)
-	sha3.ShakeSum256(stateHash, ia.BytesForHash())
+	h := sha3.NewShake256()
+	iaHash.IScore.SetUint64(3 * MinDelegation * (100 - 10) * minRewardRep / rewardDivider)
+	h.Write(iaHash.BytesForHash())
+	iaHash.IScore.SetUint64(3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
+		MinDelegation * (100 - 20) * minRewardRep / rewardDivider)
+	h.Write(iaHash.BytesForHash())
+	iaHash.IScore.SetUint64(3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
+		MinDelegation * (30 - 20) * minRewardRep / rewardDivider)
+	h.Write(iaHash.BytesForHash())
+	h.Read(stateHash)
 
 	reward := 3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
 		MinDelegation * (30 - 20) * minRewardRep / rewardDivider
@@ -155,43 +134,39 @@ func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 	prepB.Start = 0
 	ctx.PRepCandidates[prepB.Address] = prepB
 
-	// set IISS TX
-	tests := make([]*IISSTX, 0)
+	// write IISS TX
+	iissDBDir := testDBDir + "/iiss"
+	iissDB := db.Open(iissDBDir, string(db.GoLevelDBBackend), testDB)
+	defer iissDB.Close()
+	defer os.RemoveAll(iissDBDir)
+	bucket, _ := iissDB.GetBucket(db.PrefixIISSBPInfo)
+	txList := make([]*IISSTX, 0)
 	iconist := *common.NewAddressFromString("hx11")
 
 	// TX 0: Add new delegation at block height 10
-	// hx11 delegates MinDelegation to prepA and delegates 2 * MinDelegation to prepB
-	tx := new(IISSTX)
+	// iconist delegates MinDelegation - 1 to prepA
+	dgDataSlice := []DelegateData {
+		{prepA.Address, *common.NewHexIntFromUint64(MinDelegation - 1)},
+	}
+	tx := makeIISSTX(TXDataTypeDelegate, iconist.String(), dgDataSlice)
 	tx.Index = 0
 	tx.BlockHeight = 10
-	tx.Address = iconist
-	tx.DataType = TXDataTypeDelegate
-	tx.Data = new(codec.TypedObj)
+	txList = append(txList, tx)
 
-	delegation := make([]interface{}, 0)
-
-	// delegate small value
-	dgData := make([]interface{}, 0)
-	dgData = append(dgData, &prepA.Address)
-	dgData = append(dgData, MinDelegation - 1)
-	delegation = append(delegation, dgData)
-
-	var err error
-	tx.Data, err = common.EncodeAny(delegation)
-	if err != nil {
-		fmt.Printf("Can't encode delegation. err=%+v\n", err)
-		return
-	}
-	tests = append(tests, tx)
+	// write to IISS data DB
+	writeTX(iissDB, txList)
 
 	// calculate IISS TX
-	stats, hash := calculateIISSTX(ctx, tests, 100)
+	stats, hash := calculateIISSTX(ctx, iissDB, 100, false)
 
 	// check Calculate DB
 	calcDB := ctx.DB.getCalculateDB(iconist)
-	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
+	bucket, _ = calcDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(iconist.Bytes())
-	ia, _ := NewIScoreAccountFromBytes(bs)
+	ia, err := NewIScoreAccountFromBytes(bs)
+	if err != nil {
+		log.Printf("NewIScoreAccountFromBytes error : %+v", err)
+	}
 	ia.Address = iconist
 	stateHash := make([]byte, 64)
 	sha3.ShakeSum256(stateHash, ia.BytesForHash())
@@ -237,9 +212,13 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	prepB := *common.NewAddressFromString("hxbb")
 	prepC := *common.NewAddressFromString("hxcc")
 
-	// set IISS Block produce Info.
-	tests := make([]*IISSBlockProduceInfo, 0)
+	// write IISS block produce Info.
 	iconist := *common.NewAddressFromString("hx11")
+	iissDBDir := testDBDir + "/iiss"
+	iissDB := db.Open(iissDBDir, string(db.GoLevelDBBackend), testDB)
+	defer iissDB.Close()
+	defer os.RemoveAll(iissDBDir)
+	bucket, _ := iissDB.GetBucket(db.PrefixIISSBPInfo)
 
 	// BP 0:
 	// Generator : prepA, Validator : prepB, prepC
@@ -249,7 +228,8 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	bp.Generator = prepA
 	bp.Validator = append(bp.Validator, prepB)
 	bp.Validator = append(bp.Validator, prepC)
-	tests = append(tests, bp)
+	bs, _ := bp.Bytes()
+	bucket.Set(bp.ID(), bs)
 
 	// BP 1:
 	// Generator : prepA, Validator : prepC
@@ -258,7 +238,8 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	bp.BlockHeight = bp1BlockHeight
 	bp.Generator = prepA
 	bp.Validator = append(bp.Validator, prepC)
-	tests = append(tests, bp)
+	bs, _ = bp.Bytes()
+	bucket.Set(bp.ID(), bs)
 
 	// BP 2:
 	// Generator : prepB, Validator : prepA
@@ -267,13 +248,14 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	bp.BlockHeight = bp2BlockHeight
 	bp.Generator = prepB
 	bp.Validator = append(bp.Validator, prepA)
-	tests = append(tests, bp)
+	bs, _ = bp.Bytes()
+	bucket.Set(bp.ID(), bs)
 
 	// calculate BP
-	stats, hash := calculateIISSBlockProduce(ctx, tests, 100)
+	stats, hash := calculateIISSBlockProduce(ctx, iissDB, 100, false)
 
 	calcDB := ctx.DB.getCalculateDB(iconist)
-	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
+	bucket, _ = calcDB.GetBucket(db.PrefixIScore)
 
 	var reward, reward0, reward1, reward2, totalReward common.HexInt
 	stateHash := make([]byte, 64)
@@ -290,7 +272,7 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	reward.Add(&reward0.Int, &reward1.Int)
 	reward.Add(&reward.Int, &reward2.Int)
 
-	bs, _ := bucket.Get(prepA.Bytes())
+	bs, _ = bucket.Get(prepA.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
 	ia.Address = prepA
 	iaSlice = append(iaSlice, ia)
@@ -338,9 +320,11 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	sort.Slice(iaSlice, func(i, j int) bool {
 		return iaSlice[i].Compare(iaSlice[j]) < 0
 	})
+	h := sha3.NewShake256()
 	for _, ia := range iaSlice {
-		sha3.ShakeSum256(stateHash, ia.BytesForHash())
+		h.Write(ia.BytesForHash())
 	}
+	h.Read(stateHash)
 	assert.Equal(t, stateHash, hash)
 
 }
@@ -482,17 +466,26 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	assert.Equal(t, 0, totalReward.Cmp(&stats.Int))
 
 	// check state root hash
+	stateHash := make([]byte, 64)
 	stateHash1 := make([]byte, 64)
-	sha3.ShakeSum256(stateHash1, iaPRepA1.BytesForHash())
-	sha3.ShakeSum256(stateHash1, iaPRepB1.BytesForHash())
-
 	stateHash2 := make([]byte, 64)
-	sha3.ShakeSum256(stateHash2, iaPRepA2.BytesForHash())
-	sha3.ShakeSum256(stateHash2, iaPRepB2.BytesForHash())
 
-	sha3.ShakeSum256(stateHash1, stateHash2)
+	h1 := sha3.NewShake256()
+	h1.Write(iaPRepA1.BytesForHash())
+	h1.Write(iaPRepB1.BytesForHash())
+	h1.Read(stateHash1)
 
-	assert.Equal(t, stateHash1, hash)
+	h2 := sha3.NewShake256()
+	h2.Write(iaPRepA2.BytesForHash())
+	h2.Write(iaPRepB2.BytesForHash())
+	h2.Read(stateHash2)
+
+	h := sha3.NewShake256()
+	h.Write(stateHash1)
+	h.Write(stateHash2)
+	h.Read(stateHash)
+
+	assert.Equal(t, stateHash, hash)
 }
 
 func TestMsgCalc_CalculateDB(t *testing.T) {
@@ -579,6 +572,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 
 	var reward, totalReward uint64
 	stateHash := make([]byte, 64)
+	h := sha3.NewShake256()
 
 	// check - addr1
 	period := calculateBlockHeight - addr1BlockHeight
@@ -600,7 +594,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	totalReward -= addr1InitIScore
 
 	ia.Address = addr1
-	sha3.ShakeSum256(stateHash, ia.BytesForHash())
+	h.Write(ia.BytesForHash())
 
 	// check - addr2
 	period = calculateBlockHeight - addr2BlockHeight
@@ -620,13 +614,14 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	totalReward -= addr2InitIScore
 
 	ia.Address = addr2
-	sha3.ShakeSum256(stateHash, ia.BytesForHash())
+	h.Write(ia.BytesForHash())
 
 	// check stats
 	assert.Equal(t, count, stats.Accounts)
 	assert.Equal(t, totalReward, stats.Beta3.Uint64())
 
 	// check state root hash
+	h.Read(stateHash)
 	assert.Equal(t, stateHash, hash)
 }
 
@@ -637,8 +632,10 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	// get CALCULATE message while processing CALCULATE message
 	ctx.calculateStatus.set(true, 50)
 
-	req := CalculateRequest{Path: "test", BlockHeight:100}
+	iissDBDir := testDBDir + "/iiss"
+	req := CalculateRequest{Path: iissDBDir, BlockHeight:100}
 	err, blockHeight, _, _ := DoCalculate(ctx, &req, nil, 0)
+	defer os.RemoveAll(iissDBDir)
 	assert.NotNil(t, err)
 	assert.Error(t, err, "Calculating now. Drop this calculate message. blockHeight: %d, IISS data path: %s",
 		req.BlockHeight, req.Path)
@@ -724,62 +721,4 @@ func TestMsgQueryCalc_DoQueryCalculateResult(t *testing.T) {
 	assert.Equal(t, blockHeight, resp.BlockHeight)
 	assert.Equal(t, 0, resp.IScore.Cmp(&stats.TotalReward.Int))
 	assert.Equal(t, stateHash, resp.StateHash)
-}
-
-func Test_MakeHash(t *testing.T) {
-	h := sha3.NewShake256()
-	stateHash := make([]byte, 64)
-	stateHashOld := make([]byte, 64)
-	dataA := []byte("1234567890")
-	dataB := make([]byte, 64)
-
-	// check backward compatibility - reset every write
-	h.Reset()
-	makeHash(IISSDataRevisionDefault, h, dataA)
-	h.Read(stateHashOld)
-	h.Reset()
-	makeHash(IISSDataRevisionDefault, h, dataA)
-	makeHash(IISSDataRevisionDefault, h, dataA)
-	h.Read(stateHash)
-	assert.Equal(t, stateHashOld, stateHash)
-	assert.Equal(t, 64, len(stateHash))
-
-	// check backward compatibility - first write make same result
-	h.Reset()
-	makeHash(IISSDataRevisionDefault, h, dataA)
-	h.Read(stateHashOld)
-	h.Reset()
-	makeHash(IISSDataRevisionDefault+1, h, dataA)
-	h.Read(stateHash)
-	assert.Equal(t, stateHashOld, stateHash)
-	assert.Equal(t, 64, len(stateHash))
-
-	// check accumulation of data
-	h.Reset()
-	makeHash(IISSDataRevisionDefault+1, h, dataA)
-	h.Read(stateHashOld)
-	h.Reset()
-	makeHash(IISSDataRevisionDefault+1, h, dataA)
-	makeHash(IISSDataRevisionDefault+1, h, dataA)
-	h.Read(stateHash)
-	assert.NotEqual(t, stateHashOld, stateHash)
-	assert.Equal(t, 64, len(stateHash))
-
-	// check zero-data write modification
-	h.Reset()
-	h.Read(stateHashOld)
-	h.Reset()
-	makeHash(IISSDataRevisionDefault+1, h, dataB)
-	h.Read(stateHash)
-	assert.NotEqual(t, stateHashOld, stateHash)
-	assert.Equal(t, 64, len(stateHash))
-
-	// check nil write
-	h.Reset()
-	h.Read(stateHashOld)
-	h.Reset()
-	makeHash(IISSDataRevisionDefault+1, h, nil)
-	h.Read(stateHash)
-	assert.Equal(t, stateHashOld, stateHash)
-	assert.Equal(t, 64, len(stateHash))
 }

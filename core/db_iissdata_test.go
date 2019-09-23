@@ -2,7 +2,6 @@ package core
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -153,6 +152,7 @@ func writeIISSGV(dbDir string, dbName string) ([]*IISSGovernanceVariable, db.Dat
 	gvList = append(gvList, gv)
 	gv = makeIISSGV()
 	gv.BlockHeight = iaBlockHeight + 100
+	gv.RewardRep = gvRewardRep + 100
 	gvList = append(gvList, gv)
 
 	// write IISS governance variable
@@ -281,57 +281,50 @@ func writeIISSBPInfo(dbDir string, dbName string) ([]*IISSBlockProduceInfo, db.D
 	return bpInfoList, iissDB
 }
 
-func TestDBIISSBPInfo_loadIISSBlockProduceInfo(t *testing.T) {
-	// write IISS block produce Info to DB
-	bpInfoList, iissDB := writeIISSBPInfo(testDBDir, testDB)
-	defer iissDB.Close()
-	defer os.RemoveAll(testDBDir)
-
-	// load IISS block produce Info.
-	bpInfoListNew, err := loadIISSBlockProduceInfo(iissDB)
-
-	// check
-	assert.Nil(t, err)
-	assert.Equal(t, len(bpInfoList), len(bpInfoListNew))
-	for i := range bpInfoListNew {
-		assert.Equal(t, bpInfoList[i].BlockHeight, bpInfoListNew[i].BlockHeight)
-		assert.True(t, bpInfoList[i].Generator.Equal(&bpInfoListNew[i].Generator))
-		assert.Equal(t, len(bpInfoList[i].Validator), len(bpInfoListNew[i].Validator))
-		assert.True(t, bpInfoList[i].Validator[0].Equal(&bpInfoListNew[i].Validator[0]))
-		bs, _ := bpInfoList[i].Bytes()
-		bsNew, _ := bpInfoListNew[i].Bytes()
-		assert.Equal(t, bs, bsNew)
-	}
-}
-
 const (
 	txIndex uint64 = 0
 )
 
-func makeIISSTX(dataType uint64) *IISSTX {
+func makeIISSTX(dataType uint64, addr string, dgDataSlice []DelegateData) *IISSTX {
 	tx := new(IISSTX)
 
 	tx.Index = txIndex
 	tx.BlockHeight = iaBlockHeight
-	tx.Address = *common.NewAddressFromString(genAddress)
+	tx.Address = *common.NewAddressFromString(addr)
 	tx.DataType = dataType
 	if dataType == TXDataTypeDelegate {
 		tx.Data = new(codec.TypedObj)
 
-		delegation := make([]interface{}, 0)
+		if dgDataSlice != nil {
+			delegation := make([]interface{}, 0)
 
-		dgData := make([]interface{}, 0)
-		dgData = append(dgData, common.NewAddressFromString(delegationAddress))
-		dgData = append(dgData, MinDelegation)
-		delegation = append(delegation, dgData)
+			for _, dg := range dgDataSlice {
+				dgData := addDelegationData(dg.Address, dg.Delegate.Uint64())
+				delegation = append(delegation, dgData)
+			}
 
-		tx.Data, _ = common.EncodeAny(delegation)
+			tx.Data, _ = common.EncodeAny(delegation)
+		} else {
+			tx.Data.Type = codec.TypeNil
+			tx.Data.Object = []byte("")
+		}
 	}
 	return tx
 }
 
+func addDelegationData(address common.Address, amount uint64) []interface{} {
+	dgData := make([]interface{}, 0)
+	dgData = append(dgData, &address)
+	dgData = append(dgData, amount)
+
+	return dgData
+}
+
 func TestDBIISSTX_ID(t *testing.T) {
-	tx := makeIISSTX(TXDataTypeDelegate)
+	dgDataSlice := []DelegateData {
+		{*common.NewAddressFromString(delegationAddress), *common.NewHexIntFromUint64(MinDelegation)},
+	}
+	tx := makeIISSTX(TXDataTypeDelegate, genAddress, dgDataSlice)
 
 	id := tx.ID()
 
@@ -340,7 +333,10 @@ func TestDBIISSTX_ID(t *testing.T) {
 }
 
 func TestDBIISSTX_BytesAndSetBytes(t *testing.T) {
-	tx := makeIISSTX(TXDataTypeDelegate)
+	dgDataSlice := []DelegateData {
+		{*common.NewAddressFromString(delegationAddress), *common.NewHexIntFromUint64(MinDelegation)},
+	}
+	tx := makeIISSTX(TXDataTypeDelegate, genAddress, dgDataSlice)
 
 	var txNew IISSTX
 
@@ -355,51 +351,39 @@ func TestDBIISSTX_BytesAndSetBytes(t *testing.T) {
 	assert.Equal(t, bs, bsNew)
 }
 
+func writeTX(iissDB db.Database, txList []*IISSTX) {
+	bucket, _ := iissDB.GetBucket(db.PrefixIISSTX)
+	for _, tx := range txList {
+		bs, _ := tx.Bytes()
+		bucket.Set(tx.ID(), bs)
+	}
+}
+
 func writeIISSTX(dbDir string, dbName string) ([]*IISSTX, db.Database) {
 	txList := make([]*IISSTX, 0)
-	tx := makeIISSTX(TXDataTypeDelegate)
+
+	dgDataSlice := []DelegateData {
+		{*common.NewAddressFromString(delegationAddress), *common.NewHexIntFromUint64(MinDelegation)},
+	}
+	tx := makeIISSTX(TXDataTypeDelegate, genAddress, dgDataSlice)
 	txList = append(txList, tx)
-	tx = makeIISSTX(TXDataTypePrepReg)
+
+	tx = makeIISSTX(TXDataTypePrepReg, genAddress, nil)
 	tx.Index += 1
 	tx.BlockHeight = iaBlockHeight + 100
 	txList = append(txList, tx)
-	tx = makeIISSTX(TXDataTypePrepUnReg)
+
+
+	tx = makeIISSTX(TXDataTypePrepUnReg, genAddress, nil)
 	tx.Index += 2
 	tx.BlockHeight = iaBlockHeight + 200
 	txList = append(txList, tx)
 
 	// write IISS TX
 	iissDB := db.Open(dbDir, string(db.GoLevelDBBackend), dbName)
-	bucket, _ := iissDB.GetBucket(db.PrefixIISSTX)
-	for _, tx = range txList {
-		bs, _ := tx.Bytes()
-		bucket.Set(tx.ID(), bs)
-	}
+	writeTX(iissDB, txList)
 
 	return txList, iissDB
-}
-
-func TestDBIISSTX_loadIISSTX(t *testing.T) {
-	// write IISS TX to DB
-	txList, iissDB := writeIISSTX(testDBDir, testDB)
-	defer iissDB.Close()
-	defer os.RemoveAll(testDBDir)
-
-	// load IISS TX
-	txListNew, err := loadIISSTX(iissDB)
-
-	// check
-	assert.Nil(t, err)
-	assert.Equal(t, len(txList), len(txListNew))
-	for i := range txListNew {
-		assert.Equal(t, txList[i].Index, txListNew[i].Index)
-		assert.Equal(t, txList[i].BlockHeight, txListNew[i].BlockHeight)
-		assert.True(t, txList[i].Address.Equal(&txListNew[i].Address))
-		assert.Equal(t, txList[i].DataType, txListNew[i].DataType)
-		bs, _ := txList[i].Bytes()
-		bsNew, _ := txListNew[i].Bytes()
-		assert.Equal(t, bs, bsNew)
-	}
 }
 
 func TestDBIISS_LoadIISSData(t *testing.T) {
@@ -407,13 +391,13 @@ func TestDBIISS_LoadIISSData(t *testing.T) {
 	iissDB.Close()
 	gvList, iissDB := writeIISSGV(testDBDir, testDB)
 	iissDB.Close()
-	bpInfoList, iissDB := writeIISSBPInfo(testDBDir, testDB)
+	_, iissDB = writeIISSBPInfo(testDBDir, testDB)
 	iissDB.Close()
-	txList, iissDB := writeIISSTX(testDBDir, testDB)
-	iissDB.Close()
+	_, iissDB = writeIISSTX(testDBDir, testDB)
+	defer iissDB.Close()
 	defer os.RemoveAll(testDBDir)
 
-	headerNew, gvListNew, bpInfoListNew, pRepListNew, txListNew := LoadIISSData(filepath.Join(testDBDir, testDB), false)
+	headerNew, gvListNew, pRepListNew := LoadIISSData(iissDB)
 
 	assert.NotNil(t, headerNew)
 	bs, _ := header.Bytes()
@@ -423,12 +407,6 @@ func TestDBIISS_LoadIISSData(t *testing.T) {
 	assert.NotNil(t, gvListNew)
 	assert.Equal(t, len(gvList), len(gvListNew))
 
-	assert.NotNil(t, bpInfoListNew)
-	assert.Equal(t, len(bpInfoList), len(bpInfoListNew))
-
 	assert.NotNil(t, pRepListNew)
 	assert.Equal(t, 0, len(pRepListNew))
-
-	assert.NotNil(t, txListNew)
-	assert.Equal(t, len(txList), len(txListNew))
 }

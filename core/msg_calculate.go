@@ -15,6 +15,7 @@ import (
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -206,7 +207,7 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, revision ui
 		}
 
 		// update stateHash
-		makeHash(revision, h, ia.BytesForHash())
+		h.Write(ia.BytesForHash())
 
 		// update Statistics
 		stats.Increase("Beta3", *reward)
@@ -385,8 +386,12 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	defer ctx.calculateStatus.reset()
 	startTime := time.Now()
 
-	// Load IISS Data
-	header, gvList, bpInfoList, prepList, txList := LoadIISSData(req.Path, false)
+	// open IISS Data
+	iissDB := OpenIISSData(req.Path)
+	defer iissDB.Close()
+
+	// Load IISS data - Header, Governance variable, P-Rep list
+	header, gvList, prepList := LoadIISSData(iissDB)
 
 	// set block height
 	if blockHeight == 0 {
@@ -428,7 +433,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	ctx.UpdatePRep(prepList)
 
 	// Update P-Rep candidate with IISS TX(P-Rep register/unregister)
-	ctx.UpdatePRepCandidate(txList)
+	ctx.UpdatePRepCandidate(iissDB)
 
 	ctx.Print()
 
@@ -474,28 +479,28 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	var hashValue []byte
 
 	// Update calculate DB with delegate TX
-	reward, hashValue = calculateIISSTX(ctx, txList, blockHeight)
+	reward, hashValue = calculateIISSTX(ctx, iissDB, blockHeight, false)
 	stats.Increase("Beta3", *reward)
 	stats.Increase("TotalReward", *reward)
-	makeHash(ctx.Revision, h, hashValue)
+	h.Write(hashValue)
 
 	// Update block produce reward
-	reward, hashValue = calculateIISSBlockProduce(ctx, bpInfoList, blockHeight)
+	reward, hashValue = calculateIISSBlockProduce(ctx, iissDB, blockHeight, false)
 	stats.Increase("Beta1", *reward)
 	stats.Increase("TotalReward", *reward)
-	makeHash(ctx.Revision, h, hashValue)
+	h.Write(hashValue)
 
 	// Update P-Rep reward
 	reward, hashValue = calculatePRepReward(ctx, blockHeight)
 	stats.Increase("Beta2", *reward)
 	stats.Increase("TotalReward", *reward)
-	makeHash(ctx.Revision, h, hashValue)
+	h.Write(hashValue)
 
 	ctx.stats = stats
 
 	// make stateHash
 	for _, hash := range stateHashList {
-		makeHash(ctx.Revision, h, hash)
+		h.Write(hash)
 	}
 	h.Read(stateHash)
 
@@ -515,13 +520,24 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 }
 
 // Update I-Score of account in TX list
-func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) (*common.HexInt, []byte) {
+func calculateIISSTX(ctx *Context, iissDB db.Database, blockHeight uint64, verbose bool) (*common.HexInt, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(common.HexInt)
+	var tx IISSTX
 
-	for _, tx := range txList {
-		//log.Printf("[IISSTX] TX : %s", tx.String())
+	iter, _ := iissDB.GetIterator()
+	prefix := util.BytesPrefix([]byte(db.PrefixIISSTX))
+	iter.New(prefix.Start, prefix.Limit)
+	for entries := 0; iter.Next(); entries++ {
+		err := tx.SetBytes(iter.Value())
+		if err != nil {
+			log.Printf("Failed to load IISS TX data")
+			continue
+		}
+		if verbose {
+			log.Printf("[IISSTX] TX : %s", tx.String())
+		}
 		switch tx.DataType {
 		case TXDataTypeDelegate:
 			// get Calculate DB for account
@@ -529,7 +545,7 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) (*commo
 			bucket, _ := cDB.GetBucket(db.PrefixIScore)
 
 			// update I-Score
-			newIA := NewIScoreAccountFromIISS(tx)
+			newIA := NewIScoreAccountFromIISS(&tx)
 
 			data, _ := bucket.Get(tx.Address.Bytes())
 			if data != nil {
@@ -565,17 +581,20 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) (*commo
 				stats.Add(&stats.Int, &reward.Int)
 			}
 
-			//log.Printf("[IISSTX] %s", newIA.String())
+			if verbose {
+				log.Printf("[IISSTX] %s", newIA.String())
+			}
 
 			// write to account DB
 			bucket.Set(newIA.ID(), newIA.Bytes())
 
 			// update stateHash
-			makeHash(ctx.Revision, h, newIA.BytesForHash())
+			h.Write(newIA.BytesForHash())
 		case TXDataTypePrepReg:
 		case TXDataTypePrepUnReg:
 		}
 	}
+	iter.Release()
 
 	// get stateHash
 	h.Read(stateHash)
@@ -584,40 +603,55 @@ func calculateIISSTX(ctx *Context, txList []*IISSTX, blockHeight uint64) (*commo
 }
 
 // Calculate Block produce reward
-func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo, blockHeight uint64) (*common.HexInt, []byte) {
+func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uint64, verbose bool) (*common.HexInt, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	bpMap := make(map[common.Address]common.HexInt)
 
 	// calculate reward
-	for _, bpInfo := range bpInfoList {
+	var bp IISSBlockProduceInfo
+	iter, _ := iissDB.GetIterator()
+	prefix := util.BytesPrefix([]byte(db.PrefixIISSBPInfo))
+	iter.New(prefix.Start, prefix.Limit)
+	for entries := 0; iter.Next(); entries++ {
+		err := bp.SetBytes(iter.Value())
+		if err != nil {
+			log.Printf("Failed to load IISS Block Produce information.")
+			continue
+		}
+		bp.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSBPInfo):])
+		if verbose {
+			log.Printf("[IISS BP] %s", bp.String())
+		}
+
 		// get Governance variable
-		gv := ctx.getGVByBlockHeight(bpInfo.BlockHeight)
+		gv := ctx.getGVByBlockHeight(bp.BlockHeight)
 		if gv == nil {
 			continue
 		}
 
 		// update Generator reward
-		generator := bpMap[bpInfo.Generator]
+		generator := bpMap[bp.Generator]
 		generator.Add(&generator.Int, &gv.BlockProduceReward.Int)
-		bpMap[bpInfo.Generator] = generator
+		bpMap[bp.Generator] = generator
 
 		// set block validator reward value
-		if len(bpInfo.Validator) == 0 {
+		if len(bp.Validator) == 0 {
 			continue
 		}
 
 		var valReward common.HexInt
-		valCount := common.NewHexInt(int64(len(bpInfo.Validator)))
+		valCount := common.NewHexInt(int64(len(bp.Validator)))
 		valReward.Div(&gv.BlockProduceReward.Int, &valCount.Int)
 
 		// update Validator reward
-		for _, v := range bpInfo.Validator {
+		for _, v := range bp.Validator {
 			validator := bpMap[v]
 			validator.Add(&validator.Int, &valReward.Int)
 			bpMap[v] = validator
 		}
 	}
+	iter.Release()
 
 	totalReward := new(common.HexInt)
 	iaSlice := make([]*IScoreAccount, 0)
@@ -669,7 +703,7 @@ func calculateIISSBlockProduce(ctx *Context, bpInfoList []*IISSBlockProduceInfo,
 		return iaSlice[i].Compare(iaSlice[j]) < 0
 	})
 	for _, ia := range iaSlice {
-		makeHash(ctx.Revision, h, ia.BytesForHash())
+		h.Write(ia.BytesForHash())
 	}
 	h.Read(stateHash)
 
@@ -708,7 +742,7 @@ func calculatePRepReward(ctx *Context, to uint64) (*common.HexInt, []byte) {
 
 		// calculate P-Rep reward for Governance variable and write to calculate DB
 		reward, hash := setPRepReward(ctx, s, e, prep)
-		makeHash(ctx.Revision, h, hash)
+		h.Write(hash)
 		totalReward.Add(&totalReward.Int, &reward.Int)
 	}
 
@@ -798,7 +832,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.
 			ia.Address = dgInfo.Address
 			//log.Printf("[P-Rep reward] Write to DB %s, increased reward: %s", ia.String(), rewards[i].IScore.String())
 			bucket.Set(ia.ID(), ia.Bytes())
-			makeHash(ctx.Revision, h, ia.BytesForHash())
+			h.Write(ia.BytesForHash())
 			totalReward.Add(&totalReward.Int, &rewards[i].iScore.Int)
 		}
 	}
@@ -807,15 +841,6 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.
 	h.Read(stateHash)
 
 	return totalReward, stateHash
-}
-
-func makeHash(revision uint64, h sha3.ShakeHash, data []byte) {
-	if revision == IISSDataRevisionDefault {
-		h.Reset()	// Reset hash for backward compatibility
-		h.Write(data)
-	} else {
-		h.Write(data)
-	}
 }
 
 const (

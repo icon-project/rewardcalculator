@@ -50,6 +50,10 @@ func TestStatistics_Increase(t *testing.T) {
 	err = stats.Increase("Beta3", *common.NewHexInt(initIScore))
 	assert.Equal(t, 2*initIScore, stats.Beta3.Int64())
 	assert.Nil(t, err)
+
+	// IScore
+	err = stats.Increase("Beta3", *common.NewHexInt(-initIScore))
+	assert.Equal(t, initIScore, stats.Beta3.Int64())
 }
 
 func TestStatistics_Decrease(t *testing.T) {

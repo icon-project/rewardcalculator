@@ -9,8 +9,8 @@ import (
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
-
 
 const (
 	NumDelegate           = 10
@@ -224,8 +224,19 @@ func (ctx *Context) UpdatePRep(prepList []*PRep) {
 }
 
 // Update P-Rep candidate with IISS TX(P-Rep register/unregister)
-func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
-	for _, tx := range txList {
+func (ctx *Context) UpdatePRepCandidate(iissDB db.Database) {
+	var tx IISSTX
+
+	iter, _ := iissDB.GetIterator()
+	prefix := util.BytesPrefix([]byte(db.PrefixIISSTX))
+	iter.New(prefix.Start, prefix.Limit)
+	for entries := 0; iter.Next(); entries++ {
+		err := tx.SetBytes(iter.Value())
+		if err != nil {
+			log.Printf("Failed to load IISS TX data")
+			continue
+		}
+		tx.Index = common.BytesToUint64(iter.Key()[len(db.PrefixIISSTX):])
 		switch tx.DataType {
 		case TXDataTypeDelegate:
 		case TXDataTypePrepReg:
@@ -243,6 +254,7 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 				bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRepCandidate)
 				data, _ := p.Bytes()
 				bucket.Set(p.ID(), data)
+				log.Printf("P-Rep : register '%s'", tx.Address.String())
 			} else {
 				log.Printf("P-Rep : '%s' was registered already\n", tx.Address.String())
 				continue
@@ -262,12 +274,14 @@ func (ctx *Context) UpdatePRepCandidate(txList []*IISSTX) {
 				bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRepCandidate)
 				data, _ := pRep.Bytes()
 				bucket.Set(pRep.ID(), data)
+				log.Printf("P-Rep : unregister '%s'", tx.Address.String())
 			} else {
 				log.Printf("P-Rep :  %s was not registered\n", tx.Address.String())
 				continue
 			}
 		}
 	}
+	iter.Release()
 }
 
 func (ctx *Context) Print() {
