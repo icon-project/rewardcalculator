@@ -199,26 +199,21 @@ func (bp *IISSBlockProduceInfo) SetBytes(bs []byte) error {
 	return nil
 }
 
-func loadIISSBlockProduceInfo(iissDB db.Database) ([]*IISSBlockProduceInfo, error) {
-	bpInfoList := make([]*IISSBlockProduceInfo, 0, NumMainPRep)
-	iter, err := iissDB.GetIterator()
-	if err != nil {
-		return nil, err
-	}
+func ReadIISSBP(iissDB db.Database) {
+	var bpInfo IISSBlockProduceInfo
+
+	iter, _ := iissDB.GetIterator()
 	prefix := util.BytesPrefix([]byte(db.PrefixIISSBPInfo))
 	iter.New(prefix.Start, prefix.Limit)
 	for entries := 0; iter.Next(); entries++ {
-		bpInfo := new(IISSBlockProduceInfo)
-		err = bpInfo.SetBytes(iter.Value())
+		err := bpInfo.SetBytes(iter.Value())
 		if err != nil {
-			return nil, err
+			log.Printf("Failed to load IISS Block Produce information.")
+			continue
 		}
 		bpInfo.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSBPInfo):])
-		bpInfoList = append(bpInfoList, bpInfo)
 	}
 	iter.Release()
-
-	return bpInfoList, nil
 }
 
 const (
@@ -273,93 +268,61 @@ func (tx *IISSTX) SetBytes(bs []byte) error {
 	return nil
 }
 
-func loadIISSTX(iissDB db.Database) ([]*IISSTX, error) {
-	txList := make([]*IISSTX, 0)
+func ReadIISSTX(iissDB db.Database) {
+	var tx IISSTX
+
 	iter, _ := iissDB.GetIterator()
 	prefix := util.BytesPrefix([]byte(db.PrefixIISSTX))
 	iter.New(prefix.Start, prefix.Limit)
 	for entries := 0; iter.Next(); entries++ {
-		tx := new(IISSTX)
 		err := tx.SetBytes(iter.Value())
 		if err != nil {
-			return nil, err
+			log.Printf("Failed to load IISS TX data")
+			continue
 		}
-		tx.Index = common.BytesToUint64(iter.Key()[len(db.PrefixIISSTX):])
-		txList = append(txList, tx)
+		log.Printf("[IISSTX] TX : %s", tx.String())
 	}
 	iter.Release()
-
-	return txList, nil
 }
 
-func LoadIISSData(dbPath string, verbose bool) (*IISSHeader, []*IISSGovernanceVariable,
-	[]*IISSBlockProduceInfo, []*PRep, []*IISSTX) {
-	dbPath = filepath.Clean(dbPath)
+func OpenIISSData(path string) db.Database {
+	dbPath := filepath.Clean(path)
 	dbDir, dbName := filepath.Split(dbPath)
+	return db.Open(dbDir, string(db.GoLevelDBBackend), dbName)
+}
 
-	iissDB := db.Open(dbDir, string(db.GoLevelDBBackend), dbName)
-	defer iissDB.Close()
-
-	// Header
+func LoadIISSData(iissDB db.Database) (*IISSHeader, []*IISSGovernanceVariable, []*PRep) {
+	// Load IISS Data
 	header, err := loadIISSHeader(iissDB)
 	if err != nil {
 		log.Printf("Failed to read header from IISS Data. err=%+v\n", err)
-		return nil, nil, nil, nil, nil
+		return nil, nil, nil
 	}
+	log.Printf("Header: %s\n", header.String())
 
 	// Governance Variable
 	gvList, err := loadIISSGovernanceVariable(iissDB, header.Version)
 	if err != nil {
 		log.Printf("Failed to read governance variable from IISS Data. err=%+v\n", err)
-		return nil, nil, nil, nil, nil
+		return nil, nil, nil
 	}
-
-	// Block produce Info.
-	bpInfoList, err := loadIISSBlockProduceInfo(iissDB)
-	if err != nil {
-		log.Printf("Failed to read Block Produce Info. from IISS Data. err=%+v\n", err)
-		return nil, nil, nil, nil, nil
+	log.Printf("Governance variable:\n")
+	for i, gv := range gvList {
+		log.Printf("\t%d: %s", i, gv.String())
 	}
 
 	// Main/Sub P-Rep
 	pRepList, err := LoadPRep(iissDB)
 	if err != nil {
 		log.Printf("Failed to read P-Rep list from IISS Data. err=%+v\n", err)
-		return nil, nil, nil, nil, nil
+		return nil, nil, nil
+	}
+	log.Printf("Main/Sub P-Rep list:\n")
+	for i, preps:= range pRepList {
+		log.Printf("\t%d: %s\n", i, preps.String())
 	}
 
-	// TX list
-	txList, err := loadIISSTX(iissDB)
-	if err != nil {
-		log.Printf("Failed to read TX list from IISS Data. err=%+v\n", err)
-		return nil, nil, nil, nil, nil
-	}
-
-	if verbose {
-		log.Printf("Header: %s\n", header.String())
-
-		log.Printf("Governance variable:\n")
-		for i, gv := range gvList {
-			log.Printf("\t%d: %s", i, gv.String())
-		}
-
-		log.Printf("Block Produce Info.:\n")
-		for i, bpInfo := range bpInfoList {
-			log.Printf("\t%d: %s\n", i, bpInfo.String())
-		}
-
-		log.Printf("Main/Sub P-Rep list:\n")
-		for i, preps:= range pRepList {
-			log.Printf("\t%d: %s\n", i, preps.String())
-		}
-
-		log.Printf("TX:\n")
-		for i, tx := range txList {
-			log.Printf("\t%d: %s\n", i, tx.String())
-		}
-	}
-
-	return header, gvList, bpInfoList, pRepList, txList
+	return header, gvList, pRepList
 }
 
 func findIISSData(dir string) []os.FileInfo {

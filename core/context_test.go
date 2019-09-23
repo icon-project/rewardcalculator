@@ -203,28 +203,32 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 	ctx := initTest(1)
 	defer finalizeTest()
 
-	bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRepCandidate)
-
-	pRepA := common.NewAddressFromString("hxa")
+	// write IISS TX
+	iissDBDir := testDBDir + "/iiss"
+	iissDB := db.Open(iissDBDir, string(db.GoLevelDBBackend), testDB)
+	txList := make([]*IISSTX, 0)
+	pRepA := *common.NewAddressFromString("hxa")
 
 	// 1. register PRep candidate A
-	txList := make([]*IISSTX, 0)
-	tx := new(IISSTX)
-	tx.Index = 0
-	tx.DataType = TXDataTypePrepReg
+	tx := makeIISSTX(TXDataTypePrepReg, pRepA.String(), nil)
 	tx.BlockHeight = regPRepABH
-	tx.Address = *pRepA
 	txList = append(txList, tx)
 
+	// write to IISS data DB
+	writeTX(iissDB, txList)
+
 	// update P-Rep candidate
-	ctx.UpdatePRepCandidate(txList)
+	ctx.UpdatePRepCandidate(iissDB)
+	iissDB.Close()
+	os.RemoveAll(iissDBDir)
 
 	// check - in memory
 	assert.Equal(t, regPRepABH, ctx.PRepCandidates[tx.Address].Start)
 	assert.Equal(t, NotUnRegBH, ctx.PRepCandidates[tx.Address].End)
 
 	// check - in DB
-	bs, _ := bucket.Get(pRepA.Bytes())
+	bucketPRep, _ := ctx.DB.management.GetBucket(db.PrefixPRepCandidate)
+	bs, _ := bucketPRep.Get(pRepA.Bytes())
 	var pRep PRepCandidate
 	pRep.SetBytes(bs)
 
@@ -232,92 +236,105 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 	assert.Equal(t, NotUnRegBH, pRep.End)
 
 	// 2. register PRep candidate A with different block height again
+	iissDB = db.Open(iissDBDir, string(db.GoLevelDBBackend), testDB)
 	txList = make([]*IISSTX, 0)
-	tx = new(IISSTX)
-	tx.Index = 0
-	tx.DataType = TXDataTypePrepReg
+	tx = makeIISSTX(TXDataTypePrepReg, pRepA.String(), nil)
 	tx.BlockHeight = regPRepABH + 1
-	tx.Address = *pRepA
 	txList = append(txList, tx)
 
+	// write to IISS data DB
+	writeTX(iissDB, txList)
+
 	// update P-Rep candidate
-	ctx.UpdatePRepCandidate(txList)
+	ctx.UpdatePRepCandidate(iissDB)
+	iissDB.Close()
+	os.RemoveAll(iissDBDir)
 
 	// check - in memory
 	assert.Equal(t, regPRepABH, ctx.PRepCandidates[tx.Address].Start)
 	assert.Equal(t, NotUnRegBH, ctx.PRepCandidates[tx.Address].End)
 
 	// check - in DB
-	bs, _ = bucket.Get(pRepA.Bytes())
+	bs, _ = bucketPRep.Get(pRepA.Bytes())
 	pRep.SetBytes(bs)
 
 	assert.Equal(t, regPRepABH, pRep.Start)
 	assert.Equal(t, NotUnRegBH, pRep.End)
 
 	// 3. unregister PRep candidate A
+	iissDB = db.Open(iissDBDir, string(db.GoLevelDBBackend), testDB)
 	txList = make([]*IISSTX, 0)
-	tx = new(IISSTX)
-	tx.Index = 0
-	tx.DataType = TXDataTypePrepUnReg
+	tx = makeIISSTX(TXDataTypePrepUnReg, pRepA.String(), nil)
 	tx.BlockHeight = unRegPRepABH
-	tx.Address = *pRepA
 	txList = append(txList, tx)
 
+	// write to IISS data DB
+	writeTX(iissDB, txList)
+
 	// update P-Rep candidate
-	ctx.UpdatePRepCandidate(txList)
+	ctx.UpdatePRepCandidate(iissDB)
+	iissDB.Close()
+	os.RemoveAll(iissDBDir)
 
 	// check - in memory
-	assert.Equal(t, regPRepABH, ctx.PRepCandidates[tx.Address].Start)
-	assert.Equal(t, unRegPRepABH, ctx.PRepCandidates[tx.Address].End)
+	assert.Equal(t, regPRepABH, ctx.PRepCandidates[pRepA].Start)
+	assert.Equal(t, unRegPRepABH, ctx.PRepCandidates[pRepA].End)
 
 	// check - in DB
-	bs, _ = bucket.Get(pRepA.Bytes())
+	bs, _ = bucketPRep.Get(pRepA.Bytes())
 	pRep.SetBytes(bs)
-
 	assert.Equal(t, regPRepABH, pRep.Start)
 	assert.Equal(t, unRegPRepABH, pRep.End)
 
 	// 4. unregister PRep candidate A with different block height again
+	iissDB = db.Open(iissDBDir, string(db.GoLevelDBBackend), testDB)
 	txList = make([]*IISSTX, 0)
-	tx = new(IISSTX)
-	tx.Index = 0
-	tx.DataType = TXDataTypePrepUnReg
+	tx = makeIISSTX(TXDataTypePrepUnReg, pRepA.String(), nil)
 	tx.BlockHeight = unRegPRepABH + 1
-	tx.Address = *pRepA
 	txList = append(txList, tx)
 
+	// write to IISS data DB
+	writeTX(iissDB, txList)
+
 	// update P-Rep candidate
-	ctx.UpdatePRepCandidate(txList)
+	ctx.UpdatePRepCandidate(iissDB)
+	iissDB.Close()
+	os.RemoveAll(iissDBDir)
 
 	// check - in memory
 	assert.Equal(t, regPRepABH, ctx.PRepCandidates[tx.Address].Start)
 	assert.Equal(t, unRegPRepABH, ctx.PRepCandidates[tx.Address].End)
 
 	// check - in DB
-	bs, _ = bucket.Get(pRepA.Bytes())
+	bs, _ = bucketPRep.Get(pRepA.Bytes())
 	pRep.SetBytes(bs)
 
 	assert.Equal(t, regPRepABH, pRep.Start)
 	assert.Equal(t, unRegPRepABH, pRep.End)
 
 	// 5. unregister PRep candidate B
+	iissDB = db.Open(iissDBDir, string(db.GoLevelDBBackend), testDB)
 	txList = make([]*IISSTX, 0)
-	tx = new(IISSTX)
-	tx.Index = 0
+	tx = makeIISSTX(TXDataTypePrepUnReg, pRepA.String(), nil)
 	tx.DataType = TXDataTypePrepUnReg
 	tx.BlockHeight = unRegPRepABH
 	tx.Address = *common.NewAddressFromString("hxb")
 	txList = append(txList, tx)
 
+	// write to IISS data DB
+	writeTX(iissDB, txList)
+
 	// update P-Rep candidate
-	ctx.UpdatePRepCandidate(txList)
+	ctx.UpdatePRepCandidate(iissDB)
+	iissDB.Close()
+	os.RemoveAll(iissDBDir)
 
 	// check - in memory
 	_, ok := ctx.PRepCandidates[tx.Address]
 	assert.False(t, ok)
 
 	// check - in DB
-	bs, _ = bucket.Get(tx.Address.Bytes())
+	bs, _ = bucketPRep.Get(tx.Address.Bytes())
 	assert.Nil(t, bs)
 }
 
