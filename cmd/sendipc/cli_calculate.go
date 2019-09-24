@@ -9,18 +9,23 @@ import (
 
 func (cli *CLI) calculate(conn ipc.Connection, iissData string, blockHeight uint64) {
 	var req core.CalculateRequest
-	var resp core.CalculateDone
+	var resp core.CalculateResponse
 
 	req.Path = iissData
 	req.BlockHeight = blockHeight
 
-	// Send CALCULATE and get ack
+	// Send CALCULATE and get response
 	conn.SendAndReceive(core.MsgCalculate, cli.id, &req, &resp)
+	fmt.Printf("CALCULATE command get response: %s\n", resp.String())
+	if resp.Status != core.CalcRespStatusOK {
+		return
+	}
 
 	// Get CALCULATE_DONE
-	msg, id, _ := conn.Receive(&resp)
-	if msg == core.MsgReady {
-		fmt.Printf("CALCULATE command get calculate result: %s\n", resp.String())
+	var respDone core.CalculateDone
+	msg, id, _ := conn.Receive(&respDone)
+	if msg == core.MsgCalculateDone {
+		fmt.Printf("CALCULATE command get calculate result: %s\n", respDone.String())
 	} else {
 		fmt.Printf("CALCULATE command get invalied response : (msg:%d, id:%d)\n", msg, id)
 	}

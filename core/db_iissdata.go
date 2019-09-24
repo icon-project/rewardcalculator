@@ -295,7 +295,7 @@ func LoadIISSData(iissDB db.Database) (*IISSHeader, []*IISSGovernanceVariable, [
 	// Load IISS Data
 	header, err := loadIISSHeader(iissDB)
 	if err != nil {
-		log.Printf("Failed to read header from IISS Data. err=%+v\n", err)
+		log.Printf("Failed to read header from IISS Data. err=%+v", err)
 		return nil, nil, nil
 	}
 	log.Printf("Header: %s\n", header.String())

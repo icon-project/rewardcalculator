@@ -633,13 +633,12 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	ctx := initTest(1)
 	defer finalizeTest()
 
-	// get CALCULATE message while processing CALCULATE message
-	ctx.calculateStatus.set(true, 50)
-
 	iissDBDir := testDBDir + "/iiss"
 	req := CalculateRequest{Path: iissDBDir, BlockHeight:100}
+
+	// get CALCULATE message while processing CALCULATE message
+	ctx.calculateStatus.set(true, 50)
 	err, blockHeight, _, _ := DoCalculate(ctx, &req, nil, 0)
-	defer os.RemoveAll(iissDBDir)
 	assert.NotNil(t, err)
 	assert.Error(t, err, "Calculating now. Drop this calculate message. blockHeight: %d, IISS data path: %s",
 		req.BlockHeight, req.Path)
@@ -647,11 +646,30 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	ctx.calculateStatus.reset()
 
 	// get CALCULATE message with invalid block height
-	ctx.DB.setBlockHeight(uint64(100))
+	ctx.DB.setBlockHeight(uint64(50))
+	err, blockHeight, _, _ = DoCalculate(ctx, &req, nil, 0)
+	assert.NotNil(t, err)
+	assert.Error(t, err, "Failed to load IISS data (path: %s)\n", req.Path)
+	assert.Equal(t, req.BlockHeight, blockHeight)
+
+	// write IISS data DB
+	_, iissDB := writeHeader(testDBDir, "iiss", req.BlockHeight)
+	iissDB.Close()
+	defer os.RemoveAll(iissDBDir)
+
+	// get CALCULATE message with invalid block height
+	ctx.DB.setBlockHeight(uint64(200))
 	err, blockHeight, _, _ = DoCalculate(ctx, &req, nil, 0)
 	assert.NotNil(t, err)
 	assert.Error(t, err, "Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
 		req.BlockHeight, ctx.DB.info.BlockHeight)
+	assert.Equal(t, req.BlockHeight, blockHeight)
+
+	// get CALCULATE message with duplicated block height
+	ctx.DB.setBlockHeight(uint64(100))
+	err, blockHeight, _, _ = DoCalculate(ctx, &req, nil, 0)
+	assert.NotNil(t, err)
+	assert.Error(t, err, "Calculate message has duplicate blockHeight(block height: %d)\n", req.BlockHeight)
 	assert.Equal(t, req.BlockHeight, blockHeight)
 }
 
