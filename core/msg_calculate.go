@@ -52,8 +52,43 @@ type CalculateRequest struct {
 	Path        string
 	BlockHeight uint64
 }
+
 func (cr *CalculateRequest) String() string {
 	return fmt.Sprintf("Path: %s, BlockHeight: %d", cr.Path, cr.BlockHeight)
+}
+
+type CalculateResponse struct {
+	Status      uint16
+	BlockHeight uint64
+}
+
+const (
+	CalcRespStatusOK          uint16 = 0
+	CalcRespStatusInvalidData uint16 = 1
+	CalcRespStatusDoing       uint16 = 2
+	CalcRespStatusInvalidBH   uint16 = 3
+	CalcRespStatusDuplicateBH uint16 = 4
+)
+
+func CalcRespStatusToString(status uint16) string {
+	switch status {
+	case CalcRespStatusOK:
+		return "OK"
+	case CalcRespStatusInvalidData:
+		return "Invalid IISS data"
+	case CalcRespStatusDoing:
+		return "Calculating"
+	case CalcRespStatusInvalidBH:
+		return "Invalid block height"
+	case CalcRespStatusDuplicateBH:
+		return "Duplicate block height"
+	default:
+		return "Unknown status"
+	}
+}
+
+func (cr *CalculateResponse) String() string {
+	return fmt.Sprintf("status: %s, BlockHeight: %d", CalcRespStatusToString(cr.Status), cr.BlockHeight)
 }
 
 type CalculateDone struct {
@@ -315,10 +350,11 @@ func toggleAccountDB(ctx *Context, blockHeight uint64) {
 	idb.toggleAccountDB()
 }
 
-func sendCalculateACK(c ipc.Connection, id uint32) error {
+func sendCalculateACK(c ipc.Connection, id uint32, status uint16, blockHeight uint64) error {
 	if c != nil {
-		log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCalculate), id, "ack")
-		if err := c.Send(MsgCalculate, id, nil); err != nil {
+		response := CalculateResponse{Status: status, BlockHeight: blockHeight}
+		log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCalculate), id, response.String())
+		if err := c.Send(MsgCalculate, id, response); err != nil {
 			return err
 		}
 	}
@@ -371,15 +407,12 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
 	if ctx.calculateStatus.Doing {
-		// send acknowledge of CALCULATE
-		sendCalculateACK(c, id)
-
-
+		// send response of CALCULATE
+		sendCalculateACK(c, id, CalcRespStatusDoing, blockHeight)
 		errMsg := fmt.Sprintf("Calculating now. Drop this calculate message. blockHeight: %d, IISS data path: %s",
 			blockHeight, req.Path)
 		log.Printf(errMsg)
 		err := fmt.Errorf(errMsg)
-
 		return err, blockHeight, nil, nil
 	}
 
@@ -393,22 +426,32 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 
 	// Load IISS data - Header, Governance variable, P-Rep list
 	header, gvList, prepList := LoadIISSData(iissDB)
+	if header == nil {
+		sendCalculateACK(c, id, CalcRespStatusInvalidData, blockHeight)
+		errMsg := fmt.Sprintf("Failed to load IISS data (path: %s)\n", req.Path)
+		log.Printf(errMsg)
+		err := fmt.Errorf(errMsg)
+		return err, blockHeight, nil, nil
+	}
 
 	// set block height
+	blockHeight = header.BlockHeight
 	if blockHeight == 0 {
-		if header != nil {
-			blockHeight = header.BlockHeight
-		} else {
-			blockHeight = iScoreDB.info.BlockHeight + 1
-		}
+		blockHeight = iScoreDB.info.BlockHeight + 1
 	}
 
 	if blockHeight != 0 && blockHeight <= iScoreDB.info.BlockHeight {
-		// send acknowledge of CALCULATE
-		sendCalculateACK(c, id)
+		var errMsg string
+		// send response of CALCULATE
+		if blockHeight == iScoreDB.info.BlockHeight {
+			sendCalculateACK(c, id, CalcRespStatusDuplicateBH, blockHeight)
+			errMsg = fmt.Sprintf("Calculate message has duplicate blockHeight(block height: %d)\n", blockHeight)
+		} else {
+			sendCalculateACK(c, id, CalcRespStatusInvalidBH, blockHeight)
+			errMsg = fmt.Sprintf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
+				blockHeight, iScoreDB.info.BlockHeight)
+		}
 
-		errMsg := fmt.Sprintf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
-			blockHeight, iScoreDB.info.BlockHeight)
 		log.Printf(errMsg)
 		err := fmt.Errorf(errMsg)
 		return err, blockHeight, nil, nil
@@ -416,8 +459,8 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 
 	toggleAccountDB(ctx, blockHeight)
 
-	// send acknowledge of CALCULATE after toggle DB
-	sendCalculateACK(c, id)
+	// send response of CALCULATE after toggle DB
+	sendCalculateACK(c, id, CalcRespStatusOK, blockHeight)
 
 	// close and delete old account DB and open new calculate DB
 	ctx.DB.resetCalcDB()
