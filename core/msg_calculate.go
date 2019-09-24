@@ -364,6 +364,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(Statistics)
+	var newAccount uint64
 
 	iScoreDB := ctx.DB
 	blockHeight := req.BlockHeight
@@ -479,19 +480,22 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	var hashValue []byte
 
 	// Update calculate DB with delegate TX
-	reward, hashValue = calculateIISSTX(ctx, iissDB, blockHeight, false)
+	newAccount, reward, hashValue = calculateIISSTX(ctx, iissDB, blockHeight, false)
+	stats.Increase("Accounts", newAccount)
 	stats.Increase("Beta3", *reward)
 	stats.Increase("TotalReward", *reward)
 	h.Write(hashValue)
 
 	// Update block produce reward
-	reward, hashValue = calculateIISSBlockProduce(ctx, iissDB, blockHeight, false)
+	newAccount, reward, hashValue = calculateIISSBlockProduce(ctx, iissDB, blockHeight, false)
+	stats.Increase("Accounts", newAccount)
 	stats.Increase("Beta1", *reward)
 	stats.Increase("TotalReward", *reward)
 	h.Write(hashValue)
 
 	// Update P-Rep reward
-	reward, hashValue = calculatePRepReward(ctx, blockHeight)
+	newAccount, reward, hashValue = calculatePRepReward(ctx, blockHeight)
+	stats.Increase("Accounts", newAccount)
 	stats.Increase("Beta2", *reward)
 	stats.Increase("TotalReward", *reward)
 	h.Write(hashValue)
@@ -520,16 +524,18 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 }
 
 // Update I-Score of account in TX list
-func calculateIISSTX(ctx *Context, iissDB db.Database, blockHeight uint64, verbose bool) (*common.HexInt, []byte) {
+func calculateIISSTX(ctx *Context, iissDB db.Database, blockHeight uint64, verbose bool) (
+	uint64, *common.HexInt, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(common.HexInt)
 	var tx IISSTX
+	var entries, newAccount uint64 = 0, 0
 
 	iter, _ := iissDB.GetIterator()
 	prefix := util.BytesPrefix([]byte(db.PrefixIISSTX))
 	iter.New(prefix.Start, prefix.Limit)
-	for entries := 0; iter.Next(); entries++ {
+	for entries = 0; iter.Next(); entries++ {
 		err := tx.SetBytes(iter.Value())
 		if err != nil {
 			log.Printf("Failed to load IISS TX data")
@@ -572,6 +578,8 @@ func calculateIISSTX(ctx *Context, iissDB db.Database, blockHeight uint64, verbo
 
 				// Statistics
 				stats.Sub(&stats.Int, &ia.IScore.Int)
+			} else {
+				newAccount++
 			}
 
 			// calculate I-Score from tx.BlockHeight to blockHeight with new delegation Info.
@@ -599,21 +607,26 @@ func calculateIISSTX(ctx *Context, iissDB db.Database, blockHeight uint64, verbo
 	// get stateHash
 	h.Read(stateHash)
 
-	return stats, stateHash
+	log.Printf("IISS TX: TX count: %d, new account: %d, I-Score: %s, stateHash: %s",
+		entries, newAccount, stats.String(), hex.EncodeToString(stateHash))
+
+	return newAccount, stats, stateHash
 }
 
 // Calculate Block produce reward
-func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uint64, verbose bool) (*common.HexInt, []byte) {
+func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uint64, verbose bool) (
+	uint64, *common.HexInt, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	bpMap := make(map[common.Address]common.HexInt)
 
 	// calculate reward
 	var bp IISSBlockProduceInfo
+	var entries, newAccount uint64
 	iter, _ := iissDB.GetIterator()
 	prefix := util.BytesPrefix([]byte(db.PrefixIISSBPInfo))
 	iter.New(prefix.Start, prefix.Limit)
-	for entries := 0; iter.Next(); entries++ {
+	for entries = 0; iter.Next(); entries++ {
 		err := bp.SetBytes(iter.Value())
 		if err != nil {
 			log.Printf("Failed to load IISS Block Produce information.")
@@ -685,6 +698,8 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 			ia.IScore.Set(&reward.Int)
 			ia.Address = addr
 			ia.BlockHeight = blockHeight	// has no delegation. Set blockHeight to blocHeight of calculation msg
+
+			newAccount++
 		}
 
 		// write to account DB
@@ -707,17 +722,21 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 	}
 	h.Read(stateHash)
 
-	return totalReward, stateHash
+	log.Printf("IISS Block produce: BP count: %d, new account: %d, I-Score: %s, stateHash: %s",
+		entries, newAccount, totalReward.String(), hex.EncodeToString(stateHash))
+
+	return newAccount, totalReward, stateHash
 }
 
 // Calculate Main/Sub P-Rep reward
-func calculatePRepReward(ctx *Context, to uint64) (*common.HexInt, []byte) {
+func calculatePRepReward(ctx *Context, to uint64) (uint64, *common.HexInt, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	start := ctx.DB.info.BlockHeight
 	end := to
 
 	totalReward := new(common.HexInt)
+	var newAccount uint64
 
 	// calculate for PRep list
 	for i, prep := range ctx.PRep {
@@ -741,18 +760,19 @@ func calculatePRepReward(ctx *Context, to uint64) (*common.HexInt, []byte) {
 		}
 
 		// calculate P-Rep reward for Governance variable and write to calculate DB
-		reward, hash := setPRepReward(ctx, s, e, prep)
+		account, reward, hash := setPRepReward(ctx, s, e, prep)
 		h.Write(hash)
 		totalReward.Add(&totalReward.Int, &reward.Int)
+		newAccount += account
 	}
 
 	// get stateHash
 	h.Read(stateHash)
 
-	return totalReward, stateHash
+	return newAccount, totalReward, stateHash
 }
 
-func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.HexInt, []byte) {
+func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (uint64, *common.HexInt, []byte) {
 	type reward struct {
 		iScore      common.HexInt
 		blockHeight uint64
@@ -797,6 +817,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.
 	}
 
 	totalReward := new(common.HexInt)
+	var newAccount uint64
 
 	// write to account DB
 	for i, dgInfo := range prep.List {
@@ -825,6 +846,8 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.
 			ia = new(IScoreAccount)
 			ia.IScore.Set(&rewards[i].iScore.Int)
 			ia.BlockHeight = end // Set blockHeight to end
+
+			newAccount++
 		}
 
 		// write to account DB
@@ -840,7 +863,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (*common.
 	// get stateHash
 	h.Read(stateHash)
 
-	return totalReward, stateHash
+	return newAccount, totalReward, stateHash
 }
 
 const (

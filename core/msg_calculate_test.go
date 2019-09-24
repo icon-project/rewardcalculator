@@ -47,7 +47,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	iconist := *common.NewAddressFromString("hx11")
 
 	// TX 0: Add new delegation at block height 10
-	// hx11 delegates MinDelegation to prepA and delegates 2 * MinDelegation to prepB
+	// iconist delegates MinDelegation to prepA and delegates 2 * MinDelegation to prepB
 	dgDataSlice := []DelegateData {
 		{prepA.Address, *common.NewHexIntFromUint64(MinDelegation)},
 		{prepB.Address, *common.NewHexIntFromUint64(MinDelegation * 2)},
@@ -58,7 +58,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	txList = append(txList, tx)
 
 	// TX 1: Modify delegation at block height 20
-	// hx11 delegates MinDelegation to prepA and delegates MinDelegation to iconist
+	// iconist delegates MinDelegation to prepA and delegates MinDelegation to iconist
 	dgDataSlice = []DelegateData {
 		{prepA.Address, *common.NewHexIntFromUint64(MinDelegation)},
 		{iconist, *common.NewHexIntFromUint64(MinDelegation)},
@@ -68,7 +68,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	tx.BlockHeight = 20
 	txList = append(txList, tx)
 
-	// TX 2: Delete delegation at block height 30
+	// TX 2: iconist Delete delegation at block height 30
 	tx = makeIISSTX(TXDataTypeDelegate, iconist.String(), nil)
 	tx.Index = 2
 	tx.BlockHeight = 30
@@ -78,7 +78,8 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	writeTX(iissDB, txList)
 
 	// calculate IISS TX
-	stats, hash := calculateIISSTX(ctx, iissDB, 100, false)
+	account, stats, hash := calculateIISSTX(ctx, iissDB, 100, false)
+	assert.Equal(t, uint64(1), account)
 
 	// check Calculate DB
 	calcDB := ctx.DB.getCalculateDB(iconist)
@@ -157,7 +158,8 @@ func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 	writeTX(iissDB, txList)
 
 	// calculate IISS TX
-	stats, hash := calculateIISSTX(ctx, iissDB, 100, false)
+	account, stats, hash := calculateIISSTX(ctx, iissDB, 100, false)
+	assert.Equal(t, uint64(1), account)
 
 	// check Calculate DB
 	calcDB := ctx.DB.getCalculateDB(iconist)
@@ -252,7 +254,8 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	bucket.Set(bp.ID(), bs)
 
 	// calculate BP
-	stats, hash := calculateIISSBlockProduce(ctx, iissDB, 100, false)
+	account, stats, hash := calculateIISSBlockProduce(ctx, iissDB, 100, false)
+	assert.Equal(t, uint64(3), account)
 
 	calcDB := ctx.DB.getCalculateDB(iconist)
 	bucket, _ = calcDB.GetBucket(db.PrefixIScore)
@@ -403,7 +406,8 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	ctx.PRep = append(ctx.PRep, prep)
 
 	// calculate P-Rep reward
-	stats, hash := calculatePRepReward(ctx, BlockHeight2)
+	account, stats, hash := calculatePRepReward(ctx, BlockHeight2)
+	assert.Equal(t, uint64(2), account)
 
 	calcDB := ctx.DB.getCalculateDB(prepA)
 	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
