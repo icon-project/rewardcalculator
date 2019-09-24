@@ -15,24 +15,24 @@ const (
 	testDB = "test"
 )
 
-func makeHeader() *IISSHeader {
+func makeHeader(blockHeight uint64) *IISSHeader {
 	header := new(IISSHeader)
 
 	header.Version = IISSDataVersion
-	header.BlockHeight = iaBlockHeight
+	header.BlockHeight = blockHeight
 	header.Revision = IISSDataRevisionDefault
 
 	return header
 }
 
 func TestDBIISSHeader_ID(t *testing.T) {
-	header := makeHeader()
+	header := makeHeader(iaBlockHeight)
 
 	assert.Equal(t, []byte(""), header.ID())
 }
 
 func TestDBIISSHeader_BytesAndSetBytes(t *testing.T) {
-	header := makeHeader()
+	header := makeHeader(iaBlockHeight)
 
 	var headerNew IISSHeader
 
@@ -45,8 +45,8 @@ func TestDBIISSHeader_BytesAndSetBytes(t *testing.T) {
 	assert.Equal(t, bs, bsNew)
 }
 
-func writeHeader(dbDir string, dbName string) (*IISSHeader, db.Database) {
-	header := makeHeader()
+func writeHeader(dbDir string, dbName string, blockHeight uint64) (*IISSHeader, db.Database) {
+	header := makeHeader(blockHeight)
 
 	// write IISS header
 	iissDB := db.Open(dbDir, string(db.GoLevelDBBackend), dbName)
@@ -59,7 +59,7 @@ func writeHeader(dbDir string, dbName string) (*IISSHeader, db.Database) {
 
 func TestDBIISSHeader_loadIISSHeader(t *testing.T) {
 	// write IISS header to DB
-	header, iissDB := writeHeader(testDBDir, testDB)
+	header, iissDB := writeHeader(testDBDir, testDB, iaBlockHeight)
 	defer iissDB.Close()
 	defer os.RemoveAll(testDBDir)
 
@@ -387,7 +387,7 @@ func writeIISSTX(dbDir string, dbName string) ([]*IISSTX, db.Database) {
 }
 
 func TestDBIISS_LoadIISSData(t *testing.T) {
-	header, iissDB := writeHeader(testDBDir, testDB)
+	header, iissDB := writeHeader(testDBDir, testDB, iaBlockHeight)
 	iissDB.Close()
 	gvList, iissDB := writeIISSGV(testDBDir, testDB)
 	iissDB.Close()

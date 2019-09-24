@@ -132,6 +132,10 @@ type ResponseVersion struct {
 	BlockHeight uint64
 }
 
+func (rv *ResponseVersion) String() string {
+	return fmt.Sprintf("Version: %d, BlockHeight: %d", rv.Version, rv.BlockHeight)
+}
+
 func (mh *msgHandler) version(c ipc.Connection, id uint32) error {
 	return sendVersion(c, MsgVersion, id, mh.mgr.ctx.DB.info.BlockHeight)
 }
@@ -142,7 +146,7 @@ func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64) erro
 		BlockHeight: blockHeight,
 	}
 
-	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(msg), id, MsgDataToString(resp))
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(msg), id, resp.String())
 	return c.Send(msg, id, resp)
 }
 
