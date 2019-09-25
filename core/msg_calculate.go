@@ -379,6 +379,10 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	} else {
 		os.Rename(req.Path, req.Path + "_failed")
 		success = false
+		if stats == nil && stateHash == nil {
+			// has no calculation result
+			return nil
+		}
 	}
 
 	// send CALCULATE_DONE
