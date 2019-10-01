@@ -43,13 +43,13 @@ func TestContext_NewContext(t *testing.T) {
 	assert.Equal(t, dbCount, len(ctx.DB.Account0))
 	assert.Equal(t, dbCount, len(ctx.DB.Account1))
 	assert.NotNil(t, ctx.DB.calcResult)
+	assert.NotNil(t, ctx.DB.preCommit)
 	assert.NotNil(t, ctx.DB.claim)
 
 	assert.NotNil(t, ctx.GV)
 	assert.NotNil(t, ctx.PRep)
 	assert.NotNil(t, ctx.PRepCandidates)
 	assert.NotNil(t, ctx.calculateStatus)
-	assert.NotNil(t, ctx.preCommit)
 }
 
 func TestContext_UpdateGovernanceVariable(t *testing.T) {
@@ -356,6 +356,13 @@ func TestContext_GetCalcDBList(t *testing.T) {
 	assert.Equal(t, ctx.DB.Account1, ctx.DB.GetCalcDBList())
 	ctx.DB.info.QueryDBIsZero = false
 	assert.Equal(t, ctx.DB.Account0, ctx.DB.GetCalcDBList())
+}
+
+func TestContext_GetPreCommitDB(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest()
+
+	assert.Equal(t, ctx.DB.preCommit, ctx.DB.getPreCommitDB())
 }
 
 func TestContext_GetClaimDB(t *testing.T) {
