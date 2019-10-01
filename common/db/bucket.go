@@ -19,6 +19,9 @@ const (
 	// For calculation result DB
 	PrefixCalcResult BucketID         = ""
 
+	// For claim DB
+	PrefixClaim BucketID              = ""
+
 	// For global DB
 
 	// Information for management

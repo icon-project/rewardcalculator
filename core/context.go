@@ -24,6 +24,7 @@ type IScoreDB struct {
 	// DB instance
 	management    db.Database
 	calcResult    db.Database
+	preCommit     db.Database
 	claim         db.Database
 
 	accountLock   sync.RWMutex
@@ -79,6 +80,10 @@ func (idb *IScoreDB) getQueryDB(address common.Address) db.Database {
 	return qDB[idb.getAccountDBIndex(address)]
 }
 
+func (idb *IScoreDB) getPreCommitDB() db.Database {
+	return idb.preCommit
+}
+
 func (idb *IScoreDB) getClaimDB() db.Database {
 	return idb.claim
 }
@@ -132,8 +137,6 @@ type Context struct {
 	GV              []*GovernanceVariable
 
 	calculateStatus *CalculateStatus
-
-	preCommit       *preCommit
 
 	stats           *Statistics
 }
@@ -351,17 +354,17 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 		isDB.Account1[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
 	}
 
-	// Open claim DB
+	// Open calculation result DB
 	isDB.calcResult= db.Open(isDB.info.DBRoot, isDB.info.DBType, "calculation_result")
+
+	// Open preCommit DB
+	isDB.preCommit = db.Open(isDB.info.DBRoot, isDB.info.DBType, "preCommit")
 
 	// Open claim DB
 	isDB.claim = db.Open(isDB.info.DBRoot, isDB.info.DBType, "claim")
 
 	// Init CalculationStatus
 	ctx.calculateStatus = new(CalculateStatus)
-
-	// Init preCommit
-	ctx.preCommit = new(preCommit)
 
 	return ctx, nil
 }
@@ -384,6 +387,9 @@ func CloseIScoreDB(isDB *IScoreDB) {
 
 	// close calculation result DB
 	isDB.calcResult.Close()
+
+	// close preCommit DB
+	isDB.preCommit.Close()
 
 	// close claim DB
 	isDB.claim.Close()

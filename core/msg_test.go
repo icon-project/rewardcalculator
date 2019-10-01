@@ -47,7 +47,7 @@ func TestMsg_DoQuery(t *testing.T) {
 	assert.Equal(t, 0, dbContent0.IScore.Cmp(&resp.IScore.Int))
 
 	// commit to claim DB
-	ctx.preCommit.writeClaimToDB(ctx, claim.BlockHeight, claim.BlockHash)
+	writePreCommitToClaimDB(ctx.DB.getPreCommitDB(), ctx.DB.getClaimDB(), claim.BlockHeight, claim.BlockHash)
 
 	// Query to claimed Account after commit
 	resp = DoQuery(ctx, *address)
