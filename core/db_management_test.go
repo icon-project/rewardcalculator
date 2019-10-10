@@ -2,6 +2,7 @@ package core
 
 import (
 	"github.com/icon-project/rewardcalculator/common"
+	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -155,6 +156,37 @@ func TestDBMNGGV_NewGVFromIISS(t *testing.T) {
 	assert.Equal(t, iissGV.RewardRep, gv.RewardRep.Uint64())
 }
 
+type GVDataV1 struct {
+	CalculatedIncentiveRep common.HexInt
+	RewardRep              common.HexInt
+}
+
+func (gv *GVDataV1) Bytes() ([]byte, error) {
+	var bytes []byte
+	if bs, err := codec.MarshalToBytes(&gv); err != nil {
+		return nil, err
+	} else {
+		bytes = bs
+	}
+	return bytes, nil
+}
+
+func TestDBMNGGV_BackwardCompatibility(t *testing.T) {
+	var gvV1 GVDataV1
+	gvV1.CalculatedIncentiveRep.SetUint64(uint64(123))
+	gvV1.RewardRep.SetUint64(uint64(456))
+
+	bs, err := gvV1.Bytes()
+	assert.Nil(t, err)
+
+	var gv GovernanceVariable
+	err = gv.SetBytes(bs)
+	assert.Nil(t, err)
+	assert.Equal(t, gvV1.CalculatedIncentiveRep.Uint64(), gv.CalculatedIncentiveRep.Uint64())
+	assert.Equal(t, gvV1.RewardRep.Uint64(), gv.RewardRep.Uint64())
+	assert.Equal(t, uint64(0), gv.MainPRepCount.Uint64())
+	assert.Equal(t, uint64(0), gv.SubPRepCount.Uint64())
+}
 
 func makePRep() *PRep{
 	pRep := new(PRep)
