@@ -101,10 +101,10 @@ var BigInt100 = big.NewInt(100)
 var BigIntIScoreMultiplier = big.NewInt(iScoreMultiplier)
 
 type GVData struct {
-	MainPRepCount          common.HexInt
-	SubPRepCount           common.HexInt
 	CalculatedIncentiveRep common.HexInt
 	RewardRep              common.HexInt
+	MainPRepCount          common.HexInt
+	SubPRepCount           common.HexInt
 }
 
 type GovernanceVariable struct {
