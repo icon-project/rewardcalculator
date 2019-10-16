@@ -163,14 +163,14 @@ func (mh *msgHandler) commitClaim(c ipc.Connection, id uint32, data []byte) erro
 	}
 	log.Printf("\t COMMIT_CLAIM request: %s", req.String())
 
-	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCommitClaim), id, "ack")
-	if err = c.Send(MsgCommitClaim, id, nil); err != nil {
-		return err
+	err = DoCommitClaim(mh.mgr.ctx, &req)
+	if err != nil {
+		log.Printf("Failed to commit claim. %+v", err)
+		return nil
 	}
 
-	err = DoCommitClaim(mh.mgr.ctx, &req)
-
-	return err
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCommitClaim), id, "ack")
+	return c.Send(MsgCommitClaim, id, nil)
 }
 
 func DoCommitClaim(ctx *Context, req *CommitClaim) error {
