@@ -258,12 +258,15 @@ func writePreCommitToClaimDB(pcDB db.Database, cDB db.Database, blockHeight uint
 
 		claim = pc.Claim
 		if pc.Confirmed == false || claim.Data.IScore.Sign() == 0 {
+			log.Printf("Do not write precommit data to claim DB. (precommit: %s)", pc.String())
 			continue
 		}
 		bs, _ := bucket.Get(claim.ID())
 		if nil != bs {
 			oldClaim, _ := NewClaimFromBytes(bs)
 			if claim.Data.BlockHeight <= oldClaim.Data.BlockHeight {
+				log.Printf("Do not write precommit data to claim DB. too low block height(%d <= %d)",
+					claim.Data.BlockHeight, oldClaim.Data.BlockHeight)
 				continue
 			}
 			// update with old I-Score
