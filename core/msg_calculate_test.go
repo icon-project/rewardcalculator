@@ -2,15 +2,17 @@ package core
 
 import (
 	"encoding/binary"
-	"golang.org/x/crypto/sha3"
+	"fmt"
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestMsgCalc_CalculateIISSTX(t *testing.T) {
@@ -571,7 +573,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	bucket.Set(ia.ID(), ia.Bytes())
 
 	// calculate
-	count, stats, hash := calculateDB(0, queryDB, calcDB, ctx.Revision, ctx.GV, ctx.PRepCandidates,
+	count, stats, hash := calculateDB(ctx.Rollback.GetChannel(), 0, queryDB, calcDB, ctx.GV, ctx.PRepCandidates,
 		calculateBlockHeight, writeBatchCount)
 
 	var reward, totalReward uint64
@@ -634,22 +636,22 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	defer finalizeTest(ctx)
 
 	iissDBDir := testDBDir + "/iiss"
-	req := CalculateRequest{Path: iissDBDir, BlockHeight:100}
+	blockHash := make([]byte, BlockHashSize)
+	copy(blockHash, "test")
+	req := CalculateRequest{Path: iissDBDir, BlockHeight:100, BlockHash:blockHash}
 
 	// get CALCULATE message while processing CALCULATE message
-	ctx.calculateStatus.set(true, 50)
-	err, blockHeight, _, _ := DoCalculate(ctx, &req, nil, 0)
-	assert.NotNil(t, err)
-	assert.Error(t, err, "Calculating now. Drop this calculate message. blockHeight: %d, IISS data path: %s",
-		req.BlockHeight, req.Path)
+	ctx.DB.setCalculateBlockHeight(50)
+	err, blockHeight, _, _ := DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+	assert.Error(t, err)
+	assert.True(t, strings.HasPrefix(err.Error(), "calculating now. drop calculate message"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
-	ctx.calculateStatus.reset()
+	ctx.DB.resetCalculateBlockHeight()
 
-	// get CALCULATE message with invalid block height
-	ctx.DB.setBlockHeight(uint64(50))
-	err, blockHeight, _, _ = DoCalculate(ctx, &req, nil, 0)
-	assert.NotNil(t, err)
-	assert.Error(t, err, "Failed to load IISS data (path: %s)\n", req.Path)
+	// get CALCULATE message with no IISS data
+	err, blockHeight, _, _ = DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+	assert.Error(t, err)
+	assert.True(t, strings.HasPrefix(err.Error(), "Failed to load IISS data"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
 
 	// write IISS data DB
@@ -658,19 +660,29 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	defer os.RemoveAll(iissDBDir)
 
 	// get CALCULATE message with invalid block height
-	ctx.DB.setBlockHeight(uint64(200))
-	err, blockHeight, _, _ = DoCalculate(ctx, &req, nil, 0)
-	assert.NotNil(t, err)
-	assert.Error(t, err, "Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
-		req.BlockHeight, ctx.DB.info.BlockHeight)
+	ctx.DB.setBlockInfo(uint64(200), nil)
+	err, blockHeight, _, _ = DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+	assert.Error(t, err)
+	assert.True(t, strings.HasPrefix(err.Error(), "too low blockHeight"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
 
 	// get CALCULATE message with duplicated block height
-	ctx.DB.setBlockHeight(uint64(100))
-	err, blockHeight, _, _ = DoCalculate(ctx, &req, nil, 0)
-	assert.NotNil(t, err)
-	assert.Error(t, err, "Calculate message has duplicate blockHeight(block height: %d)\n", req.BlockHeight)
+	ctx.DB.setBlockInfo(uint64(100), blockHash)
+	ctx.DB.setCalculateBlockHeight(100)
+	err, blockHeight, _, _ = DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+	assert.Error(t, err)
+	assert.True(t, strings.HasPrefix(err.Error(), "duplicated block"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
+
+	// Cancel with ROLLBACK
+	ctx.DB.setBlockInfo(uint64(50), blockHash)
+	ctx.DB.setCalculateBlockHeight(50)
+
+	quitChannel := ctx.Rollback.GetChannel()
+	ctx.Rollback.notifyRollback()
+	err, blockHeight, _, _ = DoCalculate(quitChannel, ctx, &req, nil, 0)
+	assert.Error(t, err)
+	assert.True(t, strings.HasSuffix(err.Error(), "was canceled by ROLLBACK"))
 }
 
 func newIScoreAccount(addr common.Address, blockHeight uint64, reward common.HexInt) *IScoreAccount {
@@ -693,15 +705,14 @@ func TestMsgQueryCalc_DoQueryCalculateStatus(t *testing.T) {
 
 	// start calculation
 	calcBH := uint64(1000)
-	ctx.calculateStatus.set(true, calcBH)
+	ctx.DB.setCalculateBlockHeight(calcBH)
 
 	DoQueryCalculateStatus(ctx, &resp)
 	assert.Equal(t, CalculationDoing, resp.Status)
 	assert.Equal(t, calcBH, resp.BlockHeight)
 
 	// end calculation
-	ctx.calculateStatus.reset()
-	ctx.DB.setBlockHeight(calcBH)
+	ctx.DB.setBlockInfo(calcBH, nil)
 
 	DoQueryCalculateStatus(ctx, &resp)
 	assert.Equal(t, CalculationDone, resp.Status)
@@ -720,15 +731,14 @@ func TestMsgQueryCalc_DoQueryCalculateResult(t *testing.T) {
 	assert.Equal(t, blockHeight, resp.BlockHeight)
 
 	// start calculation
-	ctx.calculateStatus.set(true, blockHeight)
+	ctx.DB.setCalculateBlockHeight(blockHeight)
 
 	DoQueryCalculateResult(ctx, blockHeight, &resp)
 	assert.Equal(t, calcDoing, resp.Status)
 	assert.Equal(t, blockHeight, resp.BlockHeight)
 
 	// end calculation
-	ctx.calculateStatus.reset()
-	ctx.DB.setBlockHeight(blockHeight)
+	ctx.DB.setBlockInfo(blockHeight, nil)
 
 	crDB := ctx.DB.getCalculateResultDB()
 	stats := new(Statistics)
@@ -743,4 +753,60 @@ func TestMsgQueryCalc_DoQueryCalculateResult(t *testing.T) {
 	assert.Equal(t, blockHeight, resp.BlockHeight)
 	assert.Equal(t, 0, resp.IScore.Cmp(&stats.TotalReward.Int))
 	assert.Equal(t, stateHash, resp.StateHash)
+}
+
+var (
+	shutdown chan struct{}
+	done chan int
+)
+
+func closeShutdown() {
+	if shutdown != nil {
+		log.Printf("close shutdown")
+		close(shutdown)
+		shutdown = nil
+	} else {
+		log.Printf("Can't close shutdown")
+	}
+}
+
+func TestChannel(t *testing.T) {
+	const n = 5
+
+	shutdown = make(chan struct{})
+	done = make(chan int)
+
+	go closeShutdown()
+
+	// Start up the goroutines...
+	for i := 0; i < n; i++ {
+		i := i
+		go func(c chan struct{}) {
+			quit := false
+			count := 0
+			fmt.Println("routine", i, "waiting to exit...")
+			for {
+				select {
+				case <-c:
+					fmt.Println("routine", i, "loop", count, "times")
+					quit = true
+					done <- i
+				default:
+				}
+
+				if quit {
+					break
+				} else {
+					count++
+				}
+			}
+		}(shutdown)
+	}
+
+	//time.Sleep(2 * time.Second)
+
+	// Close the channel. All goroutines will immediately "unblock".
+	for i := 0; i < n; i++ {
+		fmt.Println("routine", <-done, "has exited!")
+	}
 }

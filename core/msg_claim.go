@@ -92,7 +92,7 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 		claim, _ = NewClaimFromBytes(bs)
 	}
 
-	// read from account query DB
+	// read from query DB
 	qDB = isDB.getQueryDB(req.Address)
 	bucket, _ = qDB.GetBucket(db.PrefixIScore)
 	bs, _ = bucket.Get(req.Address.Bytes())
@@ -216,7 +216,8 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 	ret := true
 	iDB := mh.mgr.ctx.DB
 	if req.Success == true {
-		err = writePreCommitToClaimDB(iDB.getPreCommitDB(), iDB.getClaimDB(), req.BlockHeight, req.BlockHash)
+		err = writePreCommitToClaimDB(iDB.getPreCommitDB(), iDB.getClaimDB(), iDB.getClaimBackupDB(),
+			req.BlockHeight, req.BlockHash)
 	} else {
 		err = flushPreCommit(iDB.getPreCommitDB(), req.BlockHeight, req.BlockHash)
 	}

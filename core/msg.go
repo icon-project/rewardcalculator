@@ -22,6 +22,7 @@ const (
 	MsgCommitClaim      = 5
 	MsgQueryCalculateStatus = 6
 	MsgQueryCalculateResult = 7
+	MsgRollBack         = 8
 
 	MsgNotify           = 100
 	MsgReady            = MsgNotify + 0
@@ -52,6 +53,8 @@ func MsgToString(msg uint) string{
 		return "READY"
 	case MsgCalculateDone:
 		return "CALCULATE_DONE"
+	case MsgRollBack:
+		return "ROLLBACK"
 	case MsgDebug:
 		return "DEBUG"
 	default:
@@ -89,6 +92,7 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 		c.SetHandler(MsgCalculate, handler)
 		c.SetHandler(MsgCommitBlock, handler)
 		c.SetHandler(MsgCommitClaim, handler)
+		c.SetHandler(MsgRollBack, handler)
 	}
 
 	// send READY message to peer
@@ -121,6 +125,9 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 		go mh.queryCalculateStatus(c, id, data)
 	case MsgQueryCalculateResult:
 		go mh.queryCalculateResult(c, id, data)
+	case MsgRollBack:
+		// do not process other messages while process Rollback message
+		return mh.rollback(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}

@@ -2,11 +2,10 @@ package core
 
 import (
 	"encoding/json"
-	"log"
-	"path/filepath"
-
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
+	"log"
+	"path/filepath"
 )
 
 const (
@@ -103,11 +102,14 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 
 	// Initialize DB and load context values
 	m.ctx, err = NewContext(cfg.DBDir, string(db.GoLevelDBBackend), "IScore", cfg.DBCount)
+	if err != nil {
+		return nil, err
+	}
 
 	m.ctx.Print()
 
-	// find IISS data and reload
-	go reloadIISSData(m.ctx, cfg.IISSDataDir)
+    // find IISS data and reload
+    go reloadIISSData(m.ctx, cfg.IISSDataDir)
 
 	// Initialize ipc channel
 	if m.clientMode {
@@ -156,7 +158,7 @@ func reloadIISSData(ctx *Context, dir string) {
 		req.BlockHeight = 0
 
 		log.Printf("Reload IISS Data. %s", req.Path)
-		err, _, _, _:= DoCalculate(ctx, &req, nil, 0)
+		err, _, _, _:= DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
 
 		if err != nil {
 			log.Printf("Failed to reload IISS Data. %s", req.Path)

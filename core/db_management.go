@@ -23,8 +23,12 @@ const (
 
 type DBInfoData struct {
 	DBCount       int
-	BlockHeight   uint64 // BlockHeight of finished calculate message
+	BlockHeight   uint64 // finish to calculate to thie block height
 	QueryDBIsZero bool
+	BlockHash     []byte
+	CalcBlockHeight uint64	// try to calculate to this block height
+	PrevBlockHeight uint64	// calculated to this block height in previous calculation
+	PrevBlockHash []byte
 }
 
 type DBInfo struct {
@@ -87,6 +91,12 @@ func NewDBInfo(mngDB db.Database, dbPath string, dbType string, dbName string, d
 
 	dbInfo.DBRoot = filepath.Join(dbPath, dbName)
 	dbInfo.DBType = dbType
+	if dbInfo.BlockHash == nil || len(dbInfo.BlockHash) != BlockHashSize {
+		dbInfo.BlockHash = make([]byte, BlockHashSize)
+	}
+	if dbInfo.PrevBlockHash == nil || len(dbInfo.PrevBlockHash) != BlockHashSize {
+		dbInfo.PrevBlockHash = make([]byte, BlockHashSize)
+	}
 
 	// Write to management DB
 	if writeToDB {

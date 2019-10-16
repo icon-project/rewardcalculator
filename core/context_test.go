@@ -2,12 +2,15 @@ package core
 
 import (
 	"bytes"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
-	"os"
-	"testing"
 )
 
 var testDir string
@@ -49,7 +52,6 @@ func TestContext_NewContext(t *testing.T) {
 	assert.NotNil(t, ctx.GV)
 	assert.NotNil(t, ctx.PRep)
 	assert.NotNil(t, ctx.PRepCandidates)
-	assert.NotNil(t, ctx.calculateStatus)
 }
 
 func TestContext_UpdateGovernanceVariable(t *testing.T) {
@@ -391,7 +393,7 @@ func TestContext_ToggleAccountDB(t *testing.T) {
 	assert.Equal(t, original, ctx.DB.info.QueryDBIsZero)
 }
 
-func TestContext_ResetCalcDB(t *testing.T) {
+func TestContext_ResetAccountDB(t *testing.T) {
 	dbCount := 4
 	ctx := initTest(dbCount)
 	defer finalizeTest(ctx)
@@ -399,11 +401,161 @@ func TestContext_ResetCalcDB(t *testing.T) {
 	qDBList := ctx.DB.getQueryDBList()
 	cDBList := ctx.DB.GetCalcDBList()
 
-	ctx.DB.resetCalcDB()
+	// toggled now. write to old query DB to check backup DB
+	ia := makeIA()
+	qDB := ctx.DB.getCalculateDB(ia.Address)
+	bucket, _ := qDB.GetBucket(db.PrefixIScore)
+	err := bucket.Set(ia.ID(), ia.Bytes())
+	assert.Nil(t, err)
 
+	blockHeight := uint64(1000)
+	err = ctx.DB.resetAccountDB(blockHeight)
+	assert.Nil(t, err)
+
+	// same query DB
 	assert.Equal(t, qDBList, ctx.DB.getQueryDBList())
+
+	// new calculate DB
 	assert.NotEqual(t, cDBList, ctx.DB.GetCalcDBList())
 	assert.Equal(t, dbCount, len(ctx.DB.GetCalcDBList()))
+
+	// new backup DB
+	for i := 0; i < ctx.DB.info.DBCount; i++ {
+		backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, i+1)
+		stat, err := os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
+		assert.Nil(t, err)
+		assert.True(t, stat.IsDir())
+	}
+	// check ia value in backup DB
+	backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, ctx.DB.getAccountDBIndex(ia.Address) + 1)
+	backupDB := db.Open(ctx.DB.info.DBRoot, ctx.DB.info.DBType, backupName)
+	bucket, _ = backupDB.GetBucket(db.PrefixIScore)
+	bs, err := bucket.Get(ia.ID())
+	assert.Nil(t, err)
+	assert.NotNil(t, bs)
+	assert.Equal(t, ia.Bytes(), bs)
+	backupDB.Close()
+}
+
+func TestContext_rollbackBlockInfo(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest(ctx)
+
+	const (
+		blockHeight1 uint64 = 100
+		blockHeight2 uint64 = 200
+	)
+
+	blockHash1 := make([]byte, BlockHashSize)
+	copy(blockHash1,  []byte(string(blockHeight1)))
+	blockHash2 := make([]byte, BlockHashSize)
+	copy(blockHash2,  []byte(string(blockHeight2)))
+
+	ctx.DB.setBlockInfo(blockHeight1, blockHash1)
+	ctx.DB.setBlockInfo(blockHeight2, blockHash2)
+
+	ctx.DB.rollbackBlockInfo()
+
+	assert.Equal(t, blockHeight1, ctx.DB.info.BlockHeight)
+	assert.Equal(t, blockHash1, ctx.DB.info.BlockHash)
+	assert.Equal(t, blockHeight1, ctx.DB.info.PrevBlockHeight)
+	assert.Equal(t, blockHash1, ctx.DB.info.PrevBlockHash)
+	assert.Equal(t, blockHeight1, ctx.DB.info.CalcBlockHeight)
+}
+
+func TestContext_RollbackAccountDB(t *testing.T) {
+	dbCount := 4
+	ctx := initTest(dbCount)
+	defer finalizeTest(ctx)
+
+	crDB := ctx.DB.getCalculateResultDB()
+	crBucket, err := crDB.GetBucket(db.PrefixCalcResult)
+
+	ia := makeIA()
+
+
+	// write to query DB
+	qDB := ctx.DB.getQueryDB(ia.Address)
+	bucket, _ := qDB.GetBucket(db.PrefixIScore)
+	err = bucket.Set(ia.ID(), ia.Bytes())
+	assert.Nil(t, err)
+
+	// emulate calculation process
+	prevBlockHeight := uint64(5)
+	prevBlockHash := testBlockHash0
+	ctx.DB.setBlockInfo(prevBlockHeight, prevBlockHash)
+	blockHeight := uint64(10)
+	blockHash := testBlockHash
+	ctx.DB.setCalculateBlockHeight(blockHeight)
+	ctx.DB.writeToDB()
+	ctx.DB.toggleAccountDB()
+
+	// Rollback without backup account DB
+	err = ctx.DB.rollbackAccountDB(0)
+	assert.Error(t, err)
+
+	// reset account DB to make backup account DB
+	err = ctx.DB.resetAccountDB(blockHeight)
+	assert.Nil(t, err)
+	WriteCalculationResult(crDB, blockHeight, nil, nil)
+	ctx.DB.setBlockInfo(blockHeight, blockHash)
+	ctx.DB.writeToDB()
+	assert.Equal(t, prevBlockHeight, ctx.DB.info.PrevBlockHeight)
+	assert.Equal(t, prevBlockHash, ctx.DB.info.PrevBlockHash)
+	assert.Equal(t, blockHeight, ctx.DB.info.BlockHeight)
+	assert.Equal(t, blockHash, ctx.DB.info.BlockHash)
+
+	// read from query DB
+	qDB = ctx.DB.getQueryDB(ia.Address)
+	bucket, _ = qDB.GetBucket(db.PrefixIScore)
+	bs, _ := bucket.Get(ia.ID())
+	assert.Nil(t, bs)
+
+	// no need to Rollback with blockHeigh >= ctx.DB.Info.CalcBlockHeight
+	err = ctx.DB.rollbackAccountDB(blockHeight)
+
+	// backup account DB remains
+	backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, 1)
+	stat, err := os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
+	assert.Nil(t, err)
+	assert.True(t, stat.IsDir())
+
+	// check block height and block hash
+	assert.Equal(t, blockHeight, ctx.DB.info.BlockHeight)
+	assert.Equal(t, blockHash, ctx.DB.info.BlockHash)
+
+	// valid Rollback
+	err = ctx.DB.rollbackAccountDB(0)
+	assert.Nil(t, err)
+
+	// backup account DB was deleted
+	backupName = fmt.Sprintf(BackupDBNameFormat, blockHeight, 1)
+	_, err = os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
+	assert.Error(t, err)
+	assert.True(t, os.IsNotExist(err))
+
+	// check calculation result
+	bs, _ = crBucket.Get(common.Uint64ToBytes(prevBlockHeight))
+	assert.Nil(t, bs)
+
+	// check Rollback block height and block hash
+	assert.Equal(t, prevBlockHeight, ctx.DB.info.PrevBlockHeight)
+	assert.Equal(t, prevBlockHash, ctx.DB.info.PrevBlockHash)
+	assert.Equal(t, prevBlockHeight, ctx.DB.info.BlockHeight)
+	assert.Equal(t, prevBlockHash, ctx.DB.info.BlockHash)
+
+	// read from query DB
+	qDB = ctx.DB.getQueryDB(ia.Address)
+	bucket, _ = qDB.GetBucket(db.PrefixIScore)
+	bs, _ = bucket.Get(ia.ID())
+	assert.NotNil(t, bs)
+	assert.Equal(t, ia.Bytes(), bs)
+
+	// read from calculate DB
+	cDB := ctx.DB.getCalculateDB(ia.Address)
+	bucket, _ = cDB.GetBucket(db.PrefixIScore)
+	bs, _ = bucket.Get(ia.ID())
+	assert.Nil(t, bs)
 }
 
 func TestContext_WriteToDB(t *testing.T) {

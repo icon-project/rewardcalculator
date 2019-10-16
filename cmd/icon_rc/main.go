@@ -80,7 +80,7 @@ func main() {
 
 	rcm, err := core.InitManager(&cfg)
 	if err != nil {
-		log.Panicf("Failed to start RewardCalculator manager %+v", err)
+		log.Panicf("Failed to start RewardCalculator manager. %+v", err)
 	}
 
 	forever := make(chan bool)

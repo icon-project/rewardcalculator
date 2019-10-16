@@ -66,12 +66,23 @@ func WriteCalculationResult(crDB db.Database, blockHeight uint64, stats *Statist
 	cr.Success = true
 	cr.BlockHeight = blockHeight
 	cr.StateHash = stateHash
-	cr.IScore.Set(&stats.TotalReward.Int)
-	cr.Beta1.Set(&stats.Beta1.Int)
-	cr.Beta2.Set(&stats.Beta2.Int)
-	cr.Beta3.Set(&stats.Beta3.Int)
+	if stats != nil {
+		cr.IScore.Set(&stats.TotalReward.Int)
+		cr.Beta1.Set(&stats.Beta1.Int)
+		cr.Beta2.Set(&stats.Beta2.Int)
+		cr.Beta3.Set(&stats.Beta3.Int)
+	}
 
 	bucket, _ := crDB.GetBucket(db.PrefixCalcResult)
 	bs, _ := cr.Bytes()
 	bucket.Set(cr.ID(), bs)
+}
+
+func DeleteCalculationResult(crDB db.Database, blockHeight uint64) {
+	cr := new(CalculationResult)
+
+	cr.BlockHeight = blockHeight
+
+	bucket, _ := crDB.GetBucket(db.PrefixCalcResult)
+	bucket.Delete(cr.ID())
 }

@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -13,8 +15,10 @@ import (
 )
 
 const (
-	NumDelegate           = 10
-	CalculateDBNameFormat = "calculate_%d_%d_%d"
+	NumDelegate         = 10
+	AccountDBNameFormat = "calculate_%d_%d_%d"
+	BackupDBNamePrefix  = "backup_"
+	BackupDBNameFormat  = BackupDBNamePrefix + "%d_%d"	// CalcBH_accountDBIndex
 )
 
 type IScoreDB struct {
@@ -26,6 +30,7 @@ type IScoreDB struct {
 	calcResult    db.Database
 	preCommit     db.Database
 	claim         db.Database
+	claimBackup   db.Database
 
 	accountLock   sync.RWMutex
 	Account0      []db.Database
@@ -70,6 +75,30 @@ func (idb *IScoreDB) getAccountDBIndex(address common.Address) int {
 	return prefix % idb.info.DBCount
 }
 
+func (idb *IScoreDB) OpenAccountDB() {
+	idb.Account0 = make([]db.Database, idb.info.DBCount)
+	for i := 0; i < idb.info.DBCount; i++ {
+		dbNameTemp := fmt.Sprintf(AccountDBNameFormat, i+1, idb.info.DBCount, 0)
+		idb.Account0[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbNameTemp)
+	}
+	idb.Account1 = make([]db.Database, idb.info.DBCount)
+	for i := 0; i < idb.info.DBCount; i++ {
+		dbNameTemp := fmt.Sprintf(AccountDBNameFormat, i+1, idb.info.DBCount, 1)
+		idb.Account1[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbNameTemp)
+	}
+}
+
+func (idb *IScoreDB) CloseAccountDB() {
+	for _, aDB := range idb.Account0 {
+		aDB.Close()
+	}
+	idb.Account0 = nil
+	for _, aDB := range idb.Account1 {
+		aDB.Close()
+	}
+	idb.Account1 = nil
+}
+
 func (idb *IScoreDB) getCalculateDB(address common.Address) db.Database {
 	cDB := idb.GetCalcDBList()
 	return cDB[idb.getAccountDBIndex(address)]
@@ -88,37 +117,109 @@ func (idb *IScoreDB) getClaimDB() db.Database {
 	return idb.claim
 }
 
+func (idb *IScoreDB) getClaimBackupDB() db.Database {
+	return idb.claimBackup
+}
+
 func (idb *IScoreDB) getCalculateResultDB() db.Database {
 	return idb.calcResult
 }
 
-func (idb *IScoreDB) resetCalcDB() {
+
+func (idb *IScoreDB) resetAccountDB(blockHeight uint64) error {
 	idb.accountLock.Lock()
 	defer idb.accountLock.Unlock()
 
-	calcDBList := idb._getCalcDBList()
-	var calcDBPostFix = 0
+	// account DB was toggled, so calculate DB points old query DB
+	oldQueryDBs := idb._getCalcDBList()
+	var oldQueryDBPostFix = 0
 	if idb.info.QueryDBIsZero {
-		calcDBPostFix = 1
+		oldQueryDBPostFix = 1
 	}
 
-	newDBList := make([]db.Database, len(calcDBList))
-	for i, calcDB := range calcDBList {
-		calcDB.Close()
-		dbName := fmt.Sprintf(CalculateDBNameFormat, i+1, idb.info.DBCount, calcDBPostFix)
-		os.RemoveAll(filepath.Join(idb.info.DBRoot, dbName))
-		newDBList[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbName)
+	// delete old backup account DB
+	oldBackups, err := filepath.Glob(filepath.Join(idb.info.DBRoot, BackupDBNamePrefix + "*"))
+	if err != nil {
+		log.Printf("Failed to get old backup account DB")
+		return err
+	}
+	for _, f := range oldBackups {
+		err = os.RemoveAll(f)
+		if err != nil {
+			log.Printf("Failed to delete old backup account DB. %s", f)
+			return err
+		} else {
+			log.Printf("delete old backup account DB. %s", f)
+		}
 	}
 
+	newCalcDBs := make([]db.Database, len(oldQueryDBs))
+	for i, oldQueryDB := range oldQueryDBs {
+		oldQueryDB.Close()
+		dbName := fmt.Sprintf(AccountDBNameFormat, i+1, idb.info.DBCount, oldQueryDBPostFix)
+		backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, i+1)
+
+		// backup old query DB
+		err = os.Rename(filepath.Join(idb.info.DBRoot, dbName), filepath.Join(idb.info.DBRoot, backupName))
+		if err != nil {
+			log.Printf("Failed to backup old query DB. %s -> %s, %+v", dbName, backupName, err)
+			return err
+		} else {
+			log.Printf("backup old query DB. %s -> %s", dbName, backupName)
+		}
+
+		// open new calculate DB
+		newCalcDBs[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbName)
+	}
+
+	// set new calculate DB
 	if idb.info.QueryDBIsZero {
-		idb.Account1 = newDBList
+		idb.Account1 = newCalcDBs
 	} else {
-		idb.Account0 = newDBList
+		idb.Account0 = newCalcDBs
 	}
+
+	return nil
 }
 
-func (idb *IScoreDB) setBlockHeight(blockHeight uint64) {
+func (idb *IScoreDB) setCalculateBlockHeight(blockHeight uint64) {
+	idb.info.CalcBlockHeight = blockHeight
+
+	idb.writeToDB()
+}
+
+func (idb *IScoreDB) resetCalculateBlockHeight() {
+	idb.info.CalcBlockHeight = idb.info.BlockHeight
+
+	idb.writeToDB()
+}
+
+func (idb *IScoreDB) isCalculating() bool {
+	return idb.info.CalcBlockHeight > idb.info.BlockHeight
+}
+
+func (idb *IScoreDB) setBlockInfo(blockHeight uint64, blockHash []byte) {
+	tempBlockHash := make([]byte, BlockHashSize)
+	copy(tempBlockHash, blockHash)
+
+	// backup to prev Info.
+	if idb.info.PrevBlockHeight < blockHeight {
+		idb.info.PrevBlockHeight = idb.info.BlockHeight
+		copy(idb.info.PrevBlockHash, idb.info.BlockHash)
+	}
+
+	// set current Info.
 	idb.info.BlockHeight = blockHeight
+	copy(idb.info.BlockHash, tempBlockHash)
+
+	idb.writeToDB()
+}
+
+func (idb *IScoreDB) rollbackBlockInfo() {
+	idb.info.BlockHeight = idb.info.PrevBlockHeight
+	copy(idb.info.BlockHash, idb.info.PrevBlockHash)
+	idb.setCalculateBlockHeight(idb.info.BlockHeight)
+
 	idb.writeToDB()
 }
 
@@ -126,6 +227,73 @@ func (idb *IScoreDB) writeToDB() {
 	bucket, _ := idb.management.GetBucket(db.PrefixManagement)
 	value, _ := idb.info.Bytes()
 	bucket.Set(idb.info.ID(), value)
+}
+
+func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
+	log.Printf("Start Rollback account DB to %d", blockHeight)
+	var calcDBPostFix = 0
+	if idb.info.QueryDBIsZero {
+		calcDBPostFix = 1
+	}
+
+	backups, err := filepath.Glob(filepath.Join(idb.info.DBRoot, BackupDBNamePrefix + "*"))
+	if err != nil {
+		log.Printf("Failed to get backup account DB")
+		return err
+	}
+
+	if len(backups) != idb.info.DBCount {
+		return fmt.Errorf("there is no backup account DB. %d", len(backups))
+	} else {
+		_, name := filepath.Split(backups[0])
+		nameSlice := strings.Split(name, "_")
+		backupBH, err := strconv.ParseUint(nameSlice[1], 10, 64)
+		if err != nil {
+			return err
+		}
+		if blockHeight >= backupBH {
+			// no need to Rollback account DB
+			log.Printf("no need to Rollback account DB to %d. backup: %d", blockHeight, backupBH)
+			return nil
+		}
+	}
+
+	// rollback account DB
+	idb.CloseAccountDB()
+	for i, f := range backups {
+		calcDBName := fmt.Sprintf(AccountDBNameFormat, i+1, idb.info.DBCount, calcDBPostFix)
+
+		// remove calculate DB
+		err = os.RemoveAll(filepath.Join(idb.info.DBRoot, calcDBName))
+		if err != nil {
+			log.Printf("Failed to remove old calculate DB")
+			return err
+		} else {
+			log.Printf("remove old calculate DB. %s", calcDBName)
+		}
+
+		// rename backup DB to calculate DB
+		err = os.Rename(f, filepath.Join(idb.info.DBRoot, calcDBName))
+		if err != nil {
+			log.Printf("Failed to rename backup DB to query DB. %s -> %s", f, calcDBName)
+			return err
+		} else {
+			log.Printf("rename backup DB to query DB. %s -> %s", f, calcDBName)
+		}
+	}
+	idb.OpenAccountDB()
+
+	// toggle query DB switch
+	idb.toggleAccountDB()
+
+	// Rollback block height and block hash
+	idb.rollbackBlockInfo()
+
+	// delete calculation result
+	DeleteCalculationResult(idb.getCalculateResultDB(), idb.info.CalcBlockHeight)
+
+	log.Printf("End rollblack account DB to %d", blockHeight)
+	return nil
 }
 
 type Context struct {
@@ -136,9 +304,8 @@ type Context struct {
 	PRepCandidates  map[common.Address]*PRepCandidate
 	GV              []*GovernanceVariable
 
-	calculateStatus *CalculateStatus
-
-	stats           *Statistics
+	stats    *Statistics
+	Rollback *Rollback
 }
 
 func (ctx *Context) getGVByBlockHeight(blockHeight uint64) *GovernanceVariable {
@@ -347,18 +514,6 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 		return nil, err
 	}
 
-	// Open account DBs for Query and Calculate
-	isDB.Account0 = make([]db.Database, isDB.info.DBCount)
-	for i := 0; i < isDB.info.DBCount; i++ {
-		dbNameTemp := fmt.Sprintf(CalculateDBNameFormat, i + 1, isDB.info.DBCount, 0)
-		isDB.Account0[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
-	}
-	isDB.Account1 = make([]db.Database, isDB.info.DBCount)
-	for i := 0; i < isDB.info.DBCount; i++ {
-		dbNameTemp := fmt.Sprintf(CalculateDBNameFormat, i + 1, isDB.info.DBCount, 1)
-		isDB.Account1[i] = db.Open(isDB.info.DBRoot, isDB.info.DBType, dbNameTemp)
-	}
-
 	// Open calculation result DB
 	isDB.calcResult= db.Open(isDB.info.DBRoot, isDB.info.DBType, "calculation_result")
 
@@ -368,8 +523,14 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	// Open claim DB
 	isDB.claim = db.Open(isDB.info.DBRoot, isDB.info.DBType, "claim")
 
-	// Init CalculationStatus
-	ctx.calculateStatus = new(CalculateStatus)
+	// Open claim backup DB
+	isDB.claimBackup = db.Open(isDB.info.DBRoot, isDB.info.DBType, "claim_backup")
+
+	// Open account DB
+	isDB.OpenAccountDB()
+
+	// make new Rollback stuff
+	ctx.Rollback = NewRollback()
 
 	return ctx, nil
 }
@@ -381,14 +542,7 @@ func CloseIScoreDB(isDB *IScoreDB) {
 	isDB.management.Close()
 
 	// close account DBs
-	for _, aDB := range isDB.Account0 {
-		aDB.Close()
-	}
-	isDB.Account0 = nil
-	for _, aDB := range isDB.Account1 {
-		aDB.Close()
-	}
-	isDB.Account1 = nil
+	isDB.CloseAccountDB()
 
 	// close calculation result DB
 	isDB.calcResult.Close()
@@ -398,4 +552,7 @@ func CloseIScoreDB(isDB *IScoreDB) {
 
 	// close claim DB
 	isDB.claim.Close()
+
+	// close claim backup DB
+	isDB.claimBackup.Close()
 }

@@ -66,7 +66,7 @@ func TestDBCalculate_NewClaimFromBytes(t *testing.T) {
 	assert.Equal(t, bs, bsNew)
 }
 
-func TestDBCalculate_WriteCalculationResult(t *testing.T) {
+func TestDBCalculate_CalculationResult(t *testing.T) {
 	var calculationResult CalculationResult
 
 	ctx := initTest(1)
@@ -80,7 +80,6 @@ func TestDBCalculate_WriteCalculationResult(t *testing.T) {
 
 	WriteCalculationResult(crDB, calcBlockHeight, stats, stateHash)
 
-
 	bucket, err := crDB.GetBucket(db.PrefixCalcResult)
 	assert.Nil(t, err)
 	bs, err := bucket.Get(common.Uint64ToBytes(calcBlockHeight))
@@ -92,4 +91,9 @@ func TestDBCalculate_WriteCalculationResult(t *testing.T) {
 	assert.True(t, calculationResult.Success)
 	assert.Equal(t, 0, calculationResult.IScore.Cmp(&stats.TotalReward.Int))
 	assert.Equal(t, stateHash, calculationResult.StateHash)
+
+	DeleteCalculationResult(crDB, calcBlockHeight)
+
+	bs, _ = bucket.Get(common.Uint64ToBytes(calcBlockHeight))
+	assert.Nil(t, bs)
 }

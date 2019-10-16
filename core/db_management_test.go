@@ -56,7 +56,10 @@ func TestDBMNGDBInfo_NewDBInfo(t *testing.T) {
 	assert.Equal(t, string(db.GoLevelDBBackend), dbInfo.DBType)
 	assert.Equal(t, 1, dbInfo.DBCount)
 	assert.Equal(t, uint64(0), dbInfo.BlockHeight)
+	assert.Equal(t, uint64(0), dbInfo.PrevBlockHeight)
 	assert.False(t, dbInfo.QueryDBIsZero)
+	assert.NotNil(t, dbInfo.BlockHash)
+	assert.NotNil(t, dbInfo.PrevBlockHash)
 
 	bucket, _ := mngDB.GetBucket(db.PrefixManagement)
 	bsNew, err := bucket.Get(dbInfo.ID())
@@ -65,14 +68,29 @@ func TestDBMNGDBInfo_NewDBInfo(t *testing.T) {
 	bs, _ := dbInfo.Bytes()
 	assert.Equal(t, bs, bsNew)
 
+	// update DB Info
+	dbInfo.DBCount = 2
+	dbInfo.BlockHeight = 123
+	dbInfo.QueryDBIsZero = true
+	blockHash := []byte("blockHash")
+	copy(dbInfo.BlockHash, blockHash)
+	dbInfo.PrevBlockHeight = 1
+	blockHash = []byte("prevBlockHash")
+	copy(dbInfo.BlockHash, blockHash)
+	bs, _ = dbInfo.Bytes()
+	bucket.Set(dbInfo.ID(), bs)
+
 	// read from DB
 	dbInfo1, err := NewDBInfo(mngDB, testDBDir, string(db.GoLevelDBBackend), testDB, 10)
 	assert.Nil(t, err)
 	assert.Equal(t, filepath.Join(testDBDir, testDB), dbInfo1.DBRoot)
 	assert.Equal(t, string(db.GoLevelDBBackend), dbInfo1.DBType)
-	assert.Equal(t, 1, dbInfo1.DBCount)
-	assert.Equal(t, uint64(0), dbInfo1.BlockHeight)
-	assert.False(t, dbInfo1.QueryDBIsZero)
+	assert.Equal(t, dbInfo.DBCount, dbInfo1.DBCount)
+	assert.Equal(t, dbInfo.BlockHeight, dbInfo1.BlockHeight)
+	assert.Equal(t, dbInfo.QueryDBIsZero, dbInfo1.QueryDBIsZero)
+	assert.Equal(t, dbInfo.BlockHash, dbInfo1.BlockHash)
+	assert.Equal(t, dbInfo.PrevBlockHeight, dbInfo1.PrevBlockHeight)
+	assert.Equal(t, dbInfo.PrevBlockHash, dbInfo1.PrevBlockHash)
 }
 
 
