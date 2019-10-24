@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -71,9 +72,9 @@ type PreCommitData struct {
 	Claim
 }
 
-const blockHeightSize = 8
-const blockHashSize = 32
-const PreCommitIDSize = blockHeightSize + blockHashSize + common.AddressBytes
+const BlockHeightSize = 8
+const BlockHashSize = 32
+const PreCommitIDSize = BlockHeightSize + BlockHashSize + common.AddressBytes
 
 type PreCommit struct {
 	BlockHeight uint64
@@ -85,9 +86,9 @@ func (pc *PreCommit) ID() []byte {
 	id := make([]byte, PreCommitIDSize)
 
 	bh := common.Uint64ToBytes(pc.BlockHeight)
-	copy(id[blockHeightSize - len(bh):], bh)
-	copy(id[blockHeightSize:], pc.BlockHash)
-	copy(id[blockHeightSize + blockHashSize:], pc.Address.Bytes())
+	copy(id[BlockHeightSize-len(bh):], bh)
+	copy(id[BlockHeightSize:], pc.BlockHash)
+	copy(id[BlockHeightSize+BlockHashSize:], pc.Address.Bytes())
 
 	return id
 }
@@ -103,11 +104,13 @@ func (pc *PreCommit) Bytes() ([]byte, error) {
 }
 
 func (pc *PreCommit) String() string {
-	b, err := json.Marshal(pc)
-	if err != nil {
-		return "Can't covert Message to json"
-	}
-	return string(b)
+	return fmt.Sprintf("BlockHeight:%d, BlockHash:%s, Confirmed:%v, Address:%s, Data:{BlockHeight:%d, IScore:%s}",
+		pc.BlockHeight,
+		hex.EncodeToString(pc.BlockHash),
+		pc.Confirmed,
+		pc.Address.String(),
+		pc.Data.BlockHeight,
+		pc.Data.IScore.String())
 }
 
 func (pc *PreCommit) SetBytes(bs []byte) error {
@@ -122,7 +125,7 @@ func newPreCommit(blockHeight uint64, blockHash []byte, address common.Address) 
 	pc := new(PreCommit)
 
 	pc.BlockHeight = blockHeight
-	pc.BlockHash = make([]byte, blockHashSize)
+	pc.BlockHash = make([]byte, BlockHashSize)
 	copy(pc.BlockHash, blockHash)
 	pc.Address = address
 
@@ -185,7 +188,7 @@ func makeIteratorPrefix(blockHeight uint64, blockHash []byte) *util.Range {
 	blockHeightSize := int(unsafe.Sizeof(blockHeight))
 	bsSize := len(db.PrefixClaim) + blockHeightSize
 	if blockHash != nil {
-		bsSize += blockHashSize
+		bsSize += BlockHashSize
 	}
 
 	bh := common.Uint64ToBytes(blockHeight)
@@ -194,7 +197,7 @@ func makeIteratorPrefix(blockHeight uint64, blockHash []byte) *util.Range {
 	copy(bs, db.PrefixClaim)
 	copy(bs[len(db.PrefixClaim) + blockHeightSize - len(bh):], bh)
 	if blockHash != nil {
-		copy(bs[bsSize-blockHashSize:], blockHash)
+		copy(bs[bsSize-BlockHashSize:], blockHash)
 	}
 
 	return util.BytesPrefix(bs)
