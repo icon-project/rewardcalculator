@@ -233,7 +233,8 @@ func (ctx *Context) UpdatePRepCandidate(iissDB db.Database) {
 	iter, _ := iissDB.GetIterator()
 	prefix := util.BytesPrefix([]byte(db.PrefixIISSTX))
 	iter.New(prefix.Start, prefix.Limit)
-	for entries := 0; iter.Next(); entries++ {
+	entries := 0
+	for entries = 0; iter.Next(); entries++ {
 		err := tx.SetBytes(iter.Value())
 		if err != nil {
 			log.Printf("Failed to load IISS TX data")
@@ -285,6 +286,10 @@ func (ctx *Context) UpdatePRepCandidate(iissDB db.Database) {
 		}
 	}
 	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		log.Printf("There is error while IISS TX iteration for P-Rep update. %+v", err)
+	}
 }
 
 func (ctx *Context) Print() {

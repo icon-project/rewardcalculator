@@ -152,6 +152,10 @@ func loadIISSGovernanceVariable(iissDB db.Database, version uint64) ([]*IISSGove
 		gvList = append(gvList, gv)
 	}
 	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		log.Printf("There is error while read IISS GV iteration. %+v", err)
+	}
 
 	return gvList, nil
 }
@@ -205,15 +209,31 @@ func ReadIISSBP(iissDB db.Database) {
 	iter, _ := iissDB.GetIterator()
 	prefix := util.BytesPrefix([]byte(db.PrefixIISSBPInfo))
 	iter.New(prefix.Start, prefix.Limit)
-	for entries := 0; iter.Next(); entries++ {
+	var entries, startBH, miss uint64
+	for entries = 0; iter.Next(); entries++ {
 		err := bpInfo.SetBytes(iter.Value())
 		if err != nil {
 			log.Printf("Failed to load IISS Block Produce information.")
 			continue
 		}
 		bpInfo.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSBPInfo):])
+        if entries == 0 {
+            startBH = bpInfo.BlockHeight
+        }
+        if startBH + entries + miss != bpInfo.BlockHeight {
+            fmt.Printf("Miss BP block height %d\n", startBH + entries + miss)
+            miss++
+            for  ; startBH + entries + miss != bpInfo.BlockHeight; miss++ {
+                fmt.Printf("Miss BP block height %d\n", startBH + entries + miss)
+            }
+        }
 	}
+	log.Printf(">> BP total count %d, miss %d", entries, miss)
 	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		log.Printf("There is error while read IISS BP iteration. %+v", err)
+	}
 }
 
 const (
@@ -274,15 +294,21 @@ func ReadIISSTX(iissDB db.Database) {
 	iter, _ := iissDB.GetIterator()
 	prefix := util.BytesPrefix([]byte(db.PrefixIISSTX))
 	iter.New(prefix.Start, prefix.Limit)
-	for entries := 0; iter.Next(); entries++ {
+	entries := 0
+	for entries = 0; iter.Next(); entries++ {
 		err := tx.SetBytes(iter.Value())
 		if err != nil {
 			log.Printf("Failed to load IISS TX data")
 			continue
 		}
-		log.Printf("[IISSTX] TX : %s", tx.String())
+		//log.Printf("[IISSTX] TX : %s", tx.String())
 	}
+	log.Printf(">> TX total count %d", entries)
 	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		log.Printf("There is error while read IISS TX iteration. %+v", err)
+	}
 }
 
 func OpenIISSData(path string) db.Database {
@@ -325,7 +351,7 @@ func LoadIISSData(iissDB db.Database) (*IISSHeader, []*IISSGovernanceVariable, [
 	return header, gvList, pRepList
 }
 
-func findIISSData(dir string) []os.FileInfo {
+func findIISSData(dir string, prefix string) []os.FileInfo {
 	iissData := make([]os.FileInfo, 0)
 
 	files, err := ioutil.ReadDir(dir)
@@ -334,10 +360,30 @@ func findIISSData(dir string) []os.FileInfo {
 	}
 
 	for _, f := range files {
-		if f.IsDir() == true && strings.HasPrefix(f.Name(), "iiss_") == true {
+		if f.IsDir() == true {
+			if prefix != "" && strings.HasPrefix(f.Name(), prefix) != true {
+				continue
+			}
 			iissData = append(iissData, f)
 		}
 	}
 
 	return iissData
+}
+
+func cleanupIISSData(path string) {
+	const prefix = "finish_"
+	dir, name := filepath.Split(path)
+
+	// delete old backup data
+	for _, backup := range findIISSData(dir, prefix) {
+		newPath := filepath.Join(dir, backup.Name())
+		log.Printf("remove backup %s", newPath)
+		os.RemoveAll(newPath)
+	}
+
+	// backup data
+	newPath := filepath.Join(dir, prefix + name)
+	log.Printf("backup %s -> %s", path, newPath)
+	os.Rename(path, newPath)
 }

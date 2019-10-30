@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/big"
 	"path/filepath"
+	"sort"
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
@@ -183,11 +184,15 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 			oldGV++
 		}
 	}
+	sort.Slice(gvList, func(i, j int) bool {
+		return gvList[i].BlockHeight < gvList[j].BlockHeight
+	})
 
 	// finalize iterator
 	iter.Release()
 	err = iter.Error()
 	if err != nil {
+		log.Printf("There is error while load IISS GV iteration. %+v", err)
 		return gvList, err
 	}
 
@@ -303,6 +308,7 @@ func LoadPRep(dbi db.Database) ([]*PRep, error) {
 	iter.Release()
 	err = iter.Error()
 	if err != nil {
+		log.Printf("There is error while load P-Rep iteration. %+v", err)
 		return nil, err
 	}
 
@@ -371,6 +377,7 @@ func LoadPRepCandidate(dbi db.Database) (map[common.Address]*PRepCandidate, erro
 	iter.Release()
 	err = iter.Error()
 	if err != nil {
+		log.Printf("There is error while load P-Rep candidate iteration. %+v", err)
 		return nil, err
 	}
 

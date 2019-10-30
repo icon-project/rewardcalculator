@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/json"
 	"log"
-	"os"
 	"path/filepath"
 
 	"github.com/icon-project/rewardcalculator/common/db"
@@ -151,7 +150,7 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 }
 
 func reloadIISSData(ctx *Context, dir string) {
-	for _, iissData := range findIISSData(dir) {
+	for _, iissData := range findIISSData(dir, "iiss_") {
 		var req CalculateRequest
 		req.Path = filepath.Join(dir, iissData.Name())
 		req.BlockHeight = 0
@@ -164,8 +163,8 @@ func reloadIISSData(ctx *Context, dir string) {
 			break
 		} else {
 			log.Printf("Succeeded to reload IISS Data. %s", req.Path)
-			// remove IISS data DB
-			os.RemoveAll(req.Path)
+			// cleanup IISS data DB
+			cleanupIISSData(req.Path)
 		}
 	}
 }
