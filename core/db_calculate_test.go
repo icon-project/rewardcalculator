@@ -70,7 +70,7 @@ func TestDBCalculate_WriteCalculationResult(t *testing.T) {
 	var calculationResult CalculationResult
 
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 	crDB := ctx.DB.getCalculateResultDB()
 
 	stats := new(Statistics)

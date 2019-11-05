@@ -15,7 +15,7 @@ import (
 
 func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	// set GV
 	gv := new(GovernanceVariable)
@@ -113,7 +113,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	// set GV
 	gv := new(GovernanceVariable)
@@ -188,7 +188,7 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 	)
 
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	// set GV
 	gv := new(GovernanceVariable)
@@ -347,7 +347,7 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	)
 
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	prepA := *common.NewAddressFromString("hxaa")
 	prepB := *common.NewAddressFromString("hxbb")
@@ -508,7 +508,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 		addr2DelegationToPRepB = 30 + MinDelegation
 	)
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	// set GV
 	gv := new(GovernanceVariable)
@@ -631,7 +631,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 
 func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	iissDBDir := testDBDir + "/iiss"
 	req := CalculateRequest{Path: iissDBDir, BlockHeight:100}
@@ -684,7 +684,7 @@ func newIScoreAccount(addr common.Address, blockHeight uint64, reward common.Hex
 
 func TestMsgQueryCalc_DoQueryCalculateStatus(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 	var resp QueryCalculateStatusResponse
 
 	DoQueryCalculateStatus(ctx, &resp)
@@ -710,7 +710,7 @@ func TestMsgQueryCalc_DoQueryCalculateStatus(t *testing.T) {
 
 func TestMsgQueryCalc_DoQueryCalculateResult(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 	var resp QueryCalculateResultResponse
 	var blockHeight uint64 = 1000
 	var iScore uint64 = 10

@@ -18,7 +18,7 @@ func TestMsg_DoQuery(t *testing.T) {
 	commit := CommitClaim{Success:true, BlockHeight:claim.BlockHeight, BlockHash:claim.BlockHash, Address:claim.Address}
 
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	// write content to Query DB
 	queryDB := ctx.DB.getQueryDB(dbContent0.Address)

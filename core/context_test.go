@@ -18,21 +18,21 @@ func initTest(dbCount int) *Context{
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(testDir)
 
 	ctx, _ := NewContext(testDir, string(db.GoLevelDBBackend), "test", dbCount)
 
 	return ctx
 }
 
-func finalizeTest() {
-	defer os.RemoveAll(testDir)
+func finalizeTest(ctx *Context) {
+	CloseIScoreDB(ctx.DB)
+	os.RemoveAll(testDir)
 }
 
 func TestContext_NewContext(t *testing.T) {
 	const dbCount int = 16
 	ctx := initTest(dbCount)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 	assert.NotNil(t, ctx)
 
 	assert.NotNil(t, ctx.DB)
@@ -57,7 +57,7 @@ func TestContext_UpdateGovernanceVariable(t *testing.T) {
 		ctxBlockHeight uint64 = 100
 	)
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	bucket, _ := ctx.DB.management.GetBucket(db.PrefixGovernanceVariable)
 
@@ -128,7 +128,7 @@ func TestContext_UpdatePRep(t *testing.T) {
 		ctxBlockHeight uint64 = 100
 	)
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRep)
 
@@ -201,7 +201,7 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 		NotUnRegBH uint64 = 0
 	)
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	// write IISS TX
 	iissDBDir := testDBDir + "/iiss"
@@ -340,7 +340,7 @@ func TestContext_UpdatePRepCandidate(t *testing.T) {
 
 func TestContext_GetQueryDBList(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	ctx.DB.info.QueryDBIsZero = true
 	assert.Equal(t, ctx.DB.Account0, ctx.DB.getQueryDBList())
@@ -350,7 +350,7 @@ func TestContext_GetQueryDBList(t *testing.T) {
 
 func TestContext_GetCalcDBList(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	ctx.DB.info.QueryDBIsZero = true
 	assert.Equal(t, ctx.DB.Account1, ctx.DB.GetCalcDBList())
@@ -360,28 +360,28 @@ func TestContext_GetCalcDBList(t *testing.T) {
 
 func TestContext_GetPreCommitDB(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	assert.Equal(t, ctx.DB.preCommit, ctx.DB.getPreCommitDB())
 }
 
 func TestContext_GetClaimDB(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	assert.Equal(t, ctx.DB.claim, ctx.DB.getClaimDB())
 }
 
 func TestContext_GetCalculateResultDB(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	assert.Equal(t, ctx.DB.calcResult, ctx.DB.getCalculateResultDB())
 }
 
 func TestContext_ToggleAccountDB(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	original := ctx.DB.info.QueryDBIsZero
 
@@ -394,7 +394,7 @@ func TestContext_ToggleAccountDB(t *testing.T) {
 func TestContext_ResetCalcDB(t *testing.T) {
 	dbCount := 4
 	ctx := initTest(dbCount)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	qDBList := ctx.DB.getQueryDBList()
 	cDBList := ctx.DB.GetCalcDBList()
@@ -408,7 +408,7 @@ func TestContext_ResetCalcDB(t *testing.T) {
 
 func TestContext_WriteToDB(t *testing.T) {
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	original, _ := ctx.DB.info.Bytes()
 
@@ -426,7 +426,7 @@ func TestContext_GetGVByBlockHeight(t *testing.T) {
 		gvBH1 uint64 = 20
 	)
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	// Insert initial GV
 	gv := new(GovernanceVariable)
