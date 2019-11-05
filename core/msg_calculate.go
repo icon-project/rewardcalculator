@@ -263,7 +263,7 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, revision ui
 	iter.Release()
 	err := iter.Error()
 	if err != nil {
-		log.Printf("There is error while iteration. %+v", err)
+		log.Printf("There is error while calculate iteration. %+v", err)
 	}
 
 	// get stateHash if there is update
@@ -298,6 +298,15 @@ func checkToggle(ctx *Context, blockHeight uint64) bool {
 			qBH = ia.BlockHeight
 			addr.SetBytes(key)
 			findQueryEntry = true
+			break
+		}
+		iter.Release()
+		err := iter.Error()
+		if err != nil {
+			log.Printf("There is error while iterate query DB. %+v", err)
+		}
+
+		if findQueryEntry {
 			break
 		}
 	}
@@ -375,7 +384,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 
 	// remove IISS data DB
 	if err == nil {
-		os.RemoveAll(req.Path)
+		cleanupIISSData(req.Path)
 	} else {
 		os.Rename(req.Path, req.Path + "_failed")
 		success = false
@@ -589,7 +598,8 @@ func calculateIISSTX(ctx *Context, iissDB db.Database, blockHeight uint64, verbo
 			continue
 		}
 		if verbose {
-			log.Printf("[IISSTX] TX : %s", tx.String())
+			tx.Index = common.BytesToUint64(iter.Key()[len(db.PrefixIISSTX):])
+			log.Printf("[IISSTX] TX %d : %s", entries, tx.String())
 		}
 		switch tx.DataType {
 		case TXDataTypeDelegate:
@@ -650,6 +660,10 @@ func calculateIISSTX(ctx *Context, iissDB db.Database, blockHeight uint64, verbo
 		}
 	}
 	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		log.Printf("There is error while calculate IISS TX iteration. %+v", err)
+	}
 
 	// get stateHash
 	h.Read(stateHash)
@@ -681,7 +695,7 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 		}
 		bp.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSBPInfo):])
 		if verbose {
-			log.Printf("[IISS BP] %s", bp.String())
+			log.Printf("[IISS BP] %d: %s", entries, bp.String())
 		}
 
 		// get Governance variable
@@ -712,6 +726,10 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 		}
 	}
 	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		log.Printf("There is error while calculate IISS BP iteration. %+v", err)
+	}
 
 	totalReward := new(common.HexInt)
 	iaSlice := make([]*IScoreAccount, 0)

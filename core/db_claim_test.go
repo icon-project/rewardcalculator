@@ -104,7 +104,7 @@ func TestDBPreCommit_manage(t *testing.T) {
 	iScore := uint64(100)
 
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	pcDB := ctx.DB.getPreCommitDB()
 

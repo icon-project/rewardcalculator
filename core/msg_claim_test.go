@@ -37,7 +37,7 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 		ClaimMessage{BlockHeight: 102, BlockHash: []byte("1-1"), Address: *address}
 
 	ctx := initTest(1)
-	defer finalizeTest()
+	defer finalizeTest(ctx)
 
 	// write content to Query DB
 	queryDB := ctx.DB.getQueryDB(dbContent0.Address)

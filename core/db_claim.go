@@ -221,9 +221,9 @@ func flushPreCommit(pcDB db.Database, blockHeight uint64, blockHash []byte) erro
 		keys = append(keys, key)
 	}
 	iter.Release()
-
 	err = iter.Error()
 	if err != nil {
+		log.Printf("There is error while flush preCommit. %v", err)
 		return err
 	}
 
@@ -278,6 +278,7 @@ func writePreCommitToClaimDB(pcDB db.Database, cDB db.Database, blockHeight uint
 	}
 	iter.Release()
 	if err != nil {
+		log.Printf("There is error while write preCommit to claim. %v", err)
 		return err
 	}
 
