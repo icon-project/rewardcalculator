@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/binary"
-	"fmt"
 	"log"
 	"os"
 	"sort"
@@ -755,58 +754,7 @@ func TestMsgQueryCalc_DoQueryCalculateResult(t *testing.T) {
 	assert.Equal(t, stateHash, resp.StateHash)
 }
 
-var (
-	shutdown chan struct{}
-	done chan int
-)
-
-func closeShutdown() {
-	if shutdown != nil {
-		log.Printf("close shutdown")
-		close(shutdown)
-		shutdown = nil
-	} else {
-		log.Printf("Can't close shutdown")
-	}
-}
-
-func TestChannel(t *testing.T) {
-	const n = 5
-
-	shutdown = make(chan struct{})
-	done = make(chan int)
-
-	go closeShutdown()
-
-	// Start up the goroutines...
-	for i := 0; i < n; i++ {
-		i := i
-		go func(c chan struct{}) {
-			quit := false
-			count := 0
-			fmt.Println("routine", i, "waiting to exit...")
-			for {
-				select {
-				case <-c:
-					fmt.Println("routine", i, "loop", count, "times")
-					quit = true
-					done <- i
-				default:
-				}
-
-				if quit {
-					break
-				} else {
-					count++
-				}
-			}
-		}(shutdown)
-	}
-
-	//time.Sleep(2 * time.Second)
-
-	// Close the channel. All goroutines will immediately "unblock".
-	for i := 0; i < n; i++ {
-		fmt.Println("routine", <-done, "has exited!")
-	}
+func Test_isCalcCancelByRollback(t *testing.T) {
+	assert.True(t, isCalcCancelByRollback(&CalcCancelByRollbackError{}))
+	assert.False(t, isCalcCancelByRollback(&os.PathError{}))
 }

@@ -90,8 +90,7 @@ func DoRollBack(ctx *Context, req *RollBackRequest) error {
 func checkRollback(ctx *Context, rollback uint64) (bool, error) {
 	idb := ctx.DB
 	if idb.info.PrevBlockHeight >= rollback {
-		err := fmt.Errorf("too low block height %d >= %d", idb.info.PrevBlockHeight, rollback)
-		return false, err
+		return false, &RollbackLowBlockHeightError{idb.info.PrevBlockHeight, rollback}
 	}
 	return true, nil
 }
@@ -129,4 +128,13 @@ func NewRollback() *Rollback {
 	rb := new(Rollback)
 	rb.newChannel()
 	return rb
+}
+
+type RollbackLowBlockHeightError struct {
+	PrevCalcBlockHeight uint64
+	BlockHeight uint64
+}
+
+func (e *RollbackLowBlockHeightError) Error() string {
+	return fmt.Sprintf("too low block height %d >= %d", e.PrevCalcBlockHeight, e.BlockHeight)
 }

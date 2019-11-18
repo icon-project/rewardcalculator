@@ -397,8 +397,14 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 		cleanupIISSData(req.Path)
 	} else {
 		log.Printf("Failed to calculate. %v", err)
-		os.Rename(req.Path, req.Path + "_failed")
 		success = false
+		// if canceled by ROLLBACK, do not send CALCULATE_DONE
+		if isCalcCancelByRollback(err) {
+			os.RemoveAll(req.Path)
+			return nil
+		} else {
+			os.Rename(req.Path, req.Path+"_failed")
+		}
 	}
 
 	// send CALCULATE_DONE
@@ -526,8 +532,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 	wait.Wait()
 
 	if quit != ctx.Rollback.GetChannel() {
-		err := fmt.Errorf("CALCULATE(%d) was canceled by ROLLBACK", blockHeight)
-		return err, blockHeight, nil, nil
+		return &CalcCancelByRollbackError{blockHeight}, blockHeight, nil, nil
 	}
 
 	// update Statistics
@@ -557,7 +562,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 	stats.Increase("TotalReward", *reward)
 	h.Write(hashValue)
 
-	// Update P-Rep reward
+	// Update P-Rep delegated reward
 	newAccount, reward, hashValue = calculatePRepReward(ctx, blockHeight)
 	stats.Increase("Accounts", newAccount)
 	stats.Increase("Beta2", *reward)
@@ -1072,4 +1077,17 @@ func DoQueryCalculateResult(ctx *Context, blockHeight uint64, resp *QueryCalcula
 		// No calculation result
 		resp.Status = InvalidBH
 	}
+}
+
+type CalcCancelByRollbackError struct {
+	BlockHeight uint64
+}
+
+func (e *CalcCancelByRollbackError) Error() string {
+	return fmt.Sprintf("CALCULATE(%d) was canceled by ROLLBACK", e.BlockHeight)
+}
+
+func isCalcCancelByRollback(err error) bool {
+	_, ok := err.(*CalcCancelByRollbackError)
+	return ok
 }
