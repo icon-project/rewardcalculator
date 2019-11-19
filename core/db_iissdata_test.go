@@ -67,7 +67,7 @@ func TestDBIISSHeader_loadIISSHeader(t *testing.T) {
 	// load IISS header
 	headerNew, err := loadIISSHeader(iissDB)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, header.Version, headerNew.Version)
 	assert.Equal(t, header.BlockHeight, headerNew.BlockHeight)
 	bs, _ := header.Bytes()
@@ -96,7 +96,7 @@ func TestDBIISSHeader_BackwardCompatibility(t *testing.T) {
 	headerV1.BlockHeight = 2345
 
 	bs, err := headerV1.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	var ih IISSHeader
 	ih.SetBytes(bs)
@@ -177,7 +177,7 @@ func TestDBIISSGovernanceVariable_loadIISSGovernanceVariable(t *testing.T) {
 	gvListNew, err := loadIISSGovernanceVariable(iissDB, IISSDataVersion)
 
 	// check
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, len(gvList), len(gvListNew))
 	for i := range gvListNew {
 		assert.Equal(t, gvList[i].BlockHeight, gvListNew[i].BlockHeight)
@@ -212,7 +212,7 @@ func TestDBIISSGovernanceVariable_BackwardCompatibility(t *testing.T) {
 	gvV1.RewardRep = 456
 
 	bs, err := gvV1.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	var gv IISSGovernanceVariable
 	gv.SetBytes(bs, 1)

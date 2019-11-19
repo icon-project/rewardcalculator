@@ -58,7 +58,7 @@ func TestDBClaim_NewClaimFromBytes(t *testing.T) {
 
 	newClaim, err := NewClaimFromBytes(claim.Bytes())
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, 0, claim.Data.IScore.Cmp(&newClaim.Data.IScore.Int))
 	assert.Equal(t, claim.Data.BlockHeight, newClaim.Data.BlockHeight)
@@ -112,11 +112,11 @@ func TestDBPreCommit_BytesAndSetBytes(t *testing.T) {
 	var pcNew PreCommit
 
 	bs, err := pc.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	pcNew.SetBytes(bs)
 	bsNew, err := pcNew.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.True(t, pc.Data.equal(&pcNew.Data))
 	assert.Equal(t, pc.Confirmed, pcNew.Confirmed)
@@ -165,16 +165,16 @@ func TestDBPreCommit_write_delete(t *testing.T) {
 	assert.False(t, pc.query(pcDB))
 
 	// write to preCommit DB
-	assert.Nil(t, pc.write(pcDB, nil))
+	assert.NoError(t, pc.write(pcDB, nil))
 	assert.True(t, pc.query(pcDB))
 
 	iScore := common.NewHexIntFromUint64(uint64(100))
 
-	assert.Nil(t, pc.write(pcDB, iScore))
+	assert.NoError(t, pc.write(pcDB, iScore))
 	assert.True(t, pc.query(pcDB))
 
 	// delete from preCommit DB
-	assert.Nil(t, pc.delete(pcDB))
+	assert.NoError(t, pc.delete(pcDB))
 	assert.False(t, pc.query(pcDB))
 }
 
@@ -186,25 +186,25 @@ func TestDBPreCommit_commit_revert(t *testing.T) {
 	pcDB := ctx.DB.getPreCommitDB()
 
 	// write to preCommit DB
-	assert.Nil(t, pc.write(pcDB, nil))
+	assert.NoError(t, pc.write(pcDB, nil))
 	assert.True(t, pc.query(pcDB))
 
 	// revert unconfirmed entry from preCommit DB
-	assert.Nil(t, pc.revert(pcDB))
+	assert.NoError(t, pc.revert(pcDB))
 	assert.False(t, pc.query(pcDB))
 
 	// write to preCommit DB
-	assert.Nil(t, pc.write(pcDB, nil))
+	assert.NoError(t, pc.write(pcDB, nil))
 	assert.True(t, pc.query(pcDB))
 
 	// commit entry
 	assert.False(t, pc.Confirmed)
-	assert.Nil(t, pc.commit(pcDB))
+	assert.NoError(t, pc.commit(pcDB))
 	assert.True(t, pc.query(pcDB))
 	assert.True(t, pc.Confirmed)
 
 	// revert confirmed entry from preCommit DB
-	assert.Nil(t, pc.revert(pcDB))
+	assert.NoError(t, pc.revert(pcDB))
 	assert.True(t, pc.query(pcDB))
 }
 
@@ -230,28 +230,28 @@ func TestDBPreCommit_manage(t *testing.T) {
 		assert.False(t, pc.query(pcDB))
 
 		// write
-		assert.Nil(t, pc.write(pcDB, common.NewHexIntFromUint64(iScore)))
+		assert.NoError(t, pc.write(pcDB, common.NewHexIntFromUint64(iScore)))
 		assert.Equal(t, iScore, pc.Data.IScore.Uint64())
 		assert.False(t, pc.Confirmed)
 
 		// delete
-		assert.Nil(t, pc.delete(pcDB))
+		assert.NoError(t, pc.delete(pcDB))
 		assert.False(t, pc.query(pcDB))
 
 		// rewrite to test commit
-		assert.Nil(t, pc.write(pcDB, common.NewHexIntFromUint64(iScore)))
+		assert.NoError(t, pc.write(pcDB, common.NewHexIntFromUint64(iScore)))
 		assert.Equal(t, iScore, pc.Data.IScore.Uint64())
 
 		// commit and query confirmed preCommit
 		if i != len(tests) - 1 {
-			assert.Nil(t, pc.commit(pcDB))
+			assert.NoError(t, pc.commit(pcDB))
 			assert.True(t, pc.Confirmed)
 			pc2 := newPreCommit(tt.blockHeight, tt.blockHash, *tt.address)
 			assert.True(t, pc2.query(pcDB))
 			assert.Equal(t, pc.Data.IScore.Uint64(), pc2.Data.IScore.Uint64())
 
 			// revert - confirmed precommit
-			assert.Nil(t, pc.revert(pcDB))
+			assert.NoError(t, pc.revert(pcDB))
 			// can query
 			assert.True(t, pc.query(pcDB))
 		} else {
@@ -275,12 +275,12 @@ func TestDBPreCommit_manage(t *testing.T) {
 
 			// revert
 			pc = newPreCommit(tt.blockHeight, tt.blockHash, *tt.address)
-			assert.Nil(t, pc.revert(pcDB))
+			assert.NoError(t, pc.revert(pcDB))
 			// can't query
 			assert.False(t, pc.query(pcDB))
 
 			// rewrite to writePreCommitToClaimDB()
-			assert.Nil(t, pc.write(pcDB, common.NewHexIntFromUint64(iScore)))
+			assert.NoError(t, pc.write(pcDB, common.NewHexIntFromUint64(iScore)))
 			assert.Equal(t, iScore, pc.Data.IScore.Uint64())
 			// can query
 			assert.True(t, pc.query(pcDB))
@@ -289,7 +289,7 @@ func TestDBPreCommit_manage(t *testing.T) {
 
 	// write to claim DB with commit
 	cDB := ctx.DB.getClaimDB()
-	assert.Nil(t, writePreCommitToClaimDB(pcDB, cDB, ctx.DB.getClaimBackupDB(),
+	assert.NoError(t, writePreCommitToClaimDB(pcDB, cDB, ctx.DB.getClaimBackupDB(),
 		tests[0].blockHeight, tests[0].blockHash))
 
 	// can't query commited precommit data
@@ -389,6 +389,63 @@ func makeBackupClaimData(bucket db.Bucket) []backupClaimData {
 	return backupClaim
 }
 
+func Test_writeClaimBackupInfo(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest(ctx)
+
+	const (
+		blockHeight uint64 = 100
+	)
+
+	cbDB := ctx.DB.getClaimBackupDB()
+
+	err := writeClaimBackupInfo(cbDB, blockHeight)
+	assert.NoError(t, err)
+
+	var cbInfo ClaimBackupInfo
+	cbBucket, _ := cbDB.GetBucket(db.PrefixManagement)
+	bs, err := cbBucket.Get(cbInfo.ID())
+	assert.NotNil(t, bs)
+	assert.NoError(t, err)
+	err = cbInfo.SetBytes(bs)
+	assert.NoError(t, err)
+	assert.Equal(t, blockHeight, cbInfo.FirstBlockHeight)
+	assert.Equal(t, blockHeight, cbInfo.LastBlockHeight)
+
+	// write invalid blockHeight
+	err = writeClaimBackupInfo(cbDB, blockHeight - 10)
+	assert.NoError(t, err)
+	bs, err = cbBucket.Get(cbInfo.ID())
+	assert.NotNil(t, bs)
+	assert.NoError(t, err)
+	err = cbInfo.SetBytes(bs)
+	assert.NoError(t, err)
+	assert.Equal(t, blockHeight, cbInfo.FirstBlockHeight)
+	assert.Equal(t, blockHeight, cbInfo.LastBlockHeight)
+
+	// write valid blockHeight
+	err = writeClaimBackupInfo(cbDB, blockHeight + 1)
+	assert.NoError(t, err)
+	bs, err = cbBucket.Get(cbInfo.ID())
+	assert.NotNil(t, bs)
+	assert.NoError(t, err)
+	err = cbInfo.SetBytes(bs)
+	assert.NoError(t, err)
+	assert.Equal(t, blockHeight, cbInfo.FirstBlockHeight)
+	assert.Equal(t, blockHeight + 1, cbInfo.LastBlockHeight)
+
+	// write valid blockHeight
+	err = writeClaimBackupInfo(cbDB, blockHeight + ClaimBackupPeriod + 1)
+	assert.NoError(t, err)
+	bs, err = cbBucket.Get(cbInfo.ID())
+	assert.NotNil(t, bs)
+	assert.NoError(t, err)
+	err = cbInfo.SetBytes(bs)
+	assert.NoError(t, err)
+	assert.Equal(t, blockHeight + 1, cbInfo.FirstBlockHeight)
+	assert.Equal(t, blockHeight + ClaimBackupPeriod + 1, cbInfo.LastBlockHeight)
+}
+
 func Test_garbageCollectClaimBackupDB(t *testing.T) {
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
@@ -404,13 +461,13 @@ func Test_garbageCollectClaimBackupDB(t *testing.T) {
 
 	// check result
 	bs, err := bucket.Get(backupClaim[0].claim.BackupID(backupClaim[0].blockHeight))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Nil(t, bs)
 	bs, err = bucket.Get(backupClaim[1].claim.BackupID(backupClaim[1].blockHeight))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, bs)
 	bs, err = bucket.Get(backupClaim[2].claim.BackupID(backupClaim[2].blockHeight))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, bs)
 
 	// do garbage collection
@@ -418,10 +475,10 @@ func Test_garbageCollectClaimBackupDB(t *testing.T) {
 
 	// check result
 	bs, err = bucket.Get(backupClaim[1].claim.BackupID(backupClaim[1].blockHeight))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Nil(t, bs)
 	bs, err = bucket.Get(backupClaim[2].claim.BackupID(backupClaim[2].blockHeight))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Nil(t, bs)
 }
 
@@ -493,7 +550,7 @@ func TestDBClaim_rollbackClaimDB(t *testing.T) {
 	// Rollback
 	for i := uint64(11) ; i > 0; i-- {
 		err := _rollbackClaimDB(cbDB, cBucket, i)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		checkRollbackResult(t, cbBucket, cBucket, backupClaim, i)
 	}
 }

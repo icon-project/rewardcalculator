@@ -74,7 +74,6 @@ func DoRollBack(ctx *Context, req *RollBackRequest) error {
 	if err != nil {
 		log.Printf("Failed to Rollback claim DB. %+v", err)
 		return err
-	} else {
 	}
 
 	if checkAccountDBRollback(ctx, blockHeight) {
@@ -84,6 +83,9 @@ func DoRollBack(ctx *Context, req *RollBackRequest) error {
 			return err
 		}
 	}
+
+	// rollback GV and Main/Sub P-Rep list
+	ctx.RollbackManagementDB(blockHeight)
 
 	return nil
 }
@@ -133,10 +135,10 @@ func NewRollback() *Rollback {
 }
 
 type RollbackLowBlockHeightError struct {
-	PrevCalcBlockHeight uint64
+	Comparison  uint64
 	BlockHeight uint64
 }
 
 func (e *RollbackLowBlockHeightError) Error() string {
-	return fmt.Sprintf("too low block height %d >= %d", e.PrevCalcBlockHeight, e.BlockHeight)
+	return fmt.Sprintf("too low block height %d >= %d", e.Comparison, e.BlockHeight)
 }

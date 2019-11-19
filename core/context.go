@@ -358,7 +358,7 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 	deleteOld := false
 	deleteIndex := -1
 	for i := gvLen - 1; i >= 0 ; i-- {
-		if ctx.GV[i].BlockHeight < ctx.DB.getCalcDoneBH() {
+		if ctx.GV[i].BlockHeight <= ctx.DB.getPrevCalcDoneBH() {
 			if deleteOld {
 				// delete from management DB
 				bucket.Delete(ctx.GV[i].ID())
@@ -393,7 +393,7 @@ func (ctx *Context) UpdatePRep(prepList []*PRep) {
 	deleteOld := false
 	deleteIndex := -1
 	for i := prepLen - 1; i >= 0 ; i-- {
-		if ctx.PRep[i].BlockHeight < ctx.DB.getCalcDoneBH() {
+		if ctx.PRep[i].BlockHeight <= ctx.DB.getPrevCalcDoneBH() {
 			if deleteOld {
 				// delete from management DB
 				bucket.Delete(ctx.PRep[i].ID())
@@ -475,6 +475,32 @@ func (ctx *Context) UpdatePRepCandidate(iissDB db.Database) {
 	}
 }
 
+func (ctx *Context) RollbackManagementDB(blockHeight uint64) {
+	// Rollback Governance Variable
+	bucket, _ := ctx.DB.management.GetBucket(db.PrefixGovernanceVariable)
+	gvLen := len(ctx.GV)
+	for i := gvLen - 1; i >= 0 ; i-- {
+		if ctx.GV[i].BlockHeight > blockHeight {
+			// delete from management DB
+			bucket.Delete(ctx.GV[i].ID())
+			// delete from memory
+			ctx.GV = ctx.GV[:i]
+		}
+	}
+
+	// Rollback Main/Sub P-Rep list
+	bucket, _ = ctx.DB.management.GetBucket(db.PrefixPRep)
+	prepLen := len(ctx.PRep)
+	for i := prepLen - 1; i >= 0 ; i-- {
+		if ctx.PRep[i].BlockHeight > blockHeight {
+			// delete from management DB
+			bucket.Delete(ctx.PRep[i].ID())
+			// delete from memory
+			ctx.PRep = ctx.PRep[:i]
+		}
+	}
+}
+
 func (ctx *Context) Print() {
 	log.Printf("============================================================================")
 	log.Printf("Print context values\n")
@@ -510,7 +536,7 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	}
 
 	// read Governance variable
-	ctx.GV, err = LoadGovernanceVariable(mngDB, ctx.DB.getCalcDoneBH())
+	ctx.GV, err = LoadGovernanceVariable(mngDB)
 	if err != nil {
 		log.Printf("Failed to load GV structure\n")
 		return nil, err

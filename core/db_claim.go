@@ -19,7 +19,7 @@ const (
 	PreCommitIDSize = BlockHeightSize + BlockHashSize + common.AddressBytes
 
 	ClaimBackupIDSize = BlockHeightSize + common.AddressBytes
-	ClaimBackupPeriod = 43200
+	ClaimBackupPeriod = 43120 * 2 - 1
 )
 
 type ClaimData struct {
@@ -285,9 +285,9 @@ func flushPreCommit(pcDB db.Database, blockHeight uint64, blockHash []byte) erro
 	return nil
 }
 
-func writePreCommitToClaimDB(pcDB db.Database, cDB db.Database, cbDB db.Database,
+func writePreCommitToClaimDB(preCommitDB db.Database, claimDB db.Database, claimBackupDB db.Database,
 	blockHeight uint64, blockHash []byte) error {
-	iter, err := pcDB.GetIterator()
+	iter, err := preCommitDB.GetIterator()
 	if err != nil {
 		return err
 	}
@@ -295,8 +295,8 @@ func writePreCommitToClaimDB(pcDB db.Database, cDB db.Database, cbDB db.Database
 	// iterate & get values to write
 	var pc PreCommit
 	var claim Claim
-	bucket, _ := cDB.GetBucket(db.PrefixIScore)
-	cbBucket, _ := cbDB.GetBucket(db.PrefixIScore)
+	bucket, _ := claimDB.GetBucket(db.PrefixIScore)
+	cbBucket, _ := claimBackupDB.GetBucket(db.PrefixIScore)
 
 	prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight, blockHash, BlockHashSize)
 	iter.New(prefix.Start, prefix.Limit)
@@ -347,11 +347,28 @@ func writePreCommitToClaimDB(pcDB db.Database, cDB db.Database, cbDB db.Database
 		return err
 	}
 
-	// read management Info.
+	err = writeClaimBackupInfo(claimBackupDB, blockHeight)
+	if err != nil {
+		return err
+	}
+
+	// flush precommit with block height
+	return flushPreCommit(preCommitDB, blockHeight, nil)
+}
+
+func writeClaimBackupInfo(claimBackupDB db.Database, blockHeight uint64) error {
 	var cbInfo ClaimBackupInfo
-	cbBucket, _ = cbDB.GetBucket(db.PrefixManagement)
-	bs, _ := cbBucket.Get(cbInfo.ID())
-	cbInfo.SetBytes(bs)
+	cbBucket, _ := claimBackupDB.GetBucket(db.PrefixManagement)
+	bs, err := cbBucket.Get(cbInfo.ID())
+	if err != nil {
+		return err
+	}
+	if bs != nil {
+		err = cbInfo.SetBytes(bs)
+		if err != nil {
+			return err
+		}
+	}
 	if cbInfo.FirstBlockHeight == 0 {
 		cbInfo.FirstBlockHeight = blockHeight
 	}
@@ -360,23 +377,24 @@ func writePreCommitToClaimDB(pcDB db.Database, cDB db.Database, cbDB db.Database
 	}
 
 	// do garbage collection of claim backup DB
-	if blockHeight > ClaimBackupPeriod + 1 {
-		garbageBlock := blockHeight - 1 - ClaimBackupPeriod
+	if blockHeight > ClaimBackupPeriod + cbInfo.FirstBlockHeight {
+		garbageBlock := blockHeight - ClaimBackupPeriod - 1
 
-		err = garbageCollectClaimBackupDB(cbDB, cbInfo.FirstBlockHeight, garbageBlock)
+		err = garbageCollectClaimBackupDB(claimBackupDB, cbInfo.FirstBlockHeight, garbageBlock)
 		if err != nil {
 			return err
 		}
 		// set first block height
-		cbInfo.FirstBlockHeight = garbageBlock
+		if cbInfo.FirstBlockHeight < garbageBlock + 1 {
+			cbInfo.FirstBlockHeight = garbageBlock + 1
+		}
 	}
 
 	// write management Info. to claim backup DB
-	cbInfo.LastBlockHeight = blockHeight
-	cbBucket.Set(cbInfo.ID(), cbInfo.Bytes())
-
-	// flush precommit with block height
-	return flushPreCommit(pcDB, blockHeight, nil)
+	if cbInfo.LastBlockHeight < blockHeight {
+		cbInfo.LastBlockHeight = blockHeight
+	}
+	return cbBucket.Set(cbInfo.ID(), cbInfo.Bytes())
 }
 
 func garbageCollectClaimBackupDB(cbDB db.Database, from uint64, to uint64) error {
@@ -418,10 +436,8 @@ func garbageCollectClaimBackupDB(cbDB db.Database, from uint64, to uint64) error
 }
 
 func checkClaimDBRollback(cbInfo *ClaimBackupInfo, rollback uint64) (bool, error) {
-	var err error
 	if cbInfo.FirstBlockHeight > rollback {
-		err = fmt.Errorf("too low block height %d > %d", cbInfo.FirstBlockHeight, rollback)
-		return false, err
+		return false, &RollbackLowBlockHeightError{ cbInfo.FirstBlockHeight, rollback}
 	}
 
 	if cbInfo.LastBlockHeight <= rollback {

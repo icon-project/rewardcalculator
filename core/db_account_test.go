@@ -70,7 +70,7 @@ func TestDBAccount_NewIScoreAccountFromBytes(t *testing.T) {
 
 	iaNew, err := NewIScoreAccountFromBytes(ia.Bytes())
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, 0, ia.IScore.Cmp(&iaNew.IScore.Int))
 	assert.Equal(t, ia.BlockHeight, iaNew.BlockHeight)
