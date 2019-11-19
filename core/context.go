@@ -125,7 +125,6 @@ func (idb *IScoreDB) getCalculateResultDB() db.Database {
 	return idb.calcResult
 }
 
-
 func (idb *IScoreDB) resetAccountDB(blockHeight uint64) error {
 	idb.accountLock.Lock()
 	defer idb.accountLock.Unlock()
@@ -182,43 +181,60 @@ func (idb *IScoreDB) resetAccountDB(blockHeight uint64) error {
 	return nil
 }
 
-func (idb *IScoreDB) setCalculateBlockHeight(blockHeight uint64) {
-	idb.info.CalcBlockHeight = blockHeight
+func (idb *IScoreDB) setCalculatingBH(blockHeight uint64) {
+	idb.info.Calculating = blockHeight
 
 	idb.writeToDB()
 }
 
-func (idb *IScoreDB) resetCalculateBlockHeight() {
-	idb.info.CalcBlockHeight = idb.info.BlockHeight
+func (idb *IScoreDB) resetCalculatingBH() {
+	idb.info.Calculating = idb.info.CalcDone
 
 	idb.writeToDB()
 }
 
 func (idb *IScoreDB) isCalculating() bool {
-	return idb.info.CalcBlockHeight > idb.info.BlockHeight
+	return idb.getCalculatingBH() > idb.getCalcDoneBH()
 }
 
-func (idb *IScoreDB) setBlockInfo(blockHeight uint64, blockHash []byte) {
-	tempBlockHash := make([]byte, BlockHashSize)
-	copy(tempBlockHash, blockHash)
-
-	// backup to prev Info.
-	if idb.info.PrevBlockHeight < blockHeight {
-		idb.info.PrevBlockHeight = idb.info.BlockHeight
-		copy(idb.info.PrevBlockHash, idb.info.BlockHash)
-	}
-
-	// set current Info.
-	idb.info.BlockHeight = blockHeight
-	copy(idb.info.BlockHash, tempBlockHash)
+func (idb *IScoreDB) setCurrentBlockInfo(blockHeight uint64, blockHash []byte) {
+	idb.info.Current.set(blockHeight, blockHash)
 
 	idb.writeToDB()
 }
 
-func (idb *IScoreDB) rollbackBlockInfo() {
-	idb.info.BlockHeight = idb.info.PrevBlockHeight
-	copy(idb.info.BlockHash, idb.info.PrevBlockHash)
-	idb.setCalculateBlockHeight(idb.info.BlockHeight)
+func (idb *IScoreDB) setCalcDoneBH(blockHeight uint64) {
+	idb.info.PrevCalcDone = idb.info.CalcDone
+	idb.info.CalcDone = blockHeight
+
+	idb.writeToDB()
+}
+
+func (idb *IScoreDB) getCurrentBlockInfo() *BlockInfo {
+	return &idb.info.Current
+}
+
+func (idb *IScoreDB) getCalcDoneBH() uint64 {
+	return idb.info.CalcDone
+}
+
+func (idb *IScoreDB) getPrevCalcDoneBH() uint64 {
+	return idb.info.PrevCalcDone
+}
+
+func (idb *IScoreDB) getCalculatingBH() uint64 {
+	return idb.info.Calculating
+}
+
+func (idb *IScoreDB) rollbackCurrentBlockInfo(blockHeight uint64, blockHash []byte) {
+	idb.setCurrentBlockInfo(blockHeight, blockHash)
+
+	idb.writeToDB()
+}
+
+func (idb *IScoreDB) rollbackAccountDBBlockInfo() {
+	idb.info.CalcDone = idb.info.PrevCalcDone
+	idb.info.Calculating = idb.info.PrevCalcDone
 
 	idb.writeToDB()
 }
@@ -286,11 +302,11 @@ func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
 	// toggle query DB switch
 	idb.toggleAccountDB()
 
-	// Rollback block height and block hash
-	idb.rollbackBlockInfo()
-
 	// delete calculation result
-	DeleteCalculationResult(idb.getCalculateResultDB(), idb.info.CalcBlockHeight)
+	DeleteCalculationResult(idb.getCalculateResultDB(), idb.getCalcDoneBH())
+
+	// Rollback block height and block hash
+	idb.rollbackAccountDBBlockInfo()
 
 	log.Printf("End rollblack account DB to %d", blockHeight)
 	return nil
@@ -342,7 +358,7 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 	deleteOld := false
 	deleteIndex := -1
 	for i := gvLen - 1; i >= 0 ; i-- {
-		if ctx.GV[i].BlockHeight < ctx.DB.info.BlockHeight {
+		if ctx.GV[i].BlockHeight < ctx.DB.getCalcDoneBH() {
 			if deleteOld {
 				// delete from management DB
 				bucket.Delete(ctx.GV[i].ID())
@@ -377,7 +393,7 @@ func (ctx *Context) UpdatePRep(prepList []*PRep) {
 	deleteOld := false
 	deleteIndex := -1
 	for i := prepLen - 1; i >= 0 ; i-- {
-		if ctx.PRep[i].BlockHeight < ctx.DB.info.BlockHeight {
+		if ctx.PRep[i].BlockHeight < ctx.DB.getCalcDoneBH() {
 			if deleteOld {
 				// delete from management DB
 				bucket.Delete(ctx.PRep[i].ID())
@@ -494,7 +510,7 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	}
 
 	// read Governance variable
-	ctx.GV, err = LoadGovernanceVariable(mngDB, ctx.DB.info.BlockHeight)
+	ctx.GV, err = LoadGovernanceVariable(mngDB, ctx.DB.getCalcDoneBH())
 	if err != nil {
 		log.Printf("Failed to load GV structure\n")
 		return nil, err

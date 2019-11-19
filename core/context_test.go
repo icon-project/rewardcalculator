@@ -41,7 +41,10 @@ func TestContext_NewContext(t *testing.T) {
 	assert.NotNil(t, ctx.DB)
 	assert.NotNil(t, ctx.DB.info)
 	assert.Equal(t, dbCount, ctx.DB.info.DBCount)
-	assert.Equal(t, uint64(0), ctx.DB.info.BlockHeight)
+	assert.True(t, ctx.DB.getCurrentBlockInfo().checkValue(uint64(0), zeroBlockHash))
+	assert.Equal(t, uint64(0), ctx.DB.getCalcDoneBH())
+	assert.Equal(t, uint64(0), ctx.DB.getPrevCalcDoneBH())
+	assert.Equal(t, uint64(0), ctx.DB.getCalculatingBH())
 	assert.False(t, ctx.DB.info.QueryDBIsZero)
 	assert.Equal(t, dbCount, len(ctx.DB.Account0))
 	assert.Equal(t, dbCount, len(ctx.DB.Account1))
@@ -64,7 +67,9 @@ func TestContext_UpdateGovernanceVariable(t *testing.T) {
 	bucket, _ := ctx.DB.management.GetBucket(db.PrefixGovernanceVariable)
 
 	// Set Block height
-	ctx.DB.info.BlockHeight = ctxBlockHeight
+	blockHash := make([]byte, BlockHashSize)
+	copy(blockHash,  []byte(string(ctxBlockHeight)))
+	ctx.DB.setCalcDoneBH(ctxBlockHeight)
 
 	// Insert initial GV
 	gv := new(GovernanceVariable)
@@ -135,7 +140,9 @@ func TestContext_UpdatePRep(t *testing.T) {
 	bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRep)
 
 	// Set Block height
-	ctx.DB.info.BlockHeight = ctxBlockHeight
+	blockHash := make([]byte, BlockHashSize)
+	copy(blockHash,  []byte(string(ctxBlockHeight)))
+	ctx.DB.setCalcDoneBH(ctxBlockHeight)
 
 	// Insert initial PRep
 	pRep := new(PRep)
@@ -437,7 +444,7 @@ func TestContext_ResetAccountDB(t *testing.T) {
 	backupDB.Close()
 }
 
-func TestContext_rollbackBlockInfo(t *testing.T) {
+func TestContext_CurrentBlockInfo(t *testing.T) {
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
 
@@ -451,16 +458,32 @@ func TestContext_rollbackBlockInfo(t *testing.T) {
 	blockHash2 := make([]byte, BlockHashSize)
 	copy(blockHash2,  []byte(string(blockHeight2)))
 
-	ctx.DB.setBlockInfo(blockHeight1, blockHash1)
-	ctx.DB.setBlockInfo(blockHeight2, blockHash2)
+	ctx.DB.setCurrentBlockInfo(blockHeight2, blockHash2)
+	assert.True(t, ctx.DB.getCurrentBlockInfo().checkValue(blockHeight2, blockHash2))
 
-	ctx.DB.rollbackBlockInfo()
+	ctx.DB.rollbackCurrentBlockInfo(blockHeight1, blockHash1)
+	assert.True(t, ctx.DB.getCurrentBlockInfo().checkValue(blockHeight1, blockHash1))
+}
 
-	assert.Equal(t, blockHeight1, ctx.DB.info.BlockHeight)
-	assert.Equal(t, blockHash1, ctx.DB.info.BlockHash)
-	assert.Equal(t, blockHeight1, ctx.DB.info.PrevBlockHeight)
-	assert.Equal(t, blockHash1, ctx.DB.info.PrevBlockHash)
-	assert.Equal(t, blockHeight1, ctx.DB.info.CalcBlockHeight)
+func TestContext_AccountDBBlockHeight(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest(ctx)
+
+	const (
+		blockHeight1 uint64 = 100
+		blockHeight2 uint64 = 200
+	)
+
+	ctx.DB.setCalcDoneBH(blockHeight1)
+	ctx.DB.setCalcDoneBH(blockHeight2)
+	assert.Equal(t, blockHeight2, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, blockHeight1, ctx.DB.getPrevCalcDoneBH())
+
+	ctx.DB.rollbackAccountDBBlockInfo()
+
+	assert.Equal(t, blockHeight1, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, blockHeight1, ctx.DB.getPrevCalcDoneBH())
+	assert.Equal(t, blockHeight1, ctx.DB.getCalculatingBH())
 }
 
 func TestContext_RollbackAccountDB(t *testing.T) {
@@ -482,11 +505,9 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 
 	// emulate calculation process
 	prevBlockHeight := uint64(5)
-	prevBlockHash := testBlockHash0
-	ctx.DB.setBlockInfo(prevBlockHeight, prevBlockHash)
+	ctx.DB.setCalcDoneBH(prevBlockHeight)
 	blockHeight := uint64(10)
-	blockHash := testBlockHash
-	ctx.DB.setCalculateBlockHeight(blockHeight)
+	ctx.DB.setCalculatingBH(blockHeight)
 	ctx.DB.writeToDB()
 	ctx.DB.toggleAccountDB()
 
@@ -498,12 +519,10 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	err = ctx.DB.resetAccountDB(blockHeight)
 	assert.Nil(t, err)
 	WriteCalculationResult(crDB, blockHeight, nil, nil)
-	ctx.DB.setBlockInfo(blockHeight, blockHash)
+	ctx.DB.setCalcDoneBH(blockHeight)
 	ctx.DB.writeToDB()
-	assert.Equal(t, prevBlockHeight, ctx.DB.info.PrevBlockHeight)
-	assert.Equal(t, prevBlockHash, ctx.DB.info.PrevBlockHash)
-	assert.Equal(t, blockHeight, ctx.DB.info.BlockHeight)
-	assert.Equal(t, blockHash, ctx.DB.info.BlockHash)
+	assert.Equal(t, prevBlockHeight, ctx.DB.getPrevCalcDoneBH())
+	assert.Equal(t, blockHeight, ctx.DB.getCalcDoneBH())
 
 	// read from query DB
 	qDB = ctx.DB.getQueryDB(ia.Address)
@@ -511,7 +530,7 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	bs, _ := bucket.Get(ia.ID())
 	assert.Nil(t, bs)
 
-	// no need to Rollback with blockHeigh >= ctx.DB.Info.CalcBlockHeight
+	// no need to Rollback with blockHeight >= ctx.DB.Info.CalcBlockHeight
 	err = ctx.DB.rollbackAccountDB(blockHeight)
 
 	// backup account DB remains
@@ -521,8 +540,7 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	assert.True(t, stat.IsDir())
 
 	// check block height and block hash
-	assert.Equal(t, blockHeight, ctx.DB.info.BlockHeight)
-	assert.Equal(t, blockHash, ctx.DB.info.BlockHash)
+	assert.Equal(t, blockHeight, ctx.DB.getCalcDoneBH())
 
 	// valid Rollback
 	err = ctx.DB.rollbackAccountDB(0)
@@ -539,10 +557,8 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	assert.Nil(t, bs)
 
 	// check Rollback block height and block hash
-	assert.Equal(t, prevBlockHeight, ctx.DB.info.PrevBlockHeight)
-	assert.Equal(t, prevBlockHash, ctx.DB.info.PrevBlockHash)
-	assert.Equal(t, prevBlockHeight, ctx.DB.info.BlockHeight)
-	assert.Equal(t, prevBlockHash, ctx.DB.info.BlockHash)
+	assert.Equal(t, prevBlockHeight, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, prevBlockHeight, ctx.DB.getPrevCalcDoneBH())
 
 	// read from query DB
 	qDB = ctx.DB.getQueryDB(ia.Address)

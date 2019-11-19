@@ -70,10 +70,11 @@ func DoRollBack(ctx *Context, req *RollBackRequest) error {
 	ctx.Rollback.notifyRollback()
 
 	// must Rollback claim DB first
-	err = rollbackClaimDB(idb.getClaimDB(), idb.getClaimBackupDB(), blockHeight)
+	err = rollbackClaimDB(ctx, blockHeight, req.BlockHash)
 	if err != nil {
 		log.Printf("Failed to Rollback claim DB. %+v", err)
 		return err
+	} else {
 	}
 
 	if checkAccountDBRollback(ctx, blockHeight) {
@@ -89,15 +90,16 @@ func DoRollBack(ctx *Context, req *RollBackRequest) error {
 
 func checkRollback(ctx *Context, rollback uint64) (bool, error) {
 	idb := ctx.DB
-	if idb.info.PrevBlockHeight >= rollback {
-		return false, &RollbackLowBlockHeightError{idb.info.PrevBlockHeight, rollback}
+	if idb.getPrevCalcDoneBH() >= rollback {
+		return false, &RollbackLowBlockHeightError{idb.getPrevCalcDoneBH(), rollback}
 	}
 	return true, nil
 }
 
 func checkAccountDBRollback(ctx *Context, rollback uint64) bool {
-	if rollback >= ctx.DB.info.CalcBlockHeight {
-		log.Printf("No need to Rollback account DB. %d >= %d", rollback, ctx.DB.info.CalcBlockHeight)
+	idb := ctx.DB
+	if rollback >= idb.getCalcDoneBH() {
+		log.Printf("No need to Rollback account DB. %d >= %d", rollback, idb.getCalcDoneBH())
 		return false
 	}
 

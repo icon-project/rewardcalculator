@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -42,14 +41,12 @@ type CalculateRequest struct {
 }
 
 func (cr *CalculateRequest) String() string {
-	return fmt.Sprintf("Path: %s, BlockHeight: %d, BlockHash: %s",
-		cr.Path, cr.BlockHeight, hex.EncodeToString(cr.BlockHash))
+	return fmt.Sprintf("Path: %s, BlockHeight: %d", cr.Path, cr.BlockHeight)
 }
 
 type CalculateResponse struct {
 	Status      uint16
 	BlockHeight uint64
-	BlockHash   []byte
 }
 
 const (
@@ -441,7 +438,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 		return err, blockHeight, nil, nil
 	}
 
-	ctx.DB.setCalculateBlockHeight(req.BlockHeight)
+	ctx.DB.setCalculatingBH(req.BlockHeight)
 	startTime := time.Now()
 
 	// open IISS Data
@@ -453,29 +450,30 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 	if header == nil {
 		sendCalculateACK(c, id, CalcRespStatusInvalidData, blockHeight)
 		err := fmt.Errorf("Failed to load IISS data (path: %s)\n", req.Path)
-		ctx.DB.resetCalculateBlockHeight()
+		ctx.DB.resetCalculatingBH()
 		return err, blockHeight, nil, nil
 	}
 
 	// set block height
 	blockHeight = header.BlockHeight
 	if blockHeight == 0 {
-		blockHeight = iScoreDB.info.BlockHeight + 1
+		blockHeight = iScoreDB.getCalcDoneBH() + 1
 	}
 
 	// check blockHeight and blockHash
-	if blockHeight == iScoreDB.info.BlockHeight && bytes.Compare(req.BlockHash, iScoreDB.info.BlockHash) == 0 {
+	calcDoneBH := iScoreDB.getCalcDoneBH()
+	if calcDoneBH == blockHeight {
 		sendCalculateACK(c, id, CalcRespStatusDuplicateBH, blockHeight)
 		err := fmt.Errorf("duplicated block(height: %d, hash: %s)\n",
 			blockHeight, hex.EncodeToString(req.BlockHash))
-		ctx.DB.resetCalculateBlockHeight()
+		ctx.DB.resetCalculatingBH()
 		return err, blockHeight, nil, nil
 	}
-	if blockHeight < iScoreDB.info.BlockHeight {
+	if blockHeight < calcDoneBH {
 		sendCalculateACK(c, id, CalcRespStatusInvalidBH, blockHeight)
 		err := fmt.Errorf("too low blockHeight(request: %d, RC blockHeight: %d)\n",
-			blockHeight, iScoreDB.info.BlockHeight)
-		ctx.DB.resetCalculateBlockHeight()
+			blockHeight, calcDoneBH)
+		ctx.DB.resetCalculatingBH()
 		return err, blockHeight, nil, nil
 	}
 
@@ -579,12 +577,12 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 
 	elapsedTime := time.Since(startTime)
 	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d entries",
-		elapsedTime, ctx.DB.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount)
+		elapsedTime, ctx.DB.getCalcDoneBH(), blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount)
 	log.Printf("%s", stats.String())
 	log.Printf("stateHash : %s", hex.EncodeToString(stateHash))
 
 	// set blockHeight
-	ctx.DB.setBlockInfo(blockHeight, req.BlockHash)
+	ctx.DB.setCalcDoneBH(blockHeight)
 
 	// write calculation result
 	WriteCalculationResult(ctx.DB.getCalculateResultDB(), blockHeight, stats, stateHash)
@@ -810,7 +808,7 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 func calculatePRepReward(ctx *Context, to uint64) (uint64, *common.HexInt, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
-	start := ctx.DB.info.BlockHeight
+	start := ctx.DB.getCalcDoneBH()
 	end := to
 
 	totalReward := new(common.HexInt)
@@ -984,10 +982,10 @@ func (mh *msgHandler) queryCalculateStatus(c ipc.Connection, id uint32, data []b
 func DoQueryCalculateStatus(ctx *Context, resp *QueryCalculateStatusResponse) {
 	if ctx.DB.isCalculating() {
 		resp.Status = CalculationDoing
-		resp.BlockHeight = ctx.DB.info.CalcBlockHeight
+		resp.BlockHeight = ctx.DB.getCalculatingBH()
 	} else {
 		resp.Status = CalculationDone
-		resp.BlockHeight = ctx.DB.info.BlockHeight
+		resp.BlockHeight = ctx.DB.getCalcDoneBH()
 	}
 }
 
@@ -1052,7 +1050,7 @@ func DoQueryCalculateResult(ctx *Context, blockHeight uint64, resp *QueryCalcula
 
 	// check doing calculation
 	if ctx.DB.isCalculating() {
-		if blockHeight == ctx.DB.info.CalcBlockHeight {
+		if blockHeight == ctx.DB.getCalculatingBH() {
 			resp.Status = calcDoing
 			return
 		}

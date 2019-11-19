@@ -59,7 +59,7 @@ type ResponseDebugStats struct {
 func handleStats(c ipc.Connection, id uint32, ctx *Context) error {
 	var resp ResponseDebugStats
 	resp.Cmd = DebugStatistics
-	resp.BlockHeight = ctx.DB.info.BlockHeight
+	resp.BlockHeight = ctx.DB.getCalcDoneBH()
 	if ctx.stats != nil {
 		resp.Stats = *ctx.stats
 	}

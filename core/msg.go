@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
@@ -96,7 +97,8 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 	}
 
 	// send READY message to peer
-	err := sendVersion(c, MsgReady, 0, handler.mgr.ctx.DB.info.BlockHeight)
+	cBI := handler.mgr.ctx.DB.getCurrentBlockInfo()
+	err := sendVersion(c, MsgReady, 0, cBI.BlockHeight, cBI.BlockHash)
 	if err != nil {
 		log.Printf("Failed to send READY message")
 	}
@@ -137,20 +139,24 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 type ResponseVersion struct {
 	Version uint64
 	BlockHeight uint64
+	BlockHash [BlockHashSize]byte
 }
 
 func (rv *ResponseVersion) String() string {
-	return fmt.Sprintf("Version: %d, BlockHeight: %d", rv.Version, rv.BlockHeight)
+	return fmt.Sprintf("Version: %d, BlockHeight: %d, BlockHash: %s",
+		rv.Version, rv.BlockHeight, hex.EncodeToString(rv.BlockHash[:]))
 }
 
 func (mh *msgHandler) version(c ipc.Connection, id uint32) error {
-	return sendVersion(c, MsgVersion, id, mh.mgr.ctx.DB.info.BlockHeight)
+	cBI := mh.mgr.ctx.DB.getCurrentBlockInfo()
+	return sendVersion(c, MsgVersion, id, cBI.BlockHeight, cBI.BlockHash)
 }
 
-func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64) error {
+func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64, blockHash [BlockHashSize]byte) error {
 	resp := ResponseVersion{
 		Version: IPCVersion,
 		BlockHeight: blockHeight,
+		BlockHash: blockHash,
 	}
 
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(msg), id, resp.String())

@@ -14,8 +14,8 @@ func TestMsgRollback_checkRollback(t *testing.T) {
 
 	const calcBlockHeight1 uint64 = 100
 	const calcBlockHeight2 uint64 = 200
-	ctx.DB.setBlockInfo(calcBlockHeight1, []byte(string(calcBlockHeight1)))
-	ctx.DB.setBlockInfo(calcBlockHeight2, []byte(string(calcBlockHeight2)))
+	ctx.DB.setCalcDoneBH(calcBlockHeight1)
+	ctx.DB.setCalcDoneBH(calcBlockHeight2)
 
 	tests := []struct {
 		name string
@@ -68,7 +68,7 @@ func TestMsgRollback_checkAccountDBRollback(t *testing.T) {
 	defer finalizeTest(ctx)
 
 	const calcBlockHeight uint64 = 100
-	ctx.DB.setCalculateBlockHeight(calcBlockHeight)
+	ctx.DB.setCalcDoneBH(calcBlockHeight)
 	assert.True(t, checkAccountDBRollback(ctx, calcBlockHeight - 1))
 	assert.False(t, checkAccountDBRollback(ctx, calcBlockHeight))
 	assert.False(t, checkAccountDBRollback(ctx, calcBlockHeight + 1))

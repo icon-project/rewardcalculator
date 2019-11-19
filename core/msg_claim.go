@@ -218,6 +218,9 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 	if req.Success == true {
 		err = writePreCommitToClaimDB(iDB.getPreCommitDB(), iDB.getClaimDB(), iDB.getClaimBackupDB(),
 			req.BlockHeight, req.BlockHash)
+		if err == nil {
+			mh.mgr.ctx.DB.setCurrentBlockInfo(req.BlockHeight, req.BlockHash)
+		}
 	} else {
 		err = flushPreCommit(iDB.getPreCommitDB(), req.BlockHeight, req.BlockHash)
 	}

@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/icon-project/rewardcalculator/common"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -24,14 +26,70 @@ func (cli *CLI) read(dbDir string, dbName string) {
 
 	iissDB := core.OpenIISSData(path)
 	core.LoadIISSData(iissDB)
-	core.ReadIISSBP(iissDB)
-	core.ReadIISSTX(iissDB)
+	ReadIISSBP(iissDB)
+	ReadIISSTX(iissDB)
 
 	//checkIISSTX(iissDB, lossDB)
 
 	checkALL(iissDB)
 
 	iissDB.Close()
+}
+
+func ReadIISSBP(iissDB db.Database) {
+	var bpInfo core.IISSBlockProduceInfo
+
+	iter, _ := iissDB.GetIterator()
+	prefix := util.BytesPrefix([]byte(db.PrefixIISSBPInfo))
+	iter.New(prefix.Start, prefix.Limit)
+	var entries, startBH, miss uint64
+	for entries = 0; iter.Next(); entries++ {
+		err := bpInfo.SetBytes(iter.Value())
+		if err != nil {
+			log.Printf("Failed to load IISS Block Produce information.")
+			continue
+		}
+		bpInfo.BlockHeight = common.BytesToUint64(iter.Key()[len(db.PrefixIISSBPInfo):])
+		if entries == 0 {
+			startBH = bpInfo.BlockHeight
+		}
+		if startBH + entries + miss != bpInfo.BlockHeight {
+			fmt.Printf("Miss BP block height %d\n", startBH + entries + miss)
+			miss++
+			for  ; startBH + entries + miss != bpInfo.BlockHeight; miss++ {
+				fmt.Printf("Miss BP block height %d\n", startBH + entries + miss)
+			}
+		}
+	}
+	log.Printf(">> BP total count %d, miss %d", entries, miss)
+	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		log.Printf("There is error while read IISS BP iteration. %+v", err)
+	}
+}
+
+func ReadIISSTX(iissDB db.Database) {
+	var tx core.IISSTX
+
+	iter, _ := iissDB.GetIterator()
+	prefix := util.BytesPrefix([]byte(db.PrefixIISSTX))
+	iter.New(prefix.Start, prefix.Limit)
+	entries := 0
+	for entries = 0; iter.Next(); entries++ {
+		err := tx.SetBytes(iter.Value())
+		if err != nil {
+			log.Printf("Failed to load IISS TX data")
+			continue
+		}
+		//log.Printf("[IISSTX] TX : %s", tx.String())
+	}
+	log.Printf(">> TX total count %d", entries)
+	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		log.Printf("There is error while read IISS TX iteration. %+v", err)
+	}
 }
 
 func checkIISSTX(iissDB db.Database, result db.Database) {

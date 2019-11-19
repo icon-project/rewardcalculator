@@ -635,17 +635,15 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	defer finalizeTest(ctx)
 
 	iissDBDir := testDBDir + "/iiss"
-	blockHash := make([]byte, BlockHashSize)
-	copy(blockHash, "test")
-	req := CalculateRequest{Path: iissDBDir, BlockHeight:100, BlockHash:blockHash}
+	req := CalculateRequest{Path: iissDBDir, BlockHeight:100, BlockHash:testBlockHash}
 
 	// get CALCULATE message while processing CALCULATE message
-	ctx.DB.setCalculateBlockHeight(50)
+	ctx.DB.setCalculatingBH(uint64(50))
 	err, blockHeight, _, _ := DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
 	assert.Error(t, err)
 	assert.True(t, strings.HasPrefix(err.Error(), "calculating now. drop calculate message"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
-	ctx.DB.resetCalculateBlockHeight()
+	ctx.DB.resetCalculatingBH()
 
 	// get CALCULATE message with no IISS data
 	err, blockHeight, _, _ = DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
@@ -659,23 +657,23 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	defer os.RemoveAll(iissDBDir)
 
 	// get CALCULATE message with invalid block height
-	ctx.DB.setBlockInfo(uint64(200), nil)
+	ctx.DB.setCalcDoneBH(uint64(200))
 	err, blockHeight, _, _ = DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
 	assert.Error(t, err)
 	assert.True(t, strings.HasPrefix(err.Error(), "too low blockHeight"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
 
 	// get CALCULATE message with duplicated block height
-	ctx.DB.setBlockInfo(uint64(100), blockHash)
-	ctx.DB.setCalculateBlockHeight(100)
+	ctx.DB.setCalcDoneBH(uint64(100))
+	ctx.DB.setCalculatingBH(uint64(100))
 	err, blockHeight, _, _ = DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
 	assert.Error(t, err)
 	assert.True(t, strings.HasPrefix(err.Error(), "duplicated block"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
 
 	// Cancel with ROLLBACK
-	ctx.DB.setBlockInfo(uint64(50), blockHash)
-	ctx.DB.setCalculateBlockHeight(50)
+	ctx.DB.setCalcDoneBH(uint64(50))
+	ctx.DB.setCalculatingBH(uint64(50))
 
 	quitChannel := ctx.Rollback.GetChannel()
 	ctx.Rollback.notifyRollback()
@@ -704,14 +702,14 @@ func TestMsgQueryCalc_DoQueryCalculateStatus(t *testing.T) {
 
 	// start calculation
 	calcBH := uint64(1000)
-	ctx.DB.setCalculateBlockHeight(calcBH)
+	ctx.DB.setCalculatingBH(calcBH)
 
 	DoQueryCalculateStatus(ctx, &resp)
 	assert.Equal(t, CalculationDoing, resp.Status)
 	assert.Equal(t, calcBH, resp.BlockHeight)
 
 	// end calculation
-	ctx.DB.setBlockInfo(calcBH, nil)
+	ctx.DB.setCalcDoneBH(calcBH)
 
 	DoQueryCalculateStatus(ctx, &resp)
 	assert.Equal(t, CalculationDone, resp.Status)
@@ -730,14 +728,14 @@ func TestMsgQueryCalc_DoQueryCalculateResult(t *testing.T) {
 	assert.Equal(t, blockHeight, resp.BlockHeight)
 
 	// start calculation
-	ctx.DB.setCalculateBlockHeight(blockHeight)
+	ctx.DB.setCalculatingBH(blockHeight)
 
 	DoQueryCalculateResult(ctx, blockHeight, &resp)
 	assert.Equal(t, calcDoing, resp.Status)
 	assert.Equal(t, blockHeight, resp.BlockHeight)
 
 	// end calculation
-	ctx.DB.setBlockInfo(blockHeight, nil)
+	ctx.DB.setCalcDoneBH(blockHeight)
 
 	crDB := ctx.DB.getCalculateResultDB()
 	stats := new(Statistics)

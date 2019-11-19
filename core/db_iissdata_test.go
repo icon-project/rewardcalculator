@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -409,4 +410,25 @@ func TestDBIISS_LoadIISSData(t *testing.T) {
 
 	assert.NotNil(t, pRepListNew)
 	assert.Equal(t, 0, len(pRepListNew))
+}
+
+func TestDBIISS_manageIISSData(t *testing.T) {
+	rootPath, _ := filepath.Abs("./iissdata_test")
+	os.MkdirAll(rootPath, os.ModePerm)
+	iissPath := filepath.Join(rootPath, "current")
+	os.MkdirAll(iissPath, os.ModePerm)
+	finishPath := filepath.Join(rootPath, "finish_iiss")
+	os.MkdirAll(finishPath, os.ModePerm)
+
+	cleanupIISSData(iissPath)
+
+	_, err := os.Stat(iissPath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(finishPath)
+	assert.True(t, os.IsNotExist(err))
+	backupPath := filepath.Join(rootPath, "finish_current")
+	f, err := os.Stat(backupPath)
+	assert.True(t, f.IsDir())
+
+	os.RemoveAll(rootPath)
 }

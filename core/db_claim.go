@@ -432,12 +432,16 @@ func checkClaimDBRollback(cbInfo *ClaimBackupInfo, rollback uint64) (bool, error
 	return true, nil
 }
 
-func rollbackClaimDB(cDB db.Database, cbDB db.Database, to uint64) error {
+func rollbackClaimDB(ctx *Context, to uint64, blockHash []byte) error {
 	log.Printf("Start Rollback claim DB to %d", to)
+	idb := ctx.DB
+	cDB := idb.getClaimDB()
+	cbDB := idb.getClaimBackupDB()
 	bucket, err := cbDB.GetBucket(db.PrefixManagement)
 	if err != nil {
 		return err
 	}
+
 	var cbInfo ClaimBackupInfo
 	bs, _ := bucket.Get(cbInfo.ID())
 	cbInfo.SetBytes(bs)
@@ -464,6 +468,8 @@ func rollbackClaimDB(cDB db.Database, cbDB db.Database, to uint64) error {
 	// update management Info.
 	cbInfo.LastBlockHeight = to
 	bucket.Set(cbInfo.ID(), cbInfo.Bytes())
+
+	idb.rollbackCurrentBlockInfo(to, blockHash)
 
 	log.Printf("End Rollback claim DB from %d to %d", from, to)
 	return nil
