@@ -7,26 +7,35 @@ import (
 )
 
 const (
-	DBTypeManagemment	= "manage"
-	DBTypeAccount       = "account"
-	DBTypeClaim			= "claim"
-	DBTypePreCommit		= "preCommit"
-	DBTypeCalcResult	= "calculateResult"
+	DBTypeManagement = "manage"
+	DBTypeAccount    = "account"
+	DBTypeClaim      = "claim"
+	DBTypePreCommit  = "preCommit"
+	DBTypeCalcResult = "calculateResult"
+	DBTypeIISS       = "iiss"
+
+	ClaimPath      = "claim"
+	PreCommitPath  = "PreCommit"
+	CalcResultPath = "calculation_result"
+
+	GVPrefixLen            = 2
+	PRepCandidatePrefixLen = 2
 )
 
-type CLI struct{
+type CLI struct {
 	cmd *flag.FlagSet
 }
 
 func (cli *CLI) printUsage() {
 	fmt.Printf("Usage: %s [db_name] [db_type] [[options]]\n", os.Args[0])
 	fmt.Printf("\t db_name     DB name\n")
-	fmt.Printf("\t db_type     DB type (%s, %s, %s, %s, %s)\n",
-		DBTypeManagemment,
+	fmt.Printf("\t db_type     DB type (%s, %s, %s, %s, %s, %s)\n",
+		DBTypeManagement,
 		DBTypeAccount,
 		DBTypeClaim,
 		DBTypePreCommit,
 		DBTypeCalcResult,
+		DBTypeIISS,
 	)
 	fmt.Printf("[options]\n")
 	cli.cmd.PrintDefaults()
