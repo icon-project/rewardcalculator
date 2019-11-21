@@ -12,13 +12,16 @@ import (
 	"path/filepath"
 )
 
-func (cli *CLI) query(dbName string, dbType string, address string, blockHeight uint64) {
+func (cli *CLI) query(dbName string, dbType string, address string, blockHeight uint64, index int64) {
 	fmt.Printf("Query DB name: %s DB type: %s", dbName, dbType)
 	if address != "" {
 		fmt.Printf(", Address: %s", address)
 	}
 	if blockHeight != 0 {
 		fmt.Printf(", BlockHeight: %d", blockHeight)
+	}
+	if index != -1 {
+		fmt.Print(", Index: ", index)
 	}
 	fmt.Printf("\n")
 
@@ -49,7 +52,7 @@ func (cli *CLI) query(dbName string, dbType string, address string, blockHeight 
 
 	fmt.Printf("### Results\n")
 
-	if addr == nil && blockHeight == 0 { // print ALL
+	if addr == nil && blockHeight == 0 && index == -1 { // print ALL
 		if dbType == DBTypeAccount {
 			for i := 0; i < dbInfo.DBInfoData.DBCount; i++ {
 				addr = new(common.Address)
@@ -66,12 +69,12 @@ func (cli *CLI) query(dbName string, dbType string, address string, blockHeight 
 		}
 	} else { // query with address or blockHeight
 		qDB := getDB(dbName, dbType, addr, dbInfo)
-		queryEntry(qDB, dbType, addr, blockHeight)
+		queryEntry(qDB, dbType, addr, blockHeight, index)
 	}
 }
 
-func queryEntry(qDB db.Database, dbType string, address *common.Address, blockHeight uint64) {
-	if address == nil && blockHeight == 0 {
+func queryEntry(qDB db.Database, dbType string, address *common.Address, blockHeight uint64, index int64) {
+	if address == nil && blockHeight == 0 && index == -1 {
 		return
 	}
 	switch dbType {
@@ -85,6 +88,16 @@ func queryEntry(qDB db.Database, dbType string, address *common.Address, blockHe
 		queryPreCommit(qDB, address, blockHeight)
 	case DBTypeCalcResult:
 		queryCalcResult(qDB, blockHeight)
+	case DBTypeHeader:
+		fmt.Printf("Can't query header DB with address, blockHeight")
+	case DBTypeGV:
+		queryGovernanceVariables(qDB, blockHeight)
+	case DBTypePRep:
+		queryPRep(qDB, blockHeight)
+	case DBTypeBPInfo:
+		queryBPInfo(qDB, blockHeight)
+	case DBTypeTX:
+		queryTransaction(qDB, index)
 	default:
 		fmt.Printf("invalid dbtype %s\n", dbType)
 	}
@@ -194,7 +207,8 @@ func queryCalcResult(qDB db.Database, blockHeight uint64) {
 	printCalcResult(common.Uint64ToBytes(blockHeight), value, blockHeight)
 }
 
-func printEntry(key []byte, value []byte, dbType string, address *common.Address, blockHeight uint64) bool {
+func printEntry(key []byte, value []byte, dbType string, address *common.Address,
+	blockHeight uint64) bool {
 	ret := false
 
 	switch dbType {
@@ -208,6 +222,16 @@ func printEntry(key []byte, value []byte, dbType string, address *common.Address
 		ret = printPreCommit(key, value, address, blockHeight)
 	case DBTypeCalcResult:
 		ret = printCalcResult(key, value, blockHeight)
+	case DBTypeHeader:
+		ret = printHeader(key, value)
+	case DBTypeGV:
+		ret = printGv(key, value)
+	case DBTypeBPInfo:
+		ret = printBP(key, value)
+	case DBTypePRep:
+		ret = printPRep(key, value)
+	case DBTypeTX:
+		ret = printTransaction(key, value)
 	default:
 		fmt.Printf("invalid dbtype %s\n", dbType)
 	}
@@ -232,6 +256,8 @@ func printManagement(key []byte, value []byte) bool {
 		pc.SetBytes(value)
 		pc.Address = *common.NewAddress(key[PRepCandidatePrefixLen:])
 		result = fmt.Sprint("PRepCandidate : ", pc.String())
+	default:
+		return false
 	}
 	fmt.Println(result)
 
@@ -337,6 +363,16 @@ func getDB(dbName string, dbType string, address *common.Address, dbInfo *core.D
 			accountDBPath := fmt.Sprintf(core.CalculateDBNameFormat, index, dbInfo.DBCount, 1)
 			dbRoot = filepath.Join(dbName, accountDBPath)
 		}
+	case DBTypeHeader:
+		dbRoot = filepath.Join(dbName)
+	case DBTypeBPInfo:
+		dbRoot = filepath.Join(dbName)
+	case DBTypePRep:
+		dbRoot = filepath.Join(dbName)
+	case DBTypeGV:
+		dbRoot = filepath.Join(dbName)
+	case DBTypeTX:
+		dbRoot = filepath.Join(dbName)
 	default:
 		fmt.Println("Invalid DB Type")
 		os.Exit(1)

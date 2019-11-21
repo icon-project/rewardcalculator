@@ -12,14 +12,21 @@ const (
 	DBTypeClaim      = "claim"
 	DBTypePreCommit  = "preCommit"
 	DBTypeCalcResult = "calculateResult"
-	DBTypeIISS       = "iiss"
+	DBTypeHeader     = "header"
+	DBTypeGV         = "governanceInfo"
+	DBTypeBPInfo     = "blockProduce"
+	DBTypePRep       = "prep"
+	DBTypeTX         = "tx"
 
 	ClaimPath      = "claim"
 	PreCommitPath  = "PreCommit"
 	CalcResultPath = "calculation_result"
 
-	GVPrefixLen            = 2
-	PRepCandidatePrefixLen = 2
+	GVPrefixLen               = 2
+	PRepCandidatePrefixLen    = 2
+	BlockProduceInfoPrefixLen = 2
+	PRepPrefixLen             = 2
+	TransactionPrefixLen      = 2
 )
 
 type CLI struct {
@@ -29,13 +36,17 @@ type CLI struct {
 func (cli *CLI) printUsage() {
 	fmt.Printf("Usage: %s [db_name] [db_type] [[options]]\n", os.Args[0])
 	fmt.Printf("\t db_name     DB name\n")
-	fmt.Printf("\t db_type     DB type (%s, %s, %s, %s, %s, %s)\n",
+	fmt.Printf("\t db_type     DB type (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)\n",
 		DBTypeManagement,
 		DBTypeAccount,
 		DBTypeClaim,
 		DBTypePreCommit,
 		DBTypeCalcResult,
-		DBTypeIISS,
+		DBTypeHeader,
+		DBTypeGV,
+		DBTypeBPInfo,
+		DBTypePRep,
+		DBTypeTX,
 	)
 	fmt.Printf("[options]\n")
 	cli.cmd.PrintDefaults()
@@ -53,6 +64,7 @@ func (cli *CLI) Run() {
 	cli.cmd = flag.NewFlagSet("query", flag.ExitOnError)
 	address := cli.cmd.String("address", "", "Address string")
 	blockHeight := cli.cmd.Uint64("blockHeight", 0, "Block height")
+	index := cli.cmd.Int64("index", -1, "option for tx command")
 
 	cli.validateArgs()
 
@@ -64,8 +76,8 @@ func (cli *CLI) Run() {
 	}
 
 	if cli.cmd.Parsed() {
-		fmt.Printf("%s, %d\n", *address, *blockHeight)
+		fmt.Printf("%s, %d %d\n", *address, *blockHeight, *index)
 
-		cli.query(dbName, dbType, *address, *blockHeight)
+		cli.query(dbName, dbType, *address, *blockHeight, *index)
 	}
 }
