@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"strconv"
 	"testing"
 
@@ -9,10 +10,25 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var testHash = []byte{
+	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
+	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
+	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
+	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
+}
+
+var zeroHash = []byte{
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+}
+
 const (
 	claimAddress               = "hxa"
 	claimIScore uint64         = 10
 	claimBlockHeight uint64    = 1
+	claimTXIndex uint64        = 0
 )
 
 func makeClaim() *Claim {
@@ -65,30 +81,9 @@ func TestDBClaim_NewClaimFromBytes(t *testing.T) {
 	assert.Equal(t, claim.Bytes(), newClaim.Bytes())
 }
 
-var testBlockHash0 = []byte{
-	0x00, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-}
-
-var testBlockHash = []byte{
-	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-	0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-}
-
-var zeroBlockHash = []byte{
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-}
-
 func makePreCommit() *PreCommit {
 	claim := makeClaim()
-	preCommit := newPreCommit(claimBlockHeight, testBlockHash, claim.Address)
+	preCommit := newPreCommit(claimBlockHeight, testHash, claimTXIndex, zeroHash, claim.Address)
 	preCommit.Confirmed = false
 	preCommit.Data = claim.Data
 
@@ -125,10 +120,12 @@ func TestDBPreCommit_BytesAndSetBytes(t *testing.T) {
 
 func TestDBPreCommit_newPreCommit(t *testing.T) {
 	hx11 := common.NewAddressFromString("hx11")
-	preCommit := newPreCommit(claimBlockHeight, testBlockHash, *hx11)
+	preCommit := newPreCommit(claimBlockHeight, testHash, claimTXIndex, testHash, *hx11)
 
 	assert.Equal(t, claimBlockHeight, preCommit.BlockHeight)
-	assert.Equal(t, testBlockHash, preCommit.BlockHash)
+	assert.Equal(t, testHash, preCommit.BlockHash)
+	assert.Equal(t, claimTXIndex, preCommit.TXIndex)
+	assert.Equal(t, testHash, preCommit.TXHash)
 	assert.Equal(t, hx11.String(), preCommit.Address.String())
 }
 
@@ -211,11 +208,12 @@ func TestDBPreCommit_commit_revert(t *testing.T) {
 func TestDBPreCommit_manage(t *testing.T) {
 	tests := [] struct {
 		blockHeight uint64
-		blockHash   []byte
+		txIndex     uint64
+		hash        []byte
 		address     *common.Address
 	}{
-		{blockHeight: 1, blockHash: []byte{0x01, 0x01}, address: common.NewAddressFromString("hx11")},
-		{blockHeight: 1, blockHash: []byte{0x01, 0x02}, address: common.NewAddressFromString("hx12")},
+		{blockHeight: 1, txIndex: 0, hash: []byte{0x01, 0x01}, address: common.NewAddressFromString("hx11")},
+		{blockHeight: 1, txIndex: 0, hash: []byte{0x01, 0x02}, address: common.NewAddressFromString("hx12")},
 	}
 	iScore := uint64(100)
 
@@ -225,7 +223,7 @@ func TestDBPreCommit_manage(t *testing.T) {
 	pcDB := ctx.DB.getPreCommitDB()
 
 	for i, tt := range tests {
-		pc := newPreCommit(tt.blockHeight, tt.blockHash, *tt.address)
+		pc := newPreCommit(tt.blockHeight, tt.hash, tt.txIndex, tt.hash, *tt.address)
 		// query no ent
 		assert.False(t, pc.query(pcDB))
 
@@ -246,7 +244,7 @@ func TestDBPreCommit_manage(t *testing.T) {
 		if i != len(tests) - 1 {
 			assert.NoError(t, pc.commit(pcDB))
 			assert.True(t, pc.Confirmed)
-			pc2 := newPreCommit(tt.blockHeight, tt.blockHash, *tt.address)
+			pc2 := newPreCommit(tt.blockHeight, tt.hash, tt.txIndex, tt.hash, *tt.address)
 			assert.True(t, pc2.query(pcDB))
 			assert.Equal(t, pc.Data.IScore.Uint64(), pc2.Data.IScore.Uint64())
 
@@ -258,23 +256,39 @@ func TestDBPreCommit_manage(t *testing.T) {
 			// do not commit last one
 
 			// commit - invalid blockHeight
-			pc = newPreCommit(tt.blockHeight + 1, tt.blockHash, *tt.address)
+			pc = newPreCommit(tt.blockHeight + 1, tt.hash, tt.txIndex, tt.hash, *tt.address)
 			assert.Error(t, pc.commit(pcDB))
 
 			// commit - invalid blockHash
-			pc = newPreCommit(tt.blockHeight, nil, *tt.address)
+			pc = newPreCommit(tt.blockHeight, nil, tt.txIndex, tt.hash, *tt.address)
 			assert.Error(t, pc.commit(pcDB))
 
+			// commit - invalid txIndex
+			pc = newPreCommit(tt.blockHeight, tt.hash, tt.txIndex + 1, tt.hash, *tt.address)
+			pcConfirmed := pc.Confirmed
+			assert.NoError(t, pc.commit(pcDB))
+			// no change confirmed flag
+			assert.Equal(t, pcConfirmed, pc.Confirmed)
+
 			// revert - invalid blockHeight
-			pc = newPreCommit(tt.blockHeight + 1, tt.blockHash, *tt.address)
+			pc = newPreCommit(tt.blockHeight + 1, tt.hash, tt.txIndex, tt.hash, *tt.address)
 			assert.Error(t, pc.revert(pcDB))
 
 			// revert - invalid blockHash
-			pc = newPreCommit(tt.blockHeight, nil, *tt.address)
+			pc = newPreCommit(tt.blockHeight, nil, tt.txIndex, tt.hash, *tt.address)
 			assert.Error(t, pc.revert(pcDB))
 
+			// revert - invalid txIndex
+			pc = newPreCommit(tt.blockHeight, tt.hash, tt.txIndex + 1, tt.hash, *tt.address)
+			pcConfirmed = pc.Confirmed
+			assert.NoError(t, pc.revert(pcDB))
+			// no change confirmed flag
+			assert.Equal(t, pcConfirmed, pc.Confirmed)
+			// can query
+			assert.True(t, pc.query(pcDB))
+
 			// revert
-			pc = newPreCommit(tt.blockHeight, tt.blockHash, *tt.address)
+			pc = newPreCommit(tt.blockHeight, tt.hash, tt.txIndex, tt.hash, *tt.address)
 			assert.NoError(t, pc.revert(pcDB))
 			// can't query
 			assert.False(t, pc.query(pcDB))
@@ -290,14 +304,14 @@ func TestDBPreCommit_manage(t *testing.T) {
 	// write to claim DB with commit
 	cDB := ctx.DB.getClaimDB()
 	assert.NoError(t, writePreCommitToClaimDB(pcDB, cDB, ctx.DB.getClaimBackupDB(),
-		tests[0].blockHeight, tests[0].blockHash))
+		tests[0].blockHeight, tests[0].hash))
 
-	// can't query commited precommit data
-	pc := newPreCommit(tests[0].blockHeight, tests[0].blockHash, *tests[0].address)
+	// can't query commited preCommit data
+	pc := newPreCommit(tests[0].blockHeight, tests[0].hash, tests[0].txIndex, tests[0].hash, *tests[0].address)
 	assert.False(t, pc.query(pcDB))
 
-	// can't query not commited precommit data
-	pc = newPreCommit(tests[1].blockHeight, tests[1].blockHash, *tests[1].address)
+	// can't query not commited preCommit data
+	pc = newPreCommit(tests[1].blockHeight, tests[1].hash, tests[1].txIndex, tests[1].hash, *tests[1].address)
 	assert.False(t, pc.query(pcDB))
 
 	// read claim data from claimDB
@@ -311,6 +325,70 @@ func TestDBPreCommit_manage(t *testing.T) {
 
 	assert.Equal(t, tests[0].blockHeight, claim.Data.BlockHeight)
 	assert.Equal(t, iScore, claim.Data.IScore.Uint64())
+}
+
+func TestDBPreCommit_deletePreCommits(t *testing.T) {
+	tests := []struct {
+		blockHeight uint64
+		txIndex     uint64
+		hash        []byte
+		address     *common.Address
+	}{
+		{blockHeight: 1, txIndex:0, hash: []byte{0x01, 0x01}, address: common.NewAddressFromString("hx11")},
+		{blockHeight: 1, txIndex:1, hash: []byte{0x01, 0x02}, address: common.NewAddressFromString("hx12")},
+		{blockHeight: 2, txIndex:0, hash: []byte{0x02, 0x01}, address: common.NewAddressFromString("hx21")},
+		{blockHeight: 2, txIndex:1, hash: []byte{0x02, 0x02}, address: common.NewAddressFromString("hx22")},
+		{blockHeight: 3, txIndex:0, hash: []byte{0x03, 0x01}, address: common.NewAddressFromString("hx31")},
+		{blockHeight: 3, txIndex:1, hash: []byte{0x03, 0x02}, address: common.NewAddressFromString("hx32")},
+		{blockHeight: 4, txIndex:0, hash: []byte{0x04, 0x01}, address: common.NewAddressFromString("hx41")},
+		{blockHeight: 4, txIndex:1, hash: []byte{0x04, 0x02}, address: common.NewAddressFromString("hx42")},
+	}
+
+	ctx := initTest(1)
+	defer finalizeTest(ctx)
+
+	pcDB := ctx.DB.getPreCommitDB()
+
+	for _, tt := range tests {
+		pc := newPreCommit(tt.blockHeight, tt.hash, tt.txIndex, tt.hash, *tt.address)
+		assert.NoError(t, pc.write(pcDB, nil), "Write() failed with preCommit(%s)", pc.String())
+	}
+
+	// check initPreCommit
+	initData := tests[1]
+	assert.NoError(t, initPreCommit(pcDB, initData.blockHeight))
+	for _, tt := range tests {
+		pc := newPreCommit(tt.blockHeight, tt.hash, tt.txIndex, tt.hash, *tt.address)
+		if pc.BlockHeight > initData.blockHeight {
+			assert.False(t, pc.query(pcDB), "initPreCommit() failed with preCommit(%s)", pc.String())
+		} else {
+			assert.True(t, pc.query(pcDB), "initPreCommit() failed with preCommit(%s)", pc.String())
+		}
+	}
+
+	// check flushPreCommit with blockHash
+	flushData := tests[1]
+	assert.NoError(t, flushPreCommit(pcDB, flushData.blockHeight, flushData.hash))
+	for _, tt := range tests {
+		if tt.blockHeight == flushData.blockHeight {
+			pc := newPreCommit(tt.blockHeight, tt.hash, tt.txIndex, tt.hash, *tt.address)
+			if bytes.Compare(tt.hash, flushData.hash) == 0 {
+				assert.False(t, pc.query(pcDB), "flushPreCommit() failed with preCommit(%s)", pc.String())
+			} else {
+				assert.True(t, pc.query(pcDB), "flushPreCommit() failed with preCommit(%s)", pc.String())
+			}
+		}
+	}
+
+	// check flushPreCommit without blockHash
+	flushData = tests[0]
+	assert.NoError(t, flushPreCommit(pcDB, flushData.blockHeight, nil))
+	for _, tt := range tests {
+		if tt.blockHeight == flushData.blockHeight {
+			pc := newPreCommit(tt.blockHeight, tt.hash, tt.txIndex, tt.hash, *tt.address)
+			assert.False(t, pc.query(pcDB), "flushPreCommit(noHash) failed with preCommit(%s)", pc.String())
+		}
+	}
 }
 
 type backupClaimData struct {

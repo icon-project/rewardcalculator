@@ -1,10 +1,10 @@
 package core
 
 import (
-	"encoding/json"
+	"encoding/hex"
 	"fmt"
 	"log"
-	"unsafe"
+	"strconv"
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
@@ -15,6 +15,7 @@ import (
 const (
 	BlockHeightSize = 8
 	BlockHashSize   = 32
+	TXHashSize      = 32
 
 	PreCommitIDSize = BlockHeightSize + BlockHashSize + common.AddressBytes
 
@@ -25,6 +26,10 @@ const (
 type ClaimData struct {
 	BlockHeight   uint64
 	IScore        common.HexInt
+}
+
+func (cd *ClaimData) String() string {
+	return fmt.Sprintf("BlockHeight: %d, IScore: %s", cd.BlockHeight, cd.IScore.String())
 }
 
 func (cd *ClaimData) equal(cmpData *ClaimData) bool {
@@ -62,11 +67,7 @@ func (c *Claim) Bytes() []byte {
 }
 
 func (c *Claim) String() string {
-	b, err := json.Marshal(c)
-	if err != nil {
-		return "Can't covert Message to json"
-	}
-	return string(b)
+	return fmt.Sprintf("Address: %s, %s", c.Address.String(), c.Data.String())
 }
 
 func (c *Claim) SetBytes(bs []byte) error {
@@ -120,7 +121,17 @@ func (cb *ClaimBackupInfo) SetBytes(bs []byte) error {
 
 type PreCommitData struct {
 	Confirmed bool
+	TXIndex uint64
+	TXHash []byte
 	Claim
+}
+
+func (pc *PreCommitData) String() string {
+	return fmt.Sprintf("TXIndex: %d, TXHash: %s, Confirmed: %s, %s",
+		pc.TXIndex,
+		hex.EncodeToString(pc.TXHash),
+		strconv.FormatBool(pc.Confirmed),
+		pc.Claim.String())
 }
 
 type PreCommit struct {
@@ -133,11 +144,18 @@ func (pc *PreCommit) ID() []byte {
 	id := make([]byte, PreCommitIDSize)
 
 	bh := common.Uint64ToBytes(pc.BlockHeight)
-	copy(id[BlockHeightSize- len(bh):], bh)
+	copy(id[BlockHeightSize-len(bh):], bh)
 	copy(id[BlockHeightSize:], pc.BlockHash)
 	copy(id[BlockHeightSize+BlockHashSize:], pc.Address.Bytes())
 
 	return id
+}
+
+func (pc *PreCommit) SetID(id []byte) {
+	pc.BlockHeight = common.BytesToUint64(id[:BlockHeightSize])
+	pc.BlockHash = make([]byte, BlockHashSize)
+	copy(pc.BlockHash, id[BlockHeightSize:BlockHeightSize+BlockHashSize])
+	pc.Address.SetBytes(id[BlockHeightSize+BlockHashSize:])
 }
 
 func (pc *PreCommit) Bytes() ([]byte, error) {
@@ -151,11 +169,10 @@ func (pc *PreCommit) Bytes() ([]byte, error) {
 }
 
 func (pc *PreCommit) String() string {
-	b, err := json.Marshal(pc)
-	if err != nil {
-		return "Can't covert Message to json"
-	}
-	return string(b)
+	return fmt.Sprintf("BlockHeight: %d, BlockHash: %s, %s",
+		pc.BlockHeight,
+		hex.EncodeToString(pc.BlockHash),
+		pc.PreCommitData.String())
 }
 
 func (pc *PreCommit) SetBytes(bs []byte) error {
@@ -166,12 +183,15 @@ func (pc *PreCommit) SetBytes(bs []byte) error {
 	return nil
 }
 
-func newPreCommit(blockHeight uint64, blockHash []byte, address common.Address) *PreCommit {
+func newPreCommit(blockHeight uint64, blockHash []byte, txIndex uint64, txHash []byte, address common.Address) *PreCommit {
 	pc := new(PreCommit)
 
 	pc.BlockHeight = blockHeight
 	pc.BlockHash = make([]byte, BlockHashSize)
 	copy(pc.BlockHash, blockHash)
+	pc.TXIndex = txIndex
+	pc.TXHash = make([]byte, TXHashSize)
+	copy(pc.TXHash, txHash)
 	pc.Address = address
 
 	return pc
@@ -208,30 +228,37 @@ func (pc *PreCommit) delete(pcDB db.Database) error {
 }
 
 func (pc *PreCommit) commit(pcDB db.Database) error {
+	txIndex := pc.TXIndex
 	if pc.query(pcDB) == false {
 		return fmt.Errorf("no data to commit")
 	}
-	if pc.Confirmed == true {
-		return nil
+	if txIndex == pc.TXIndex {
+		if pc.Confirmed == true {
+			return nil
+		}
+		pc.Confirmed = true
+		return pc.write(pcDB, nil)
 	}
-	pc.Confirmed = true
-	return pc.write(pcDB, nil)
+	return nil
 }
 
 func (pc *PreCommit) revert(pcDB db.Database) error {
+	txIndex := pc.TXIndex
 	if pc.query(pcDB) == false {
-		return fmt.Errorf("no data to commit")
+		return fmt.Errorf("no data to revert")
 	}
-	if pc.Confirmed == true {
-		return nil
-	} else {
-		return pc.delete(pcDB)
+	if txIndex == pc.TXIndex {
+		if pc.Confirmed == true {
+			return nil
+		} else {
+			return pc.delete(pcDB)
+		}
 	}
+	return nil
 }
 
 func makeIteratorPrefix(prefix db.BucketID, blockHeight uint64, data []byte, dataSize int) *util.Range {
-	blockHeightSize := int(unsafe.Sizeof(blockHeight))
-	bsSize := len(prefix) + blockHeightSize
+	bsSize := len(prefix) + BlockHeightSize
 	if data != nil {
 		bsSize += dataSize
 	}
@@ -240,7 +267,7 @@ func makeIteratorPrefix(prefix db.BucketID, blockHeight uint64, data []byte, dat
 	bs := make([]byte, bsSize)
 
 	copy(bs, prefix)
-	copy(bs[len(prefix) + blockHeightSize - len(bh):], bh)
+	copy(bs[len(prefix) + BlockHeightSize - len(bh):], bh)
 	if data != nil {
 		copy(bs[bsSize-dataSize:], data)
 	}
@@ -248,7 +275,23 @@ func makeIteratorPrefix(prefix db.BucketID, blockHeight uint64, data []byte, dat
 	return util.BytesPrefix(bs)
 }
 
+// Delete PreCommit data with blockHeight and blockHash
+// To delete only with blockHeight, pass blockHash as nil
 func flushPreCommit(pcDB db.Database, blockHeight uint64, blockHash []byte) error {
+	prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight, blockHash, BlockHashSize)
+
+	return deletePreCommit(pcDB, prefix.Start, prefix.Limit)
+}
+
+// Delete PreCommit data with block height greater than blockHeight
+func initPreCommit(pcDB db.Database, blockHeight uint64) error {
+	prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight + 1, nil, BlockHashSize)
+
+	return deletePreCommit(pcDB, prefix.Start, nil)
+}
+
+// Delete PreCommit data with iterator
+func deletePreCommit(pcDB db.Database, start []byte, limit []byte) error {
 	bucket, err := pcDB.GetBucket(db.PrefixClaim)
 	if err != nil {
 		return err
@@ -261,8 +304,7 @@ func flushPreCommit(pcDB db.Database, blockHeight uint64, blockHash []byte) erro
 
 	// iterate & get keys to delete
 	keys := make([][]byte, 0)
-	prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight, blockHash, BlockHashSize)
-	iter.New(prefix.Start, prefix.Limit)
+	iter.New(start, limit)
 	for iter.Next() {
 		key := make([]byte, PreCommitIDSize)
 		copy(key, iter.Key()[len(db.PrefixClaim):])

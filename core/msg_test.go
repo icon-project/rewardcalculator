@@ -55,3 +55,17 @@ func TestMsg_DoQuery(t *testing.T) {
 	assert.Equal(t, dbContent0.BlockHeight, resp.BlockHeight)
 	assert.Equal(t, 0, resp.IScore.Cmp(&common.NewHexIntFromUint64(100).Int))
 }
+
+
+func TestMsg_DoInit(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest(ctx)
+
+	// invalid - too high blockHeight
+	err := DoInit(ctx, 100)
+	assert.Error(t, err)
+
+	// valid blockHeight
+	err = DoInit(ctx, 0)
+	assert.NoError(t, err)
+}

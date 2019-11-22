@@ -41,7 +41,7 @@ func TestContext_NewContext(t *testing.T) {
 	assert.NotNil(t, ctx.DB)
 	assert.NotNil(t, ctx.DB.info)
 	assert.Equal(t, dbCount, ctx.DB.info.DBCount)
-	assert.True(t, ctx.DB.getCurrentBlockInfo().checkValue(uint64(0), zeroBlockHash))
+	assert.True(t, ctx.DB.getCurrentBlockInfo().checkValue(uint64(0), zeroHash))
 	assert.Equal(t, uint64(0), ctx.DB.getCalcDoneBH())
 	assert.Equal(t, uint64(0), ctx.DB.getPrevCalcDoneBH())
 	assert.Equal(t, uint64(0), ctx.DB.getCalculatingBH())

@@ -20,13 +20,17 @@ type ClaimMessage struct {
 	Address     common.Address
 	BlockHeight uint64
 	BlockHash   []byte
+	TXIndex     uint64
+	TXHash      []byte
 }
 
 func (cm *ClaimMessage) String() string {
-	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s",
+	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s, TXIndex: %d, TXHash: %s",
 		cm.Address.String(),
 		cm.BlockHeight,
-		hex.EncodeToString(cm.BlockHash))
+		hex.EncodeToString(cm.BlockHash),
+		cm.TXIndex,
+		hex.EncodeToString(cm.TXHash))
 }
 
 type ResponseClaim struct {
@@ -35,11 +39,7 @@ type ResponseClaim struct {
 }
 
 func (rc *ResponseClaim) String() string {
-	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s, IScore: %s",
-		rc.Address.String(),
-		rc.BlockHeight,
-		hex.EncodeToString(rc.BlockHash),
-		rc.IScore.String())
+	return fmt.Sprintf("%s, IScore: %s", rc.ClaimMessage.String(), rc.IScore.String())
 }
 
 func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
@@ -69,10 +69,15 @@ func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 // In error case, block height is zero and I-Score is nil.
 func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	pcDB := ctx.DB.getPreCommitDB()
-	preCommit := newPreCommit(req.BlockHeight, req.BlockHash, req.Address)
+	preCommit := newPreCommit(req.BlockHeight, req.BlockHash, req.TXIndex, req.TXHash, req.Address)
 	if preCommit.query(pcDB) == true {
-		// already claimed in current block
-		return preCommit.BlockHeight, nil
+		if preCommit.Confirmed && req.TXIndex != preCommit.TXIndex {
+			// already claimed in current block
+			return preCommit.BlockHeight, nil
+		} else {
+			// re-invoke same TX in same Block
+			return preCommit.BlockHeight, &preCommit.Data.IScore
+		}
 	}
 
 	var claim *Claim = nil
@@ -144,14 +149,18 @@ type CommitClaim struct {
 	Address     common.Address
 	BlockHeight uint64
 	BlockHash   []byte
+	TXIndex     uint64
+	TXHash      []byte
 }
 
 func (cc *CommitClaim) String() string {
-	return fmt.Sprintf("Success: %s, Address: %s, BlockHeight: %d, BlockHash: %s",
+	return fmt.Sprintf("Success: %s, Address: %s, BlockHeight: %d, BlockHash: %s, TXIndex: %d, TXHash: %s",
 		strconv.FormatBool(cc.Success),
 		cc.Address.String(),
 		cc.BlockHeight,
-		hex.EncodeToString(cc.BlockHash))
+		hex.EncodeToString(cc.BlockHash),
+		cc.TXIndex,
+		hex.EncodeToString(cc.TXHash))
 }
 
 func (mh *msgHandler) commitClaim(c ipc.Connection, id uint32, data []byte) error {
@@ -175,7 +184,7 @@ func (mh *msgHandler) commitClaim(c ipc.Connection, id uint32, data []byte) erro
 
 func DoCommitClaim(ctx *Context, req *CommitClaim) error {
 	var err error
-	preCommit := newPreCommit(req.BlockHeight, req.BlockHash, req.Address)
+	preCommit := newPreCommit(req.BlockHeight, req.BlockHash, req.TXIndex, req.TXHash, req.Address)
 	pcDB := ctx.DB.getPreCommitDB()
 
 	if req.Success == true {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"github.com/icon-project/rewardcalculator/core"
@@ -9,7 +10,8 @@ import (
 
 
 
-func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
+func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64, blockHash string,
+	txIndex uint64, txHash string, noCommitClaim bool, noCommitBlock bool) {
 	var req core.ClaimMessage
 	var resp core.ResponseClaim
 
@@ -17,34 +19,99 @@ func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
 	req.Address.SetString(address)
 	req.BlockHeight = blockHeight
 	req.BlockHash = make([]byte, core.BlockHashSize)
-	binary.BigEndian.PutUint64(req.BlockHash, blockHeight)
+	if len(blockHash) == 0 {
+		binary.BigEndian.PutUint64(req.BlockHash, blockHeight)
+	} else {
+		bh, err := hex.DecodeString(blockHash)
+		if err != nil {
+			fmt.Printf("Failed to send CLAIM. Invalid block hash. %v\n", err)
+			return
+		}
+		copy(req.BlockHash, bh)
+	}
+	req.TXIndex = txIndex
+	req.TXHash = make([]byte, core.TXHashSize)
+	if len(txHash) == 0 {
+		binary.BigEndian.PutUint64(req.TXHash, blockHeight + txIndex)
+	} else {
+		th, err := hex.DecodeString(txHash)
+		if err != nil {
+			fmt.Printf("Failed to send CLAIM. Invalid TX hash. %v\n", err)
+		}
+		copy(req.TXHash, th)
+	}
 
-	fmt.Printf("send CLAIM message: %s\n", req.String())
+	fmt.Printf("Send CLAIM message: %s\n", req.String())
 	conn.SendAndReceive(core.MsgClaim, cli.id, &req, &resp)
 	cli.id++
-	fmt.Printf("CLAIM message get response: %s\n", resp.String())
+	fmt.Printf("Get CLAIM response: %s\n", resp.String())
 
 	// send COMMIT_CLAIM and get ack
-	var commitClaim core.CommitClaim
-	commitClaim.Success = true
-	commitClaim.Address = req.Address
-	commitClaim.BlockHeight = req.BlockHeight
-	commitClaim.BlockHash = make([]byte, core.BlockHashSize)
-	copy(commitClaim.BlockHash, req.BlockHash)
-
-	fmt.Printf("Send COMMIT_CLAIM message: %s\n", commitClaim.String())
-	conn.SendAndReceive(core.MsgCommitClaim, cli.id, &commitClaim, &resp)
-	cli.id++
-	fmt.Printf("COMMIT_CLAIM message get ack\n")
+	if noCommitClaim == false {
+		cli.commitClaim(conn, true, address, blockHeight, blockHash, txIndex, txHash)
+		cli.id++
+	}
 
 	// send COMMIT_BLOCK and get response
-	var commit core.CommitBlock
-	var commitResp core.CommitBlock
-	commit.Success = true
-	commit.BlockHash = req.BlockHash
-	commit.BlockHeight = blockHeight
+	if noCommitBlock == false {
+		cli.commitBlock(conn, true, blockHeight, blockHash)
+	}
+}
 
-	fmt.Printf("Send COMMIT_BLOCK message: %s\n", commit.String())
-	conn.SendAndReceive(core.MsgCommitBlock, cli.id, &commit, &commitResp)
-	fmt.Printf("COMMIT_BLOCK message get response: %s\n", commitResp.String())
+func (cli *CLI) commitClaim(conn ipc.Connection, success bool, address string, blockHeight uint64, blockHash string,
+	txIndex uint64, txHash string) {
+	var req core.CommitClaim
+	var resp core.CommitClaim
+	req.Success = success
+	req.Address.SetString(address)
+	req.BlockHeight = blockHeight
+	req.BlockHash = make([]byte, core.BlockHashSize)
+	if len(blockHash) == 0 {
+		binary.BigEndian.PutUint64(req.BlockHash, blockHeight)
+	} else {
+		bh, err := hex.DecodeString(blockHash)
+		if err != nil {
+			fmt.Printf("Failed to send COMMIT_CLAIM. Invalid block hash. %v\n", err)
+			return
+		}
+		copy(req.BlockHash, bh)
+	}
+	req.TXIndex = txIndex
+	req.TXHash = make([]byte, core.TXHashSize)
+	if len(txHash) == 0 {
+		binary.BigEndian.PutUint64(req.TXHash, blockHeight + txIndex)
+	} else {
+		th, err := hex.DecodeString(txHash)
+		if err != nil {
+			fmt.Printf("Failed to send COMMIT_CLAIM. Invalid TX hash. %v\n", err)
+			return
+		}
+		copy(req.TXHash, th)
+	}
+
+	fmt.Printf("Send COMMIT_CLAIM message: %s\n", req.String())
+	conn.SendAndReceive(core.MsgCommitClaim, cli.id, &req, &resp)
+	fmt.Printf("Get COMMIT_CLAIM ack\n")
+}
+
+func (cli *CLI) commitBlock(conn ipc.Connection, success bool, blockHeight uint64, blockHash string) {
+	var req core.CommitBlock
+	var resp core.CommitBlock
+	req.Success = success
+	req.BlockHash = make([]byte, core.BlockHashSize)
+	if len(blockHash) == 0 {
+		binary.BigEndian.PutUint64(req.BlockHash, blockHeight)
+	} else {
+		bh, err := hex.DecodeString(blockHash)
+		if err != nil {
+			fmt.Printf("Failed to COMMIT_BLOCK. Invalid block hash. %v\n", err)
+			return
+		}
+		copy(req.BlockHash, bh)
+	}
+	req.BlockHeight = blockHeight
+
+	fmt.Printf("Send COMMIT_BLOCK message: %s\n", req.String())
+	conn.SendAndReceive(core.MsgCommitBlock, cli.id, &req, &resp)
+	fmt.Printf("Get COMMIT_BLOCK response: %s\n", resp.String())
 }

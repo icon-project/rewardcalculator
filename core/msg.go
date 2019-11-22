@@ -4,12 +4,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
+	"strconv"
+
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"github.com/pkg/errors"
-	"log"
 )
 
 const (
@@ -24,6 +26,7 @@ const (
 	MsgQueryCalculateStatus = 6
 	MsgQueryCalculateResult = 7
 	MsgRollBack         = 8
+	MsgINIT             = 9
 
 	MsgNotify           = 100
 	MsgReady            = MsgNotify + 0
@@ -56,6 +59,8 @@ func MsgToString(msg uint) string{
 		return "CALCULATE_DONE"
 	case MsgRollBack:
 		return "ROLLBACK"
+	case MsgINIT:
+		return "INIT"
 	case MsgDebug:
 		return "DEBUG"
 	default:
@@ -94,6 +99,7 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 		c.SetHandler(MsgCommitBlock, handler)
 		c.SetHandler(MsgCommitClaim, handler)
 		c.SetHandler(MsgRollBack, handler)
+		c.SetHandler(MsgINIT, handler)
 	}
 
 	// send READY message to peer
@@ -130,6 +136,8 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 	case MsgRollBack:
 		// do not process other messages while process Rollback message
 		return mh.rollback(c, id, data)
+	case MsgINIT:
+		go mh.init(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}
@@ -227,4 +235,39 @@ func DoQuery(ctx *Context, addr common.Address) *ResponseQuery {
 	resp.IScore.Set(&ia.IScore.Int)
 
 	return &resp
+}
+
+type ResponseInit struct {
+	Success bool
+	BlockHeight uint64
+}
+
+func (resp *ResponseInit) String() string {
+	return fmt.Sprintf("Success: %s, BlockHeight: %d", strconv.FormatBool(resp.Success), resp.BlockHeight)
+}
+
+func (mh *msgHandler) init(c ipc.Connection, id uint32, data []byte) error {
+	var blockHeight uint64
+	if _, err := codec.MP.UnmarshalFromBytes(data, &blockHeight); err != nil {
+		return err
+	}
+	log.Printf("\t %s request: block height : %d", MsgToString(MsgINIT), blockHeight)
+
+	resp := ResponseInit{true, blockHeight}
+	err := DoInit(mh.mgr.ctx, blockHeight)
+	if err != nil {
+		log.Printf("Failed to INIT. %v", err)
+		resp.Success = false
+	}
+
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgINIT), id, resp.String())
+	return c.Send(MsgINIT, id, &resp)
+}
+
+func DoInit(ctx *Context, blockHeight uint64) error {
+	currentBlockHeight := ctx.DB.getCurrentBlockInfo().BlockHeight
+	if blockHeight > currentBlockHeight + 1 {
+		return fmt.Errorf("too high block height %d > %d", blockHeight, currentBlockHeight+1)
+	}
+	return initPreCommit(ctx.DB.getPreCommitDB(), blockHeight)
 }
