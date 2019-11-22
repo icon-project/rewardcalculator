@@ -2,12 +2,15 @@ package core
 
 import (
 	"bytes"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
-	"os"
-	"testing"
 )
 
 var testDir string
@@ -38,7 +41,10 @@ func TestContext_NewContext(t *testing.T) {
 	assert.NotNil(t, ctx.DB)
 	assert.NotNil(t, ctx.DB.info)
 	assert.Equal(t, dbCount, ctx.DB.info.DBCount)
-	assert.Equal(t, uint64(0), ctx.DB.info.BlockHeight)
+	assert.True(t, ctx.DB.getCurrentBlockInfo().checkValue(uint64(0), zeroBlockHash))
+	assert.Equal(t, uint64(0), ctx.DB.getCalcDoneBH())
+	assert.Equal(t, uint64(0), ctx.DB.getPrevCalcDoneBH())
+	assert.Equal(t, uint64(0), ctx.DB.getCalculatingBH())
 	assert.False(t, ctx.DB.info.QueryDBIsZero)
 	assert.Equal(t, dbCount, len(ctx.DB.Account0))
 	assert.Equal(t, dbCount, len(ctx.DB.Account1))
@@ -49,45 +55,48 @@ func TestContext_NewContext(t *testing.T) {
 	assert.NotNil(t, ctx.GV)
 	assert.NotNil(t, ctx.PRep)
 	assert.NotNil(t, ctx.PRepCandidates)
-	assert.NotNil(t, ctx.calculateStatus)
 }
 
-func TestContext_UpdateGovernanceVariable(t *testing.T) {
+func TestContext_GovernanceVariable(t *testing.T) {
 	const (
-		ctxBlockHeight uint64 = 100
+		ctxBlockHeight1 uint64 = 50
+		ctxBlockHeight2 uint64 = 100
 	)
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
 
 	bucket, _ := ctx.DB.management.GetBucket(db.PrefixGovernanceVariable)
 
-	// Set Block height
-	ctx.DB.info.BlockHeight = ctxBlockHeight
+	// Set Block height of CalcDone and PrevCalcDone
+	ctx.DB.setCalcDoneBH(ctxBlockHeight1)
 
 	// Insert initial GV
 	gv := new(GovernanceVariable)
-	gv.BlockHeight = ctxBlockHeight - 20
-	gv.RewardRep = *common.NewHexIntFromUint64(ctxBlockHeight - 20)
+	gv.BlockHeight = ctxBlockHeight1 - 20
+	gv.RewardRep = *common.NewHexIntFromUint64(ctxBlockHeight1 - 20)
 	ctx.GV = append(ctx.GV, gv)
 	value, _ := gv.Bytes()
 	bucket.Set(gv.ID(), value)
 
 	gv = new(GovernanceVariable)
-	gv.BlockHeight = ctxBlockHeight - 10
-	gv.RewardRep = *common.NewHexIntFromUint64(ctxBlockHeight - 10)
+	gv.BlockHeight = ctxBlockHeight1
+	gv.RewardRep = *common.NewHexIntFromUint64(ctxBlockHeight1)
 	ctx.GV = append(ctx.GV, gv)
 	value, _ = gv.Bytes()
 	bucket.Set(gv.ID(), value)
 
+	// Set Block height of CalcDone and PrevCalcDone
+	ctx.DB.setCalcDoneBH(ctxBlockHeight2)
+
 	// make IISSGovernanceVariable list
 	gvList := make([]*IISSGovernanceVariable, 0)
 	iissGV := new(IISSGovernanceVariable)
-	iissGV.BlockHeight = ctxBlockHeight + 10
-	iissGV.RewardRep = ctxBlockHeight + 10
+	iissGV.BlockHeight = ctxBlockHeight2 - 20
+	iissGV.RewardRep = ctxBlockHeight2 - 20
 	gvList = append(gvList, iissGV)
 	iissGV = new(IISSGovernanceVariable)
-	iissGV.BlockHeight = ctxBlockHeight + 20
-	iissGV.RewardRep = ctxBlockHeight + 20
+	iissGV.BlockHeight = ctxBlockHeight2
+	iissGV.RewardRep = ctxBlockHeight2
 	gvList = append(gvList, iissGV)
 
 	// update GV
@@ -96,10 +105,8 @@ func TestContext_UpdateGovernanceVariable(t *testing.T) {
 	// check - len
 	assert.Equal(t, len(gvList) + 1, len(ctx.GV))
 
-	// check - values
-
 	// In memory
-	assert.Equal(t, ctxBlockHeight - 10, ctx.GV[0].BlockHeight)
+	assert.Equal(t, ctxBlockHeight1, ctx.GV[0].BlockHeight)
 	// In DB
 	bs, _ := bucket.Get(ctx.GV[0].ID())
 	assert.NotNil(t, bs)
@@ -107,7 +114,7 @@ func TestContext_UpdateGovernanceVariable(t *testing.T) {
 	assert.Equal(t, 0, ctx.GV[0].RewardRep.Cmp(&gv.RewardRep.Int))
 
 	// In memory
-	assert.Equal(t, ctxBlockHeight + 10, ctx.GV[1].BlockHeight)
+	assert.Equal(t, ctxBlockHeight2 - 20, ctx.GV[1].BlockHeight)
 	// In DB
 	bs, _ = bucket.Get(ctx.GV[1].ID())
 	assert.NotNil(t, bs)
@@ -115,17 +122,32 @@ func TestContext_UpdateGovernanceVariable(t *testing.T) {
 	assert.Equal(t, 0, ctx.GV[1].RewardRep.Cmp(&gv.RewardRep.Int))
 
 	// In memory
-	assert.Equal(t, ctxBlockHeight + 20, ctx.GV[2].BlockHeight)
+	assert.Equal(t, ctxBlockHeight2, ctx.GV[2].BlockHeight)
 	// In DB
 	bs, _ = bucket.Get(ctx.GV[2].ID())
 	assert.NotNil(t, bs)
 	gv.SetBytes(bs)
 	assert.Equal(t, 0, ctx.GV[2].RewardRep.Cmp(&gv.RewardRep.Int))
+
+	// test rollback
+	ctx.RollbackManagementDB(ctxBlockHeight1)
+
+	// check - len
+	assert.Equal(t, 1, len(ctx.GV))
+
+	// In memory
+	assert.Equal(t, ctxBlockHeight1, ctx.GV[0].BlockHeight)
+	// In DB
+	bs, _ = bucket.Get(ctx.GV[0].ID())
+	assert.NotNil(t, bs)
+	gv.SetBytes(bs)
+	assert.Equal(t, 0, ctx.GV[0].RewardRep.Cmp(&gv.RewardRep.Int))
 }
 
-func TestContext_UpdatePRep(t *testing.T) {
+func TestContext_PRep(t *testing.T) {
 	const (
-		ctxBlockHeight uint64 = 100
+		ctxBlockHeight1 uint64 = 50
+		ctxBlockHeight2 uint64 = 100
 	)
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
@@ -133,32 +155,35 @@ func TestContext_UpdatePRep(t *testing.T) {
 	bucket, _ := ctx.DB.management.GetBucket(db.PrefixPRep)
 
 	// Set Block height
-	ctx.DB.info.BlockHeight = ctxBlockHeight
+	ctx.DB.setCalcDoneBH(ctxBlockHeight1)
 
 	// Insert initial PRep
 	pRep := new(PRep)
-	pRep.BlockHeight = ctxBlockHeight - 20
-	pRep.TotalDelegation = *common.NewHexIntFromUint64(ctxBlockHeight - 20)
+	pRep.BlockHeight = ctxBlockHeight1 - 20
+	pRep.TotalDelegation = *common.NewHexIntFromUint64(ctxBlockHeight1 - 20)
 	ctx.PRep = append(ctx.PRep, pRep)
 	value, _ := pRep.Bytes()
 	bucket.Set(pRep.ID(), value)
 
 	pRep = new(PRep)
-	pRep.BlockHeight = ctxBlockHeight - 10
-	pRep.TotalDelegation = *common.NewHexIntFromUint64(ctxBlockHeight - 10)
+	pRep.BlockHeight = ctxBlockHeight1
+	pRep.TotalDelegation = *common.NewHexIntFromUint64(ctxBlockHeight1)
 	ctx.PRep = append(ctx.PRep, pRep)
 	value, _ = pRep.Bytes()
 	bucket.Set(pRep.ID(), value)
 
+	// Set Block height
+	ctx.DB.setCalcDoneBH(ctxBlockHeight1)
+
 	// make IISS list
 	prepList := make([]*PRep, 0)
 	pRep = new(PRep)
-	pRep.BlockHeight = ctxBlockHeight + 10
-	pRep.TotalDelegation = *common.NewHexIntFromUint64(ctxBlockHeight + 10)
+	pRep.BlockHeight = ctxBlockHeight2 - 20
+	pRep.TotalDelegation = *common.NewHexIntFromUint64(ctxBlockHeight1 - 20)
 	prepList = append(prepList, pRep)
 	pRep = new(PRep)
-	pRep.BlockHeight = ctxBlockHeight + 20
-	pRep.TotalDelegation = *common.NewHexIntFromUint64(ctxBlockHeight + 20)
+	pRep.BlockHeight = ctxBlockHeight2
+	pRep.TotalDelegation = *common.NewHexIntFromUint64(ctxBlockHeight2)
 	prepList = append(prepList, pRep)
 
 	// update PRep
@@ -170,7 +195,7 @@ func TestContext_UpdatePRep(t *testing.T) {
 	// check - values
 
 	// In memory
-	assert.Equal(t, ctxBlockHeight - 10, ctx.PRep[0].BlockHeight)
+	assert.Equal(t, ctxBlockHeight1, ctx.PRep[0].BlockHeight)
 	// In DB
 	bs, _ := bucket.Get(ctx.PRep[0].ID())
 	assert.NotNil(t, bs)
@@ -178,7 +203,7 @@ func TestContext_UpdatePRep(t *testing.T) {
 	assert.Equal(t, 0, ctx.PRep[0].TotalDelegation.Cmp(&pRep.TotalDelegation.Int))
 
 	// In memory
-	assert.Equal(t, ctxBlockHeight + 10, ctx.PRep[1].BlockHeight)
+	assert.Equal(t, ctxBlockHeight2 - 20, ctx.PRep[1].BlockHeight)
 	// In DB
 	bs, _ = bucket.Get(ctx.PRep[1].ID())
 	assert.NotNil(t, bs)
@@ -186,12 +211,27 @@ func TestContext_UpdatePRep(t *testing.T) {
 	assert.Equal(t, 0, ctx.PRep[1].TotalDelegation.Cmp(&pRep.TotalDelegation.Int))
 
 	// In memory
-	assert.Equal(t, ctxBlockHeight + 20, ctx.PRep[2].BlockHeight)
+	assert.Equal(t, ctxBlockHeight2, ctx.PRep[2].BlockHeight)
 	// In DB
 	bs, _ = bucket.Get(ctx.PRep[2].ID())
 	assert.NotNil(t, bs)
 	pRep.SetBytes(bs)
 	assert.Equal(t, 0, ctx.PRep[2].TotalDelegation.Cmp(&pRep.TotalDelegation.Int))
+
+	// rollback
+	ctx.RollbackManagementDB(ctxBlockHeight1)
+
+	// check - len
+	assert.Equal(t, 1, len(ctx.PRep))
+
+	// In memory
+	assert.Equal(t, ctxBlockHeight1, ctx.PRep[0].BlockHeight)
+	// In DB
+	bs, _ = bucket.Get(ctx.PRep[0].ID())
+	assert.NotNil(t, bs)
+	pRep.SetBytes(bs)
+	assert.Equal(t, 0, ctx.PRep[0].TotalDelegation.Cmp(&pRep.TotalDelegation.Int))
+
 }
 
 func TestContext_UpdatePRepCandidate(t *testing.T) {
@@ -391,7 +431,7 @@ func TestContext_ToggleAccountDB(t *testing.T) {
 	assert.Equal(t, original, ctx.DB.info.QueryDBIsZero)
 }
 
-func TestContext_ResetCalcDB(t *testing.T) {
+func TestContext_ResetAccountDB(t *testing.T) {
 	dbCount := 4
 	ctx := initTest(dbCount)
 	defer finalizeTest(ctx)
@@ -399,11 +439,170 @@ func TestContext_ResetCalcDB(t *testing.T) {
 	qDBList := ctx.DB.getQueryDBList()
 	cDBList := ctx.DB.GetCalcDBList()
 
-	ctx.DB.resetCalcDB()
+	// toggled now. write to old query DB to check backup DB
+	ia := makeIA()
+	qDB := ctx.DB.getCalculateDB(ia.Address)
+	bucket, _ := qDB.GetBucket(db.PrefixIScore)
+	err := bucket.Set(ia.ID(), ia.Bytes())
+	assert.NoError(t, err)
 
+	blockHeight := uint64(1000)
+	err = ctx.DB.resetAccountDB(blockHeight)
+	assert.NoError(t, err)
+
+	// same query DB
 	assert.Equal(t, qDBList, ctx.DB.getQueryDBList())
+
+	// new calculate DB
 	assert.NotEqual(t, cDBList, ctx.DB.GetCalcDBList())
 	assert.Equal(t, dbCount, len(ctx.DB.GetCalcDBList()))
+
+	// new backup DB
+	for i := 0; i < ctx.DB.info.DBCount; i++ {
+		backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, i+1)
+		stat, err := os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
+		assert.NoError(t, err)
+		assert.True(t, stat.IsDir())
+	}
+	// check ia value in backup DB
+	backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, ctx.DB.getAccountDBIndex(ia.Address) + 1)
+	backupDB := db.Open(ctx.DB.info.DBRoot, ctx.DB.info.DBType, backupName)
+	bucket, _ = backupDB.GetBucket(db.PrefixIScore)
+	bs, err := bucket.Get(ia.ID())
+	assert.NoError(t, err)
+	assert.NotNil(t, bs)
+	assert.Equal(t, ia.Bytes(), bs)
+	backupDB.Close()
+}
+
+func TestContext_CurrentBlockInfo(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest(ctx)
+
+	const (
+		blockHeight1 uint64 = 100
+		blockHeight2 uint64 = 200
+	)
+
+	blockHash1 := make([]byte, BlockHashSize)
+	copy(blockHash1,  []byte(string(blockHeight1)))
+	blockHash2 := make([]byte, BlockHashSize)
+	copy(blockHash2,  []byte(string(blockHeight2)))
+
+	ctx.DB.setCurrentBlockInfo(blockHeight2, blockHash2)
+	assert.True(t, ctx.DB.getCurrentBlockInfo().checkValue(blockHeight2, blockHash2))
+
+	ctx.DB.rollbackCurrentBlockInfo(blockHeight1, blockHash1)
+	assert.True(t, ctx.DB.getCurrentBlockInfo().checkValue(blockHeight1, blockHash1))
+}
+
+func TestContext_AccountDBBlockHeight(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest(ctx)
+
+	const (
+		blockHeight1 uint64 = 100
+		blockHeight2 uint64 = 200
+	)
+
+	ctx.DB.setCalcDoneBH(blockHeight1)
+	ctx.DB.setCalcDoneBH(blockHeight2)
+	assert.Equal(t, blockHeight2, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, blockHeight1, ctx.DB.getPrevCalcDoneBH())
+
+	ctx.DB.rollbackAccountDBBlockInfo()
+
+	assert.Equal(t, blockHeight1, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, blockHeight1, ctx.DB.getPrevCalcDoneBH())
+	assert.Equal(t, blockHeight1, ctx.DB.getCalculatingBH())
+}
+
+func TestContext_RollbackAccountDB(t *testing.T) {
+	dbCount := 4
+	ctx := initTest(dbCount)
+	defer finalizeTest(ctx)
+
+	crDB := ctx.DB.getCalculateResultDB()
+	crBucket, err := crDB.GetBucket(db.PrefixCalcResult)
+
+	ia := makeIA()
+
+
+	// write to query DB
+	qDB := ctx.DB.getQueryDB(ia.Address)
+	bucket, _ := qDB.GetBucket(db.PrefixIScore)
+	err = bucket.Set(ia.ID(), ia.Bytes())
+	assert.NoError(t, err)
+
+	// emulate calculation process
+	prevBlockHeight := uint64(5)
+	ctx.DB.setCalcDoneBH(prevBlockHeight)
+	blockHeight := uint64(10)
+	ctx.DB.setCalculatingBH(blockHeight)
+	ctx.DB.writeToDB()
+	ctx.DB.toggleAccountDB()
+
+	// Rollback without backup account DB
+	err = ctx.DB.rollbackAccountDB(0)
+	assert.Error(t, err)
+
+	// reset account DB to make backup account DB
+	err = ctx.DB.resetAccountDB(blockHeight)
+	assert.NoError(t, err)
+	WriteCalculationResult(crDB, blockHeight, nil, nil)
+	ctx.DB.setCalcDoneBH(blockHeight)
+	ctx.DB.writeToDB()
+	assert.Equal(t, prevBlockHeight, ctx.DB.getPrevCalcDoneBH())
+	assert.Equal(t, blockHeight, ctx.DB.getCalcDoneBH())
+
+	// read from query DB
+	qDB = ctx.DB.getQueryDB(ia.Address)
+	bucket, _ = qDB.GetBucket(db.PrefixIScore)
+	bs, _ := bucket.Get(ia.ID())
+	assert.Nil(t, bs)
+
+	// no need to Rollback with blockHeight >= ctx.DB.Info.CalcBlockHeight
+	err = ctx.DB.rollbackAccountDB(blockHeight)
+
+	// backup account DB remains
+	backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, 1)
+	stat, err := os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
+	assert.NoError(t, err)
+	assert.True(t, stat.IsDir())
+
+	// check block height and block hash
+	assert.Equal(t, blockHeight, ctx.DB.getCalcDoneBH())
+
+	// valid Rollback
+	err = ctx.DB.rollbackAccountDB(0)
+	assert.NoError(t, err)
+
+	// backup account DB was deleted
+	backupName = fmt.Sprintf(BackupDBNameFormat, blockHeight, 1)
+	_, err = os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
+	assert.Error(t, err)
+	assert.True(t, os.IsNotExist(err))
+
+	// check calculation result
+	bs, _ = crBucket.Get(common.Uint64ToBytes(prevBlockHeight))
+	assert.Nil(t, bs)
+
+	// check Rollback block height and block hash
+	assert.Equal(t, prevBlockHeight, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, prevBlockHeight, ctx.DB.getPrevCalcDoneBH())
+
+	// read from query DB
+	qDB = ctx.DB.getQueryDB(ia.Address)
+	bucket, _ = qDB.GetBucket(db.PrefixIScore)
+	bs, _ = bucket.Get(ia.ID())
+	assert.NotNil(t, bs)
+	assert.Equal(t, ia.Bytes(), bs)
+
+	// read from calculate DB
+	cDB := ctx.DB.getCalculateDB(ia.Address)
+	bucket, _ = cDB.GetBucket(db.PrefixIScore)
+	bs, _ = bucket.Get(ia.ID())
+	assert.Nil(t, bs)
 }
 
 func TestContext_WriteToDB(t *testing.T) {

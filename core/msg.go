@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
@@ -22,6 +23,7 @@ const (
 	MsgCommitClaim      = 5
 	MsgQueryCalculateStatus = 6
 	MsgQueryCalculateResult = 7
+	MsgRollBack         = 8
 
 	MsgNotify           = 100
 	MsgReady            = MsgNotify + 0
@@ -52,6 +54,8 @@ func MsgToString(msg uint) string{
 		return "READY"
 	case MsgCalculateDone:
 		return "CALCULATE_DONE"
+	case MsgRollBack:
+		return "ROLLBACK"
 	case MsgDebug:
 		return "DEBUG"
 	default:
@@ -89,10 +93,12 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 		c.SetHandler(MsgCalculate, handler)
 		c.SetHandler(MsgCommitBlock, handler)
 		c.SetHandler(MsgCommitClaim, handler)
+		c.SetHandler(MsgRollBack, handler)
 	}
 
 	// send READY message to peer
-	err := sendVersion(c, MsgReady, 0, handler.mgr.ctx.DB.info.BlockHeight)
+	cBI := handler.mgr.ctx.DB.getCurrentBlockInfo()
+	err := sendVersion(c, MsgReady, 0, cBI.BlockHeight, cBI.BlockHash)
 	if err != nil {
 		log.Printf("Failed to send READY message")
 	}
@@ -121,6 +127,9 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 		go mh.queryCalculateStatus(c, id, data)
 	case MsgQueryCalculateResult:
 		go mh.queryCalculateResult(c, id, data)
+	case MsgRollBack:
+		// do not process other messages while process Rollback message
+		return mh.rollback(c, id, data)
 	default:
 		return errors.Errorf("UnknownMessage(%d)", msg)
 	}
@@ -130,20 +139,24 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 type ResponseVersion struct {
 	Version uint64
 	BlockHeight uint64
+	BlockHash [BlockHashSize]byte
 }
 
 func (rv *ResponseVersion) String() string {
-	return fmt.Sprintf("Version: %d, BlockHeight: %d", rv.Version, rv.BlockHeight)
+	return fmt.Sprintf("Version: %d, BlockHeight: %d, BlockHash: %s",
+		rv.Version, rv.BlockHeight, hex.EncodeToString(rv.BlockHash[:]))
 }
 
 func (mh *msgHandler) version(c ipc.Connection, id uint32) error {
-	return sendVersion(c, MsgVersion, id, mh.mgr.ctx.DB.info.BlockHeight)
+	cBI := mh.mgr.ctx.DB.getCurrentBlockInfo()
+	return sendVersion(c, MsgVersion, id, cBI.BlockHeight, cBI.BlockHash)
 }
 
-func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64) error {
+func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64, blockHash [BlockHashSize]byte) error {
 	resp := ResponseVersion{
 		Version: IPCVersion,
 		BlockHeight: blockHeight,
+		BlockHash: blockHash,
 	}
 
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(msg), id, resp.String())

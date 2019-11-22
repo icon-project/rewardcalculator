@@ -72,6 +72,10 @@ func (cli *CLI) Run() {
 	queryCRCmd := flag.NewFlagSet("query_calculate_result", flag.ExitOnError)
 	queryCRBlockHeight := queryCRCmd.Uint64("blockheight", 0, "Block height(Required)")
 
+	rollbackCmd := flag.NewFlagSet("rollback", flag.ExitOnError)
+	rollbackBlockHeight := rollbackCmd.Uint64("blockheight", 0, "Rollback block height(Required)")
+	rollbackBlockHash := rollbackCmd.String("blockhash", "", "Rollback block hash(Required)")
+
 	// Parse the CLI
 	switch cmd {
 	case "version":
@@ -114,6 +118,12 @@ func (cli *CLI) Run() {
 		err := queryCRCmd.Parse(os.Args[3:])
 		if err != nil {
 			queryCRCmd.PrintDefaults()
+			os.Exit(1)
+		}
+	case "rollback":
+		err := rollbackCmd.Parse(os.Args[3:])
+		if err != nil {
+			rollbackCmd.PrintDefaults()
 			os.Exit(1)
 		}
 	default:
@@ -201,5 +211,13 @@ func (cli *CLI) Run() {
 
 	if monitorCmd.Parsed() {
 		cli.monitor(conn, *monitorConfig, *monitorURL)
+	}
+
+	if rollbackCmd.Parsed() {
+		if *rollbackBlockHeight == 0 || *rollbackBlockHash == "" {
+			rollbackCmd.PrintDefaults()
+			os.Exit(1)
+		}
+		cli.rollback(conn, *rollbackBlockHeight, *rollbackBlockHash)
 	}
 }

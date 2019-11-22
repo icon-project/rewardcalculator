@@ -34,23 +34,10 @@ const (
 
 var BigIntRewardDivider = big.NewInt(rewardDivider)
 
-type CalculateStatus struct {
-	Doing       bool
-	BlockHeight uint64
-}
-
-func (cs *CalculateStatus) set(start bool, blockHeight uint64) {
-	cs.Doing = start
-	cs.BlockHeight = blockHeight
-}
-
-func (cs *CalculateStatus) reset() {
-	cs.set(false, 0)
-}
-
 type CalculateRequest struct {
 	Path        string
 	BlockHeight uint64
+	BlockHash   []byte
 }
 
 func (cr *CalculateRequest) String() string {
@@ -193,7 +180,7 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 	return true, totalReward
 }
 
-func calculateDB(index int, readDB db.Database, writeDB db.Database, revision uint64, gvList []*GovernanceVariable,
+func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db.Database, gvList []*GovernanceVariable,
 	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (uint64, *Statistics, []byte) {
 
 	iter, _ := readDB.GetIterator()
@@ -203,10 +190,22 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, revision ui
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(Statistics)
+	stop := false
 
 	batch.New()
 	iter.New(nil, nil)
 	for entries = 0; iter.Next(); entries++ {
+		// check quit message
+		select {
+		case <-quit:
+			stop = true
+		default:
+		}
+
+		if stop {
+			break
+		}
+
 		// read
 		key := iter.Key()[len(db.PrefixIScore):]
 		ia, err := NewIScoreAccountFromBytes(iter.Value())
@@ -249,16 +248,6 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, revision ui
 
 		count++
 	}
-
-	// write batch to DB
-	if batchCount > 0 {
-		err := batch.Write()
-		if err != nil {
-			log.Printf("Failed to write batch\n")
-		}
-		batch.Reset()
-	}
-
 	// finalize iterator
 	iter.Release()
 	err := iter.Error()
@@ -266,14 +255,30 @@ func calculateDB(index int, readDB db.Database, writeDB db.Database, revision ui
 		log.Printf("There is error while calculate iteration. %+v", err)
 	}
 
-	// get stateHash if there is update
-	if count > 0 {
-		h.Read(stateHash)
+	if stop != true {
+		// write batch to DB
+		if batchCount > 0 {
+			err := batch.Write()
+			if err != nil {
+				log.Printf("Failed to write batch\n")
+			}
+			batch.Reset()
+		}
+
+		// get stateHash if there is update
+		if count > 0 {
+			h.Read(stateHash)
+		}
+
+		log.Printf("Calculate %d: %s, stateHash: %v", index, stats.Beta3.String(), hex.EncodeToString(stateHash))
+
+		return count, stats, stateHash
+	} else {
+		batch.Reset()
+		h.Reset()
+		log.Printf("Quit calculate %d with signal", index)
+		return 0, stats, nil
 	}
-
-	log.Printf("Calculate %d: %s, stateHash: %v", index, stats.Beta3.String(), hex.EncodeToString(stateHash))
-
-	return count, stats, stateHash
 }
 
 func checkToggle(ctx *Context, blockHeight uint64) bool {
@@ -371,26 +376,31 @@ func sendCalculateACK(c ipc.Connection, id uint32, status uint16, blockHeight ui
 }
 
 func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error {
+	success := true
 	var req CalculateRequest
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
 	log.Printf("\t CALCULATE request: %s", req.String())
 
+	ctx := mh.mgr.ctx
+	rollback := ctx.Rollback.GetChannel()
+
 	// do calculation
-	err, blockHeight, stats, stateHash := DoCalculate(mh.mgr.ctx, &req, c, id)
+	err, blockHeight, stats, stateHash := DoCalculate(rollback, ctx, &req, c, id)
 
-	success := true
-
-	// remove IISS data DB
+	// manage IISS data DB
 	if err == nil {
 		cleanupIISSData(req.Path)
 	} else {
-		os.Rename(req.Path, req.Path + "_failed")
+		log.Printf("Failed to calculate. %v", err)
 		success = false
-		if stats == nil && stateHash == nil {
-			// has no calculation result
+		// if canceled by ROLLBACK, do not send CALCULATE_DONE
+		if isCalcCancelByRollback(err) {
+			os.RemoveAll(req.Path)
 			return nil
+		} else {
+			os.Rename(req.Path, req.Path+"_failed")
 		}
 	}
 
@@ -409,7 +419,8 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	return c.Send(MsgCalculateDone, 0, &resp)
 }
 
-func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint32) (error, uint64, *Statistics, []byte) {
+func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
+	c ipc.Connection, id uint32) (error, uint64, *Statistics, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(Statistics)
@@ -419,18 +430,15 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	blockHeight := req.BlockHeight
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
-	if ctx.calculateStatus.Doing {
+	if ctx.DB.isCalculating() {
 		// send response of CALCULATE
 		sendCalculateACK(c, id, CalcRespStatusDoing, blockHeight)
-		errMsg := fmt.Sprintf("Calculating now. Drop this calculate message. blockHeight: %d, IISS data path: %s",
+		err := fmt.Errorf("calculating now. drop calculate message. blockHeight: %d, IISS data path: %s",
 			blockHeight, req.Path)
-		log.Printf(errMsg)
-		err := fmt.Errorf(errMsg)
 		return err, blockHeight, nil, nil
 	}
 
-	ctx.calculateStatus.set(true, req.BlockHeight)
-	defer ctx.calculateStatus.reset()
+	ctx.DB.setCalculatingBH(req.BlockHeight)
 	startTime := time.Now()
 
 	// open IISS Data
@@ -441,32 +449,31 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	header, gvList, prepList := LoadIISSData(iissDB)
 	if header == nil {
 		sendCalculateACK(c, id, CalcRespStatusInvalidData, blockHeight)
-		errMsg := fmt.Sprintf("Failed to load IISS data (path: %s)\n", req.Path)
-		log.Printf(errMsg)
-		err := fmt.Errorf(errMsg)
+		err := fmt.Errorf("Failed to load IISS data (path: %s)\n", req.Path)
+		ctx.DB.resetCalculatingBH()
 		return err, blockHeight, nil, nil
 	}
 
 	// set block height
 	blockHeight = header.BlockHeight
 	if blockHeight == 0 {
-		blockHeight = iScoreDB.info.BlockHeight + 1
+		blockHeight = iScoreDB.getCalcDoneBH() + 1
 	}
 
-	if blockHeight != 0 && blockHeight <= iScoreDB.info.BlockHeight {
-		var errMsg string
-		// send response of CALCULATE
-		if blockHeight == iScoreDB.info.BlockHeight {
-			sendCalculateACK(c, id, CalcRespStatusDuplicateBH, blockHeight)
-			errMsg = fmt.Sprintf("Calculate message has duplicate blockHeight(block height: %d)\n", blockHeight)
-		} else {
-			sendCalculateACK(c, id, CalcRespStatusInvalidBH, blockHeight)
-			errMsg = fmt.Sprintf("Calculate message has too low blockHeight(request: %d, RC blockHeight: %d)\n",
-				blockHeight, iScoreDB.info.BlockHeight)
-		}
-
-		log.Printf(errMsg)
-		err := fmt.Errorf(errMsg)
+	// check blockHeight and blockHash
+	calcDoneBH := iScoreDB.getCalcDoneBH()
+	if calcDoneBH == blockHeight {
+		sendCalculateACK(c, id, CalcRespStatusDuplicateBH, blockHeight)
+		err := fmt.Errorf("duplicated block(height: %d, hash: %s)\n",
+			blockHeight, hex.EncodeToString(req.BlockHash))
+		ctx.DB.resetCalculatingBH()
+		return err, blockHeight, nil, nil
+	}
+	if blockHeight < calcDoneBH {
+		sendCalculateACK(c, id, CalcRespStatusInvalidBH, blockHeight)
+		err := fmt.Errorf("too low blockHeight(request: %d, RC blockHeight: %d)\n",
+			blockHeight, calcDoneBH)
+		ctx.DB.resetCalculatingBH()
 		return err, blockHeight, nil, nil
 	}
 
@@ -475,8 +482,8 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	// send response of CALCULATE after toggle DB
 	sendCalculateACK(c, id, CalcRespStatusOK, blockHeight)
 
-	// close and delete old account DB and open new calculate DB
-	ctx.DB.resetCalcDB()
+	// close and backup old query DB and open new calculate DB
+	ctx.DB.resetAccountDB(blockHeight)
 
 	// Update header Info.
 	if header != nil {
@@ -508,19 +515,23 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	stateHashList := make([][]byte, iScoreDB.info.DBCount)
 	statsList := make([]*Statistics, iScoreDB.info.DBCount)
 	for i, cDB := range calcDBList {
-		go func(index int, read db.Database, write db.Database) {
+		go func(ch <-chan struct{}, index int, read db.Database, write db.Database) {
 			defer wait.Done()
 
 			var count uint64
 
 			// Update all Accounts in the calculate DB
 			count, statsList[index], stateHashList[index] =
-				calculateDB(index, read, write, ctx.Revision, ctx.GV, ctx.PRepCandidates, blockHeight, writeBatchCount)
+				calculateDB(ch, index, read, write, ctx.GV, ctx.PRepCandidates, blockHeight, writeBatchCount)
 
 			totalCount += count
-		} (i, queryDBList[i], cDB)
+		} (quit, i, queryDBList[i], cDB)
 	}
 	wait.Wait()
+
+	if quit != ctx.Rollback.GetChannel() {
+		return &CalcCancelByRollbackError{blockHeight}, blockHeight, nil, nil
+	}
 
 	// update Statistics
 	for _, s := range statsList {
@@ -549,7 +560,7 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 	stats.Increase("TotalReward", *reward)
 	h.Write(hashValue)
 
-	// Update P-Rep reward
+	// Update P-Rep delegated reward
 	newAccount, reward, hashValue = calculatePRepReward(ctx, blockHeight)
 	stats.Increase("Accounts", newAccount)
 	stats.Increase("Beta2", *reward)
@@ -566,12 +577,12 @@ func DoCalculate(ctx *Context, req *CalculateRequest, c ipc.Connection, id uint3
 
 	elapsedTime := time.Since(startTime)
 	log.Printf("Finish calculation: Duration: %s, block height: %d -> %d, DB: %d, batch: %d, %d entries",
-		elapsedTime, ctx.DB.info.BlockHeight, blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount)
+		elapsedTime, ctx.DB.getCalcDoneBH(), blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount)
 	log.Printf("%s", stats.String())
 	log.Printf("stateHash : %s", hex.EncodeToString(stateHash))
 
 	// set blockHeight
-	ctx.DB.setBlockHeight(blockHeight)
+	ctx.DB.setCalcDoneBH(blockHeight)
 
 	// write calculation result
 	WriteCalculationResult(ctx.DB.getCalculateResultDB(), blockHeight, stats, stateHash)
@@ -797,7 +808,7 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 func calculatePRepReward(ctx *Context, to uint64) (uint64, *common.HexInt, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
-	start := ctx.DB.info.BlockHeight
+	start := ctx.DB.getCalcDoneBH()
 	end := to
 
 	totalReward := new(common.HexInt)
@@ -969,12 +980,12 @@ func (mh *msgHandler) queryCalculateStatus(c ipc.Connection, id uint32, data []b
 }
 
 func DoQueryCalculateStatus(ctx *Context, resp *QueryCalculateStatusResponse) {
-	if ctx.calculateStatus.Doing {
+	if ctx.DB.isCalculating() {
 		resp.Status = CalculationDoing
-		resp.BlockHeight = ctx.calculateStatus.BlockHeight
+		resp.BlockHeight = ctx.DB.getCalculatingBH()
 	} else {
 		resp.Status = CalculationDone
-		resp.BlockHeight = ctx.DB.info.BlockHeight
+		resp.BlockHeight = ctx.DB.getCalcDoneBH()
 	}
 }
 
@@ -1038,13 +1049,11 @@ func DoQueryCalculateResult(ctx *Context, blockHeight uint64, resp *QueryCalcula
 	resp.BlockHeight = blockHeight
 
 	// check doing calculation
-	if blockHeight == ctx.calculateStatus.BlockHeight {
-		if blockHeight == 0 {
-			resp.Status = InvalidBH
-		} else {
+	if ctx.DB.isCalculating() {
+		if blockHeight == ctx.DB.getCalculatingBH() {
 			resp.Status = calcDoing
+			return
 		}
-		return
 	}
 
 	// read from calculate result DB
@@ -1066,4 +1075,17 @@ func DoQueryCalculateResult(ctx *Context, blockHeight uint64, resp *QueryCalcula
 		// No calculation result
 		resp.Status = InvalidBH
 	}
+}
+
+type CalcCancelByRollbackError struct {
+	BlockHeight uint64
+}
+
+func (e *CalcCancelByRollbackError) Error() string {
+	return fmt.Sprintf("CALCULATE(%d) was canceled by ROLLBACK", e.BlockHeight)
+}
+
+func isCalcCancelByRollback(err error) bool {
+	_, ok := err.(*CalcCancelByRollbackError)
+	return ok
 }

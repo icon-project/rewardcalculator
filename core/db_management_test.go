@@ -1,13 +1,14 @@
 package core
 
 import (
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/stretchr/testify/assert"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 func makeDBInfo() *DBInfo {
@@ -16,8 +17,9 @@ func makeDBInfo() *DBInfo {
 	dbInfo.DBRoot = testDBDir
 	dbInfo.DBType = string(db.GoLevelDBBackend)
 	dbInfo.DBCount = 1
-	dbInfo.BlockHeight = iaBlockHeight
 	dbInfo.QueryDBIsZero = false
+	dbInfo.CalcDone = iaBlockHeight
+	dbInfo.Calculating = iaBlockHeight
 
 	return dbInfo
 }
@@ -37,8 +39,9 @@ func TestDBMNGDBInfo_BytesAndSetBytes(t *testing.T) {
 	dbInfoNew.SetBytes(bs)
 
 	assert.Equal(t, dbInfo.DBCount, dbInfoNew.DBCount)
-	assert.Equal(t, dbInfo.BlockHeight, dbInfoNew.BlockHeight)
 	assert.Equal(t, dbInfo.QueryDBIsZero, dbInfoNew.QueryDBIsZero)
+	assert.Equal(t, dbInfo.CalcDone, dbInfoNew.CalcDone)
+	assert.Equal(t, dbInfo.Calculating, dbInfoNew.Calculating)
 	bsNew, _ := dbInfoNew.Bytes()
 	assert.Equal(t, bs, bsNew)
 }
@@ -51,28 +54,44 @@ func TestDBMNGDBInfo_NewDBInfo(t *testing.T) {
 	// make new DB
 	dbInfo, err := NewDBInfo(mngDB, testDBDir, string(db.GoLevelDBBackend), testDB, 1)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, filepath.Join(testDBDir, testDB), dbInfo.DBRoot)
 	assert.Equal(t, string(db.GoLevelDBBackend), dbInfo.DBType)
 	assert.Equal(t, 1, dbInfo.DBCount)
-	assert.Equal(t, uint64(0), dbInfo.BlockHeight)
 	assert.False(t, dbInfo.QueryDBIsZero)
+	assert.True(t, dbInfo.Current.checkValue(uint64(0), zeroBlockHash))
+	assert.Equal(t, uint64(0), dbInfo.CalcDone)
+	assert.Equal(t, uint64(0), dbInfo.PrevCalcDone)
+	assert.Equal(t, uint64(0), dbInfo.Calculating)
 
 	bucket, _ := mngDB.GetBucket(db.PrefixManagement)
 	bsNew, err := bucket.Get(dbInfo.ID())
 	assert.NotNil(t, bsNew)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	bs, _ := dbInfo.Bytes()
 	assert.Equal(t, bs, bsNew)
 
+	// update DB Info
+	dbInfo.DBCount = 2
+	dbInfo.QueryDBIsZero = true
+	dbInfo.CalcDone = 200
+	dbInfo.PrevCalcDone = 100
+	dbInfo.Calculating = dbInfo.CalcDone
+
+	bs, _ = dbInfo.Bytes()
+	bucket.Set(dbInfo.ID(), bs)
+
 	// read from DB
 	dbInfo1, err := NewDBInfo(mngDB, testDBDir, string(db.GoLevelDBBackend), testDB, 10)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, filepath.Join(testDBDir, testDB), dbInfo1.DBRoot)
 	assert.Equal(t, string(db.GoLevelDBBackend), dbInfo1.DBType)
-	assert.Equal(t, 1, dbInfo1.DBCount)
-	assert.Equal(t, uint64(0), dbInfo1.BlockHeight)
-	assert.False(t, dbInfo1.QueryDBIsZero)
+	assert.Equal(t, dbInfo.DBCount, dbInfo1.DBCount)
+	assert.Equal(t, dbInfo.QueryDBIsZero, dbInfo1.QueryDBIsZero)
+	assert.True(t, dbInfo.Current.equal(&dbInfo1.Current))
+	assert.Equal(t, dbInfo.CalcDone, dbInfo1.CalcDone)
+	assert.Equal(t, dbInfo.PrevCalcDone, dbInfo1.PrevCalcDone)
+	assert.Equal(t, dbInfo.Calculating, dbInfo1.Calculating)
 }
 
 
@@ -136,12 +155,13 @@ func TestDBMNGGV_LoadGovernanceVariable(t *testing.T) {
 		bucket.Set(gv.ID(), bs)
 	}
 
-	gvListNew, err := LoadGovernanceVariable(mngDB, iaBlockHeight + 101)
+	gvListNew, err := LoadGovernanceVariable(mngDB)
 
-	assert.Nil(t, err)
-	assert.Equal(t, 2, len(gvListNew))
-	assert.Equal(t, gvList[1].BlockHeight, gvListNew[0].BlockHeight)
-	assert.Equal(t, gvList[2].BlockHeight, gvListNew[1].BlockHeight)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(gvListNew))
+	assert.Equal(t, gvList[0].BlockHeight, gvListNew[0].BlockHeight)
+	assert.Equal(t, gvList[1].BlockHeight, gvListNew[1].BlockHeight)
+	assert.Equal(t, gvList[2].BlockHeight, gvListNew[2].BlockHeight)
 }
 
 func TestDBMNGGV_NewGVFromIISS(t *testing.T) {
@@ -177,11 +197,11 @@ func TestDBMNGGV_BackwardCompatibility(t *testing.T) {
 	gvV1.RewardRep.SetUint64(uint64(456))
 
 	bs, err := gvV1.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	var gv GovernanceVariable
 	err = gv.SetBytes(bs)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, gvV1.CalculatedIncentiveRep.Uint64(), gv.CalculatedIncentiveRep.Uint64())
 	assert.Equal(t, gvV1.RewardRep.Uint64(), gv.RewardRep.Uint64())
 	assert.Equal(t, uint64(0), gv.MainPRepCount.Uint64())
@@ -255,7 +275,7 @@ func TestDBMNGPRep_LoadPRep(t *testing.T) {
 
 	pRepListNew, err := LoadPRep(mngDB)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, len(pRepList), len(pRepListNew))
 	for i, pRepNew := range pRepListNew {
 		pRep = pRepList[i]
@@ -322,7 +342,7 @@ func TestDBMNGPRepCandidate_LoadPRepCandidate(t *testing.T) {
 
 	pcMap, err := LoadPRepCandidate(mngDB)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, len(pcList), len(pcMap))
 	for _, pc := range pcList {
 		pcNew, ok := pcMap[pc.Address]
@@ -331,4 +351,29 @@ func TestDBMNGPRepCandidate_LoadPRepCandidate(t *testing.T) {
 		assert.Equal(t, pc.Start, pcNew.Start)
 		assert.Equal(t, pc.End, pcNew.End)
 	}
+}
+
+func TestDBMNGDBInfo_backwardCompatibility(t *testing.T) {
+	v1 := DBInfoDataV1{16, 1000, true }
+	var bytes []byte
+	if bs, err := codec.MarshalToBytes(&v1); err != nil {
+		t.Errorf("Failed to marshal v1. %v", err)
+		return
+	} else {
+		bytes = bs
+	}
+
+	var dbi DBInfo
+
+	err := dbi.SetBytes(bytes)
+	if err != nil {
+		t.Errorf("Failed to unmarshal v1 with v2. %v", err)
+		return
+	}
+	assert.Equal(t, v1.DBCount, dbi.DBCount)
+	assert.Equal(t, v1.QueryDBIsZero, dbi.QueryDBIsZero)
+	assert.Equal(t, v1.BlockHeight, dbi.CalcDone)
+	assert.Equal(t, v1.BlockHeight, dbi.Calculating)
+	assert.Equal(t, v1.BlockHeight, dbi.PrevCalcDone)
+	assert.True(t, dbi.Current.checkValue(uint64(0), zeroBlockHash))
 }

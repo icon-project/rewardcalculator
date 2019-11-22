@@ -38,11 +38,11 @@ func TestDBCalculate_BytesAndSetBytes(t *testing.T) {
 	var calcResultNew CalculationResult
 
 	bs, err := calculationResult.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = calcResultNew.SetBytes(bs)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	bsNew, err := calcResultNew.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, calculationResult.Success, calcResultNew.Success)
 	assert.Equal(t, 0, calculationResult.IScore.Cmp(&calcResultNew.IScore.Int))
@@ -54,11 +54,11 @@ func TestDBCalculate_NewClaimFromBytes(t *testing.T) {
 	calculationResult := makeCalcResult()
 
 	bs, err := calculationResult.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	calcResultNew, err := NewCalculationResultFromBytes(bs)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	bsNew, err := calcResultNew.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, calculationResult.Success, calcResultNew.Success)
 	assert.Equal(t, 0, calculationResult.IScore.Cmp(&calcResultNew.IScore.Int))
@@ -66,7 +66,7 @@ func TestDBCalculate_NewClaimFromBytes(t *testing.T) {
 	assert.Equal(t, bs, bsNew)
 }
 
-func TestDBCalculate_WriteCalculationResult(t *testing.T) {
+func TestDBCalculate_CalculationResult(t *testing.T) {
 	var calculationResult CalculationResult
 
 	ctx := initTest(1)
@@ -80,16 +80,20 @@ func TestDBCalculate_WriteCalculationResult(t *testing.T) {
 
 	WriteCalculationResult(crDB, calcBlockHeight, stats, stateHash)
 
-
 	bucket, err := crDB.GetBucket(db.PrefixCalcResult)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	bs, err := bucket.Get(common.Uint64ToBytes(calcBlockHeight))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	err = calculationResult.SetBytes(bs)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.True(t, calculationResult.Success)
 	assert.Equal(t, 0, calculationResult.IScore.Cmp(&stats.TotalReward.Int))
 	assert.Equal(t, stateHash, calculationResult.StateHash)
+
+	DeleteCalculationResult(crDB, calcBlockHeight)
+
+	bs, _ = bucket.Get(common.Uint64ToBytes(calcBlockHeight))
+	assert.Nil(t, bs)
 }

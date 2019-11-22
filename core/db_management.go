@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 	"math/big"
@@ -21,11 +22,40 @@ const (
 	NumSubPRep  uint64 = 78
 )
 
-type DBInfoData struct {
+type DBInfoDataV1 struct {
 	DBCount       int
-	BlockHeight   uint64 // BlockHeight of finished calculate message
+	BlockHeight   uint64 // finish to calculate to this block height
 	QueryDBIsZero bool
 }
+
+type BlockInfo struct {
+	BlockHeight uint64
+	BlockHash [BlockHashSize]byte
+}
+
+func (bi *BlockInfo) set(blockHeight uint64, blockHash []byte) {
+	bi.BlockHeight = blockHeight
+	copy(bi.BlockHash[:], blockHash)
+}
+
+func (bi *BlockInfo) checkValue(blockHeight uint64, blockHash []byte) bool {
+	return bi.BlockHeight == blockHeight && bytes.Compare(bi.BlockHash[:], blockHash) == 0
+}
+
+func (bi *BlockInfo) equal(dst *BlockInfo) bool {
+	return bi.BlockHeight == dst.BlockHeight && bytes.Compare(bi.BlockHash[:], dst.BlockHash[:]) == 0
+}
+
+type DBInfoDataV2 struct {
+	DBCount       int
+	QueryDBIsZero bool
+	Current       BlockInfo // Latest COMMIT_BLOCK block height and hash
+	CalcDone      uint64    // Latest CALCULATE_DONE block height
+	PrevCalcDone  uint64    // Previous CALCULATE_DONE block height
+	Calculating   uint64    // Latest CALCULATE block height
+}
+
+type DBInfoData DBInfoDataV2
 
 type DBInfo struct {
 	DBRoot        string
@@ -58,8 +88,25 @@ func (dbi *DBInfo) String() string {
 func (dbi *DBInfo) SetBytes(bs []byte) error {
 	_, err := codec.UnmarshalFromBytes(bs, &dbi.DBInfoData)
 	if err != nil {
+		// handle backward compatibility
+		return dbi.backwardCompatibility(bs)
+	}
+	return nil
+}
+
+func (dbi *DBInfo) backwardCompatibility(bs []byte) error {
+	var v1 DBInfoDataV1
+	_, err := codec.UnmarshalFromBytes(bs, &v1)
+	if err != nil {
 		return err
 	}
+
+	dbi.DBCount = v1.DBCount
+	dbi.QueryDBIsZero = v1.QueryDBIsZero
+	dbi.CalcDone = v1.BlockHeight
+	dbi.PrevCalcDone = v1.BlockHeight
+	dbi.Calculating = v1.BlockHeight
+
 	return nil
 }
 
@@ -161,7 +208,7 @@ func (gv *GovernanceVariable) setReward() {
 	gv.PRepReward.Mul(&gv.PRepReward.Int, BigIntIScoreMultiplier)
 }
 
-func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVariable, error) {
+func LoadGovernanceVariable(dbi db.Database) ([]*GovernanceVariable, error) {
 	gvList := make([]*GovernanceVariable, 0)
 
 	iter, err := dbi.GetIterator()
@@ -169,7 +216,6 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 		return gvList, err
 	}
 
-	oldGV := 0
 	prefix := util.BytesPrefix([]byte(db.PrefixGovernanceVariable))
 	iter.New(prefix.Start, prefix.Limit)
 	for iter.Next() {
@@ -180,9 +226,6 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 		gv.SetBytes(iter.Value())
 		gv.BlockHeight = gvBlockHeight
 		gvList = append(gvList, gv)
-		if workingBH > gvBlockHeight {
-			oldGV++
-		}
 	}
 	sort.Slice(gvList, func(i, j int) bool {
 		return gvList[i].BlockHeight < gvList[j].BlockHeight
@@ -194,17 +237,6 @@ func LoadGovernanceVariable(dbi db.Database, workingBH uint64) ([]*GovernanceVar
 	if err != nil {
 		log.Printf("There is error while load IISS GV iteration. %+v", err)
 		return gvList, err
-	}
-
-	// delete old GVs except last one
-	if oldGV > 0 {
-		// delete from management DB
-		bucket, _ := dbi.GetBucket(db.PrefixGovernanceVariable)
-		for i := 0; i < oldGV-1; i++ {
-			bucket.Delete(gvList[i].ID())
-		}
-		// delete from memory
-		gvList = gvList[oldGV-1:]
 	}
 
 	return gvList, nil

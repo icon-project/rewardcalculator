@@ -68,8 +68,8 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 	assert.Nil(t, iScore)
 
 	// write claim to DB
-	//ctx.preCommit.writeClaimToDB(ctx, claim.BlockHeight, claim.BlockHash)
-	writePreCommitToClaimDB(ctx.DB.getPreCommitDB(), ctx.DB.getClaimDB(), claim.BlockHeight, claim.BlockHash)
+	writePreCommitToClaimDB(ctx.DB.getPreCommitDB(), ctx.DB.getClaimDB(), ctx.DB.getClaimBackupDB(),
+		claim.BlockHeight, claim.BlockHash)
 
 	// invalid address
 	blockHeight, iScore = DoClaim(ctx, &invalidAddressClaim)

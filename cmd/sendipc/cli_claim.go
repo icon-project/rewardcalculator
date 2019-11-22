@@ -16,22 +16,24 @@ func (cli *CLI) claim(conn ipc.Connection, address string, blockHeight uint64) {
 	// Send CLAIM and get response
 	req.Address.SetString(address)
 	req.BlockHeight = blockHeight
-	req.BlockHash = make([]byte, 8)
+	req.BlockHash = make([]byte, core.BlockHashSize)
 	binary.BigEndian.PutUint64(req.BlockHash, blockHeight)
 
+	fmt.Printf("send CLAIM message: %s\n", req.String())
 	conn.SendAndReceive(core.MsgClaim, cli.id, &req, &resp)
 	cli.id++
-	fmt.Printf("CLAIM command get response: %s\n", resp.String())
+	fmt.Printf("CLAIM message get response: %s\n", resp.String())
 
 	// send COMMIT_CLAIM and get ack
 	var commitClaim core.CommitClaim
+	commitClaim.Success = true
 	commitClaim.Address = req.Address
 	commitClaim.BlockHeight = req.BlockHeight
-	commitClaim.BlockHash = req.BlockHash
-	commitClaim.Success = true
+	commitClaim.BlockHash = make([]byte, core.BlockHashSize)
+	copy(commitClaim.BlockHash, req.BlockHash)
 
 	fmt.Printf("Send COMMIT_CLAIM message: %s\n", commitClaim.String())
-	conn.SendAndReceive(core.MsgClaim, cli.id, &req, &resp)
+	conn.SendAndReceive(core.MsgCommitClaim, cli.id, &commitClaim, &resp)
 	cli.id++
 	fmt.Printf("COMMIT_CLAIM message get ack\n")
 

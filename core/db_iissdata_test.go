@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -66,7 +67,7 @@ func TestDBIISSHeader_loadIISSHeader(t *testing.T) {
 	// load IISS header
 	headerNew, err := loadIISSHeader(iissDB)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, header.Version, headerNew.Version)
 	assert.Equal(t, header.BlockHeight, headerNew.BlockHeight)
 	bs, _ := header.Bytes()
@@ -95,7 +96,7 @@ func TestDBIISSHeader_BackwardCompatibility(t *testing.T) {
 	headerV1.BlockHeight = 2345
 
 	bs, err := headerV1.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	var ih IISSHeader
 	ih.SetBytes(bs)
@@ -176,7 +177,7 @@ func TestDBIISSGovernanceVariable_loadIISSGovernanceVariable(t *testing.T) {
 	gvListNew, err := loadIISSGovernanceVariable(iissDB, IISSDataVersion)
 
 	// check
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, len(gvList), len(gvListNew))
 	for i := range gvListNew {
 		assert.Equal(t, gvList[i].BlockHeight, gvListNew[i].BlockHeight)
@@ -211,7 +212,7 @@ func TestDBIISSGovernanceVariable_BackwardCompatibility(t *testing.T) {
 	gvV1.RewardRep = 456
 
 	bs, err := gvV1.Bytes()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	var gv IISSGovernanceVariable
 	gv.SetBytes(bs, 1)
@@ -409,4 +410,25 @@ func TestDBIISS_LoadIISSData(t *testing.T) {
 
 	assert.NotNil(t, pRepListNew)
 	assert.Equal(t, 0, len(pRepListNew))
+}
+
+func TestDBIISS_manageIISSData(t *testing.T) {
+	rootPath, _ := filepath.Abs("./iissdata_test")
+	os.MkdirAll(rootPath, os.ModePerm)
+	iissPath := filepath.Join(rootPath, "current")
+	os.MkdirAll(iissPath, os.ModePerm)
+	finishPath := filepath.Join(rootPath, "finish_iiss")
+	os.MkdirAll(finishPath, os.ModePerm)
+
+	cleanupIISSData(iissPath)
+
+	_, err := os.Stat(iissPath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(finishPath)
+	assert.True(t, os.IsNotExist(err))
+	backupPath := filepath.Join(rootPath, "finish_current")
+	f, err := os.Stat(backupPath)
+	assert.True(t, f.IsDir())
+
+	os.RemoveAll(rootPath)
 }
