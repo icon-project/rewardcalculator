@@ -10,21 +10,17 @@ import (
 	"path/filepath"
 )
 
-type CalcResultDB struct {
-	dbPath string
-}
-
-func (calcResultDB CalcResultDB) query(blockHeight uint64) {
-	if calcResultDB.dbPath == "" {
+func queryCalcResultDB(input Input) {
+	if input.path == "" {
 		fmt.Println("Enter dbPath")
 		os.Exit(1)
 	}
-	dir, name := filepath.Split(calcResultDB.dbPath)
+	dir, name := filepath.Split(input.path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
 
-	if blockHeight == 0 {
-		iteratePrintDB(DBTypeCalcResult, qdb, nil, 0, "")
+	if input.height == 0 {
+		iteratePrintDB(DataTypeCalcResult, qdb)
 		return
 	}
 	bucket, err := qdb.GetBucket(db.PrefixCalcResult)
@@ -33,11 +29,11 @@ func (calcResultDB CalcResultDB) query(blockHeight uint64) {
 		return
 	}
 
-	value, err := bucket.Get(common.Uint64ToBytes(blockHeight))
+	value, err := bucket.Get(common.Uint64ToBytes(input.height))
 	if value == nil || err != nil {
 		return
 	}
-	printCalcResult(common.Uint64ToBytes(blockHeight), value, blockHeight)
+	printCalcResult(common.Uint64ToBytes(input.height), value, input.height)
 }
 
 func printCalcResult(key []byte, value []byte, blockHeight uint64) bool {
