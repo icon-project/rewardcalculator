@@ -826,7 +826,7 @@ func calculatePRepReward(ctx *Context, to uint64) (uint64, *common.HexInt, []byt
 		if s < prep.BlockHeight {
 			s = prep.BlockHeight
 		}
-		if i+1 < len(ctx.PRep) && ctx.PRep[i+1].BlockHeight < to {
+		if i+1 < len(ctx.PRep) && ctx.PRep[i+1].BlockHeight < end {
 			e = ctx.PRep[i+1].BlockHeight
 		}
 		//log.Printf("[P-Rep reward] : s, e : %d - %d", s, e)
@@ -836,7 +836,7 @@ func calculatePRepReward(ctx *Context, to uint64) (uint64, *common.HexInt, []byt
 		}
 
 		// calculate P-Rep reward for Governance variable and write to calculate DB
-		account, reward, hash := setPRepReward(ctx, s, e, prep)
+		account, reward, hash := setPRepReward(ctx, s, e, prep, to)
 		h.Write(hash)
 		totalReward.Add(&totalReward.Int, &reward.Int)
 		newAccount += account
@@ -848,7 +848,7 @@ func calculatePRepReward(ctx *Context, to uint64) (uint64, *common.HexInt, []byt
 	return newAccount, totalReward, stateHash
 }
 
-func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (uint64, *common.HexInt, []byte) {
+func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep, blockHeight uint64) (uint64, *common.HexInt, []byte) {
 	type reward struct {
 		iScore      common.HexInt
 		blockHeight uint64
@@ -882,12 +882,12 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (uint64, 
 
 		// update rewards
 		for i, dgInfo:= range prep.List {
-			var reward common.HexInt
-			reward.Mul(&rewardRate.Int, &dgInfo.DelegatedAmount.Int)
-			reward.Div(&reward.Int, &prep.TotalDelegation.Int)
-			rewards[i].iScore.Add(&rewards[i].iScore.Int, &reward.Int)
+			var iScore common.HexInt
+			iScore.Mul(&rewardRate.Int, &dgInfo.DelegatedAmount.Int)
+			iScore.Div(&iScore.Int, &prep.TotalDelegation.Int)
+			rewards[i].iScore.Add(&rewards[i].iScore.Int, &iScore.Int)
 			rewards[i].blockHeight = e
-			//log.Printf("[P-Rep reward] deletation: %s, reward: %s,%d\n",
+			//log.Printf("[P-Rep reward] delegation: %s, reward: %s,%d\n",
 			//	dgInfo.String(), rewards[i].IScore.String(), rewards[i].blockHeight)
 		}
 	}
@@ -914,14 +914,19 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (uint64, 
 
 			// update I-Score
 			ia.IScore.Add(&ia.IScore.Int, &rewards[i].iScore.Int)
-			ia.BlockHeight = rewards[i].blockHeight
-
 			// do not update block height of IA
+			if ctx.Revision < Revision8 {
+				ia.BlockHeight = rewards[i].blockHeight
+			}
 		} else {
 			// there is no account in DB
 			ia = new(IScoreAccount)
 			ia.IScore.Set(&rewards[i].iScore.Int)
-			ia.BlockHeight = end // Set blockHeight to end
+			if ctx.Revision >= Revision8 {
+				ia.BlockHeight = blockHeight
+			} else {
+				ia.BlockHeight = end // Set blockHeight to end
+			}
 
 			newAccount++
 		}
@@ -929,7 +934,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep) (uint64, 
 		// write to account DB
 		if ia != nil {
 			ia.Address = dgInfo.Address
-			//log.Printf("[P-Rep reward] Write to DB %s, increased reward: %s", ia.String(), rewards[i].IScore.String())
+			//log.Printf("[P-Rep reward] Write to DB %s, increased reward: %s", ia.String(), rewards[i].iScore.String())
 			bucket.Set(ia.ID(), ia.Bytes())
 			h.Write(ia.BytesForHash())
 			totalReward.Add(&totalReward.Int, &rewards[i].iScore.Int)

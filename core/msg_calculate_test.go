@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"os"
 	"sort"
@@ -333,25 +334,41 @@ func TestMsgCalc_CalculateIISSBlockProduce(t *testing.T) {
 
 }
 
+func setRevision(ctx *Context, revision uint64) {
+	ctx.Revision = revision
+}
+
 func TestMsgCalc_CalculatePRepReward(t *testing.T) {
+	for revision := RevisionMin - 1; revision <= RevisionMax; revision++ {
+		t.Run(fmt.Sprintf("Revision:%d", revision), func(t *testing.T) {
+			testCalculatePRepReward(t, revision)
+		})
+	}
+}
+
+func testCalculatePRepReward(t *testing.T, revision uint64) {
 	const (
 		BlockHeight0 uint64 = 0
 		BlockHeight1 uint64 = 10
 		BlockHeight2 uint64 = 20
 
-		TotalDelegation0 = 10
 		DelegationA0     = 4
 		DelegationB0     = 6
-		TotalDelegation1 = 20
+		DelegationC0     = 10
+		TotalDelegation0 = DelegationA0 + DelegationB0 + DelegationC0
+
 		DelegationA1     = 14
 		DelegationB1     = 6
+		TotalDelegation1 = DelegationA1 + DelegationB1
 	)
 
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
+	setRevision(ctx, revision)
 
 	prepA := *common.NewAddressFromString("hxaa")
 	prepB := *common.NewAddressFromString("hxbb")
+	prepC := *common.NewAddressFromString("hxcc")
 
 	// set GV
 	gv := new(GovernanceVariable)
@@ -389,6 +406,12 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	prep.List = append(prep.List, *dInfo)
 	ctx.PRep = append(ctx.PRep, prep)
 
+	dInfo = new(PRepDelegationInfo)
+	dInfo.Address = prepC
+	dInfo.DelegatedAmount.SetUint64(DelegationC0)
+	prep.List = append(prep.List, *dInfo)
+	ctx.PRep = append(ctx.PRep, prep)
+
 	// P-Rep 1
 	prep = new(PRep)
 	prep.BlockHeight = BlockHeight1
@@ -408,7 +431,7 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	// calculate P-Rep reward
 	account, stats, hash := calculatePRepReward(ctx, BlockHeight2)
-	assert.Equal(t, uint64(2), account)
+	assert.Equal(t, uint64(3), account)
 
 	calcDB := ctx.DB.getCalculateDB(prepA)
 	bucket, _ := calcDB.GetBucket(db.PrefixIScore)
@@ -422,7 +445,12 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	reward0.Mul(&reward0.Int, &common.NewHexIntFromUint64(DelegationA0).Int)
 	reward0.Div(&reward0.Int, &common.NewHexIntFromUint64(TotalDelegation0).Int)
 
-	iaPRepA1 := newIScoreAccount(prepA, BlockHeight1, reward0)
+	var iaPRepA0 *IScoreAccount
+	if ctx.Revision < Revision8 {
+		iaPRepA0 = newIScoreAccount(prepA, BlockHeight1, reward0)
+	} else {
+		iaPRepA0 = newIScoreAccount(prepA, BlockHeight2, reward0)
+	}
 
 	period = common.NewHexIntFromUint64(BlockHeight2 - BlockHeight1)
 	gv = ctx.getGVByBlockHeight(BlockHeight2)
@@ -432,7 +460,7 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	reward.Add(&reward0.Int, &reward1.Int)
 
-	iaPRepA2 := newIScoreAccount(prepA, BlockHeight2, reward)
+	iaPRepA1 := newIScoreAccount(prepA, BlockHeight2, reward)
 
 	bs, _ := bucket.Get(prepA.Bytes())
 	ia, _ := NewIScoreAccountFromBytes(bs)
@@ -448,7 +476,12 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	reward0.Mul(&reward0.Int, &common.NewHexIntFromUint64(DelegationB0).Int)
 	reward0.Div(&reward0.Int, &common.NewHexIntFromUint64(TotalDelegation0).Int)
 
-	iaPRepB1 := newIScoreAccount(prepB, BlockHeight1, reward0)
+	var iaPRepB0 *IScoreAccount
+	if ctx.Revision < Revision8 {
+		iaPRepB0 = newIScoreAccount(prepB, BlockHeight1, reward0)
+	} else {
+		iaPRepB0 = newIScoreAccount(prepB, BlockHeight2, reward0)
+	}
 
 	period = common.NewHexIntFromUint64(BlockHeight2 - BlockHeight1)
 	gv = ctx.getGVByBlockHeight(BlockHeight2)
@@ -458,7 +491,7 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 
 	reward.Add(&reward0.Int, &reward1.Int)
 
-	iaPRepB2 := newIScoreAccount(prepB, BlockHeight2, reward)
+	iaPRepB1 := newIScoreAccount(prepB, BlockHeight2, reward)
 
 	bs, _ = bucket.Get(prepB.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
@@ -466,6 +499,32 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	assert.Equal(t, BlockHeight2, ia.BlockHeight)
 
 	totalReward.Add(&totalReward.Int, &reward.Int)
+
+	// check prepC
+	period = common.NewHexIntFromUint64(BlockHeight1 - BlockHeight0)
+	gv = ctx.getGVByBlockHeight(BlockHeight1)
+	reward0.Mul(&gv.PRepReward.Int, &period.Int)
+	reward0.Mul(&reward0.Int, &common.NewHexIntFromUint64(DelegationC0).Int)
+	reward0.Div(&reward0.Int, &common.NewHexIntFromUint64(TotalDelegation0).Int)
+
+	var iaPRepC0 *IScoreAccount
+	if ctx.Revision < Revision8 {
+		iaPRepC0 = newIScoreAccount(prepC, BlockHeight1, reward0)
+	} else {
+		iaPRepC0 = newIScoreAccount(prepC, BlockHeight2, reward0)
+	}
+
+	bs, _ = bucket.Get(prepC.Bytes())
+	ia, _ = NewIScoreAccountFromBytes(bs)
+	assert.Equal(t, 0, reward0.Cmp(&ia.IScore.Int))
+	if ctx.Revision < Revision8 {
+		assert.Equal(t, BlockHeight1, ia.BlockHeight)
+	} else {
+		assert.Equal(t, BlockHeight2, ia.BlockHeight)
+	}
+
+
+	totalReward.Add(&totalReward.Int, &reward0.Int)
 
 	// check stats
 	assert.Equal(t, 0, totalReward.Cmp(&stats.Int))
@@ -476,13 +535,14 @@ func TestMsgCalc_CalculatePRepReward(t *testing.T) {
 	stateHash2 := make([]byte, 64)
 
 	h1 := sha3.NewShake256()
-	h1.Write(iaPRepA1.BytesForHash())
-	h1.Write(iaPRepB1.BytesForHash())
+	h1.Write(iaPRepA0.BytesForHash())
+	h1.Write(iaPRepB0.BytesForHash())
+	h1.Write(iaPRepC0.BytesForHash())
 	h1.Read(stateHash1)
 
 	h2 := sha3.NewShake256()
-	h2.Write(iaPRepA2.BytesForHash())
-	h2.Write(iaPRepB2.BytesForHash())
+	h2.Write(iaPRepA1.BytesForHash())
+	h2.Write(iaPRepB1.BytesForHash())
 	h2.Read(stateHash2)
 
 	h := sha3.NewShake256()
