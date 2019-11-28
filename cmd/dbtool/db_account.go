@@ -10,28 +10,26 @@ import (
 	"path/filepath"
 )
 
-type AccountDB struct{}
-
-func (accountDB AccountDB) query(dbPath string, rcRootPath string, address string) {
-	if (dbPath != "" && address != "") || (dbPath == "" && address == "") {
+func queryAccountDB(input Input) {
+	if input.path == "" && input.address == "" {
 		fmt.Println("address or dbPath required")
 		os.Exit(1)
 	}
-	if dbPath != "" {
-		dir, name := filepath.Split(dbPath)
+	if input.path != "" {
+		dir, name := filepath.Split(input.path)
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 		defer qdb.Close()
 
-		iteratePrintDB(DBTypeAccount, qdb, nil, 0, "")
+		iteratePrintDB(DataTypeAccount, qdb)
 	} else {
 		// get db info
-		if rcRootPath == "" {
+		if input.rcDBRoot == "" {
 			fmt.Printf("rcPath required when querying with address")
 			os.Exit(1)
 		}
-		dbInfo := getDBInfo(rcRootPath)
-		addr := common.NewAddressFromString(address)
-		accountDBPath := getAccountDBPath(rcRootPath, addr, dbInfo)
+		dbInfo := getDBInfo(input.rcDBRoot)
+		addr := common.NewAddressFromString(input.address)
+		accountDBPath := getAccountDBPath(input.rcDBRoot, addr, dbInfo)
 		dir, name := filepath.Split(accountDBPath)
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 		defer qdb.Close()

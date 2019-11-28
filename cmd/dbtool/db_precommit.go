@@ -11,21 +11,17 @@ import (
 	"path/filepath"
 )
 
-type PreCommitDB struct {
-	dbPath string
-}
-
-func (preCommitDB PreCommitDB) query(address string, blockHeight uint64) {
-	if preCommitDB.dbPath == "" {
+func queryPreCommitDB(input Input) {
+	if input.path == "" {
 		fmt.Println("Enter dbPath")
 		os.Exit(1)
 	}
-	dir, name := filepath.Split(preCommitDB.dbPath)
+	dir, name := filepath.Split(input.path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
 
-	if address == "" || blockHeight == 0 {
-		iteratePrintDB(DBTypePreCommit, qdb, nil, 0, "")
+	if input.address == "" || input.height == 0 {
+		iteratePrintDB(DBNamePreCommit, qdb)
 		return
 	}
 
@@ -35,12 +31,12 @@ func (preCommitDB PreCommitDB) query(address string, blockHeight uint64) {
 		return
 	}
 
-	addr := common.NewAddressFromString(address)
+	addr := common.NewAddressFromString(input.address)
 
 	iter.New(nil, nil)
 	preCommitKey := make([]byte, core.BlockHashSize+core.BlockHeightSize+common.AddressBytes)
 	keyExist := false
-	blockHeightBytesValue := common.Uint64ToBytes(blockHeight)
+	blockHeightBytesValue := common.Uint64ToBytes(input.height)
 	for iter.Next() {
 		key := iter.Key()
 		if bytes.Equal(key[:core.BlockHeightSize], blockHeightBytesValue) &&
@@ -71,7 +67,7 @@ func (preCommitDB PreCommitDB) query(address string, blockHeight uint64) {
 	if value == nil || err != nil {
 		return
 	}
-	printPreCommit(preCommitKey, value, addr, blockHeight)
+	printPreCommit(preCommitKey, value, addr, input.height)
 }
 
 func printPreCommit(key []byte, value []byte, address *common.Address, blockHeight uint64) bool {

@@ -10,25 +10,21 @@ import (
 	"path/filepath"
 )
 
-type ClaimDB struct {
-	dbPath string
-}
-
-func (claimDB ClaimDB) query(address string) {
-	if claimDB.dbPath == "" {
+func queryClaimDB(input Input) {
+	if input.path == "" {
 		fmt.Println("Enter dbPath")
 		os.Exit(1)
 	}
-	dir, name := filepath.Split(claimDB.dbPath)
+	dir, name := filepath.Split(input.path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
 
-	if address == "" {
-		iteratePrintDB(DBTypeClaim, qdb, nil, 0, "")
+	if input.address == "" {
+		iteratePrintDB(DBNameClaim, qdb)
 		return
 	}
 
-	addr := common.NewAddressFromString(address)
+	addr := common.NewAddressFromString(input.address)
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
 	if err != nil {
 		log.Printf("Failed to get Bucket")
@@ -46,7 +42,6 @@ func printClaim(key []byte, value []byte, address *common.Address) bool {
 	claim, err := core.NewClaimFromBytes(value)
 	if err != nil {
 		log.Printf("Failed to make claim instance")
-		fmt.Println("printAccount1")
 		return false
 	}
 	claim.Address = *common.NewAddress(key)
