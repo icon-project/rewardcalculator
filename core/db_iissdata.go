@@ -334,3 +334,114 @@ func cleanupIISSData(path string) {
 		}
 	}
 }
+
+func WriteIISSHeader(iiss db.Database, version uint64, blockHeight uint64, revision uint64) error {
+	bucket, _ := iiss.GetBucket(db.PrefixIISSHeader)
+
+	header := new(IISSHeader)
+	header.Version = version
+	header.BlockHeight = blockHeight
+	header.Revision = revision
+
+	key := []byte("")
+	value, _ := header.Bytes()
+	return bucket.Set(key, value)
+}
+
+func WriteIISSGV(iiss db.Database,
+	blockHeight uint64, incentive uint64, reward uint64, mainPRepCount uint64, subPRepCount uint64) error {
+	bucket, _ := iiss.GetBucket(db.PrefixIISSGV)
+
+	gv := new(IISSGovernanceVariable)
+	gv.BlockHeight = blockHeight
+	gv.IncentiveRep = incentive
+	gv.RewardRep = reward
+	gv.MainPRepCount = mainPRepCount
+	gv.SubPRepCount = subPRepCount
+
+	value, _ := gv.Bytes()
+	return bucket.Set(gv.ID(), value)
+}
+
+func WriteIISSBP(iiss db.Database, blockHeight uint64, generator string, validator []string) error {
+	bucket, _ := iiss.GetBucket(db.PrefixIISSBPInfo)
+
+	prep := new(IISSBlockProduceInfo)
+	prep.BlockHeight = blockHeight
+
+	key := prep.ID()
+	if generator == "" || len(validator) == 0 {
+		return fmt.Errorf("need generator and validator parameter\n")
+	}
+
+	prep.Generator = *common.NewAddressFromString(generator)
+	prep.Validator = make([]common.Address, 0)
+	for _, v := range validator {
+		prep.Validator = append(prep.Validator, *common.NewAddressFromString(v))
+	}
+
+	value, _ := prep.Bytes()
+	return bucket.Set(key, value)
+}
+
+func WriteIISSPRep(iiss db.Database, blockHeight uint64, totalDelegation uint64, preps []*PRepDelegationInfo) error {
+	if len(preps) == 0 {
+		return fmt.Errorf("need preps parameter")
+	}
+
+	bucket, _ := iiss.GetBucket(db.PrefixIISSPRep)
+
+	prep := new(PRep)
+	prep.BlockHeight = blockHeight
+	prep.TotalDelegation.SetUint64(totalDelegation)
+	prep.List = make([]PRepDelegationInfo, 0)
+	for _, value := range preps {
+		prep.List = append(prep.List, *value)
+	}
+
+	key := prep.ID()
+	value, _ := prep.Bytes()
+	return bucket.Set(key, value)
+}
+
+func WriteIISSTX(iiss db.Database, index uint64, address string, blockHeight uint64, dataType uint64,
+	delegations []*PRepDelegationInfo) error {
+
+	bucket, _ := iiss.GetBucket(db.PrefixIISSTX)
+
+	tx := new(IISSTX)
+	tx.Address = *common.NewAddressFromString(address)
+	tx.BlockHeight = blockHeight
+	tx.DataType = dataType
+	tx.Data = new(codec.TypedObj)
+	tx.Index = index
+
+	switch tx.DataType {
+	case TXDataTypeDelegate:
+		var delegation []interface{}
+		var dgData []interface{}
+
+		for _, dg := range delegations {
+			dgData = append(dgData, &dg.Address)
+			dgData = append(dgData, dg.DelegatedAmount.Uint64())
+			delegation = append(delegation, dgData)
+		}
+
+		var err error
+		tx.Data, err = common.EncodeAny(delegation)
+		if err != nil {
+			return fmt.Errorf("failed to encode stake %+v", err)
+		}
+	case TXDataTypePrepReg:
+		tx.Data.Type = codec.TypeNil
+		tx.Data.Object = []byte("")
+	case TXDataTypePrepUnReg:
+		tx.Data.Type = codec.TypeNil
+		tx.Data.Object = []byte("")
+	}
+
+	key := tx.ID()
+	value, _ := tx.Bytes()
+	return bucket.Set(key, value)
+}
+>>>>>>> IS-933: add integration test

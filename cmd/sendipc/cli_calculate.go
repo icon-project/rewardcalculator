@@ -27,7 +27,7 @@ func (cli *CLI) calculate(conn ipc.Connection, iissData string, blockHeight uint
 	if msg == core.MsgCalculateDone {
 		fmt.Printf("CALCULATE command get calculate result: %s\n", respDone.String())
 	} else {
-		fmt.Printf("CALCULATE command get invalied response : (msg:%d, id:%d)\n", msg, id)
+		fmt.Printf("CALCULATE command get invalid response : (msg:%d, id:%d)\n", msg, id)
 	}
 
 }

@@ -107,6 +107,8 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 	err := sendVersion(c, MsgReady, 0, cBI.BlockHeight, cBI.BlockHash)
 	if err != nil {
 		log.Printf("Failed to send READY message")
+	} else {
+		log.Printf("Accept new connection and send READY message")
 	}
 
 	return handler, err

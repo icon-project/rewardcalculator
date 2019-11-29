@@ -96,8 +96,10 @@ func (c *connection) SendAndReceive(msg uint, id uint32, data interface{}, buffe
 	if err := codec.MP.Unmarshal(c.conn, &m2); err != nil {
 		return err
 	}
-	if _, err := codec.MP.UnmarshalFromBytes(m2.Data, buffer); err != nil {
-		return err
+	if buffer != nil {
+		if _, err := codec.MP.UnmarshalFromBytes(m2.Data, buffer); err != nil {
+			return err
+		}
 	}
 	return nil
 }
