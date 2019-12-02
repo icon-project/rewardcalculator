@@ -5,6 +5,7 @@ import (
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"io/ioutil"
 	"log"
 	"os"
@@ -14,9 +15,10 @@ import (
 
 func queryAccountDB(input Input) {
 	if input.path != "" {
-		queryAccountWithAccountDBPath(input.path, input.address)
+		result := queryAccountWithAccountDBPath(input.path, input.address)
+		printIScoreAccountInstance(result)
 		return
-	} else if !(input.rcDBRoot == "" && input.accountType == "") {
+	} else if (input.rcDBRoot != "") && (input.accountType != "") {
 		// get db info
 		queryAccountWithRCRootPath(input.rcDBRoot, input.address, input.accountType)
 		return
@@ -25,44 +27,41 @@ func queryAccountDB(input Input) {
 	os.Exit(1)
 }
 
-func printAccount(key []byte, value []byte, address *common.Address) bool {
-	account, err := core.NewIScoreAccountFromBytes(value)
-	if err != nil {
-		log.Printf("Failed to make account instance")
-		return false
-	}
-	account.Address = *common.NewAddress(key)
-
-	if address != nil && account.Address.Equal(address) == false {
-
-		return false
-	}
-	fmt.Printf("%s\n", account.String())
-
-	return true
+func printAccount(key []byte, value []byte) {
+	account := getIScoreAccount(key, value)
+	printIScoreAccountInstance(account)
 }
 
-func queryAccountWithAccountDBPath(path string, address string) {
+func printIScoreAccountInstance(account *core.IScoreAccount){
+	if account != nil {
+		fmt.Printf("%s\n", account.String())
+	}
+}
+
+func queryAccountWithAccountDBPath(path string, address string) *core.IScoreAccount{
 	dir, name := filepath.Split(path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
 	if address == "" {
-		iteratePrintDB(DataTypeAccount, qdb)
-		return
+		accountEntries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixIScore)))
+		printEntries(accountEntries, printAccount)
+		return nil
 	}
 	addr := common.NewAddressFromString(address)
 	bucket, err := qdb.GetBucket(db.PrefixIScore)
 	if err != nil {
 		fmt.Printf("Failed to get bucket")
-		return
+		return nil
 	}
 
+	key := addr.Bytes()
 	value, err := bucket.Get(addr.Bytes())
 	if value == nil || err != nil {
 		fmt.Printf("failed to get value in DB")
-		return
+		return nil
 	}
-	printAccount(addr.Bytes(), value, addr)
+	iScoreAccount := getIScoreAccount(key, value)
+	return iScoreAccount
 }
 
 func queryAccountWithRCRootPath(path string, address string, accountType string) {
@@ -77,10 +76,10 @@ func queryAccountWithRCRootPath(path string, address string, accountType string)
 		index := prefix + 1
 		accountDBPath0 := fmt.Sprintf(core.AccountDBNameFormat, index, accountDBNum, 0)
 		dbRoot0 := filepath.Join(path, accountDBPath0)
-		account0 := getAccount(dbRoot0, addr)
+		account0 := queryAccountWithAccountDBPath(dbRoot0, address)
 		accountDBPath1 := fmt.Sprintf(core.AccountDBNameFormat, index, accountDBNum, 1)
 		dbRoot1 := filepath.Join(path, accountDBPath1)
-		account1 := getAccount(dbRoot1, addr)
+		account1 := queryAccountWithAccountDBPath(dbRoot1, address)
 		var calculateAccount *core.IScoreAccount
 		var queryAccount *core.IScoreAccount
 		if account0 != nil {
@@ -101,7 +100,8 @@ func queryAccountWithRCRootPath(path string, address string, accountType string)
 	}
 
 	dbIndex := 0
-	var accountDBPath string
+	var dbPath string
+	var accounts []*core.IScoreAccount
 	found := false
 	for i := 1; i <= accountDBNum; i++ {
 		if !found {
@@ -111,35 +111,44 @@ func queryAccountWithRCRootPath(path string, address string, accountType string)
 			accountDBPath1 := fmt.Sprintf(core.AccountDBNameFormat, i, accountDBNum, 1)
 			dbPath1 := filepath.Join(path, accountDBPath1)
 			accounts1 := getAccounts(dbPath1)
+			dbPath = accountDBPath0
 			if len(accounts0) > 0 {
 				found = true
 				if accounts0[0].BlockHeight >= accounts1[0].BlockHeight {
 					if accountType == "query" {
 						dbIndex = 1
-						accountDBPath = accountDBPath1
+						accounts = accounts1
+						dbPath = dbPath1
 					} else {
 						dbIndex = 0
-						accountDBPath = accountDBPath0
+						accounts = accounts0
+						dbPath = dbPath0
 					}
 				} else {
 					if accountType == "query" {
 						dbIndex = 0
-						accountDBPath = accountDBPath0
+						accounts = accounts0
+						dbPath = dbPath0
 					} else {
 						dbIndex = 1
-						accountDBPath = accountDBPath1
+						accounts = accounts1
+						dbPath = dbPath1
 					}
 				}
 			}
 
+		} else {
+			accountDBPath := fmt.Sprintf(core.AccountDBNameFormat, i, accountDBNum, dbIndex)
+			dbPath := filepath.Join(path, accountDBPath)
+			accounts = getAccounts(dbPath)
 		}
-		accountDBPath = fmt.Sprintf(core.AccountDBNameFormat, i, accountDBNum, dbIndex)
-		dbPath := filepath.Join(path, accountDBPath)
 		fmt.Println(dbPath)
-		printAccountsInDB(dbPath)
+		for _, v := range accounts{
+			printIScoreAccountInstance(v)
+		}
 	}
-
 }
+
 func getAccountDBCount(path string) int {
 	contents, err := ioutil.ReadDir(path)
 	if err != nil {
@@ -156,56 +165,26 @@ func getAccountDBCount(path string) int {
 	return result
 }
 
-func getAccount(dbPath string, address *common.Address) *core.IScoreAccount {
-	dir, name := filepath.Split(dbPath)
-	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
-	defer qdb.Close()
-	bucket, err := qdb.GetBucket(db.PrefixIScore)
+func getIScoreAccount(key []byte, value []byte) *core.IScoreAccount{
+	account, err := core.NewIScoreAccountFromBytes(value)
 	if err != nil {
-		fmt.Printf("Failed to get account bucket")
-		os.Exit(1)
-	}
-
-	value, err := bucket.Get(address.Bytes())
-	if err != nil {
-		fmt.Printf("error while get value in DB")
-		os.Exit(1)
-	}
-	if value == nil {
-		fmt.Printf("failed to get value in DB")
+		log.Printf("Failed to make account instance")
 		return nil
 	}
-	account, err := core.NewIScoreAccountFromBytes(value)
-	account.Address = *address
+	account.Address = *common.NewAddress(key)
 	return account
 }
 
-func getAccounts(dbPath string) []*core.IScoreAccount {
+func getAccounts(dbPath string) []*core.IScoreAccount{
 	dir, name := filepath.Split(dbPath)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
-	accounts := []*core.IScoreAccount{}
-	iter, err := qdb.GetIterator()
-	if err != nil {
 
-	}
-	prefix := getPrefix(DataTypeAccount)
-	iter.New(prefix.Start, prefix.Limit)
-	for iter.Next() {
-		account, err := core.NewIScoreAccountFromBytes(iter.Value())
-		if err != nil {
-			fmt.Println("Error while init IscoreAccount")
-			os.Exit(1)
-		}
+	var accounts []*core.IScoreAccount
+	entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixIScore)))
+	for _, v := range entries{
+		account := getIScoreAccount(v.key, v.value)
 		accounts = append(accounts, account)
 	}
-	iter.Release()
 	return accounts
-}
-
-func printAccountsInDB(dbPath string) {
-	dir, name := filepath.Split(dbPath)
-	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
-	defer qdb.Close()
-	iteratePrintDB(DataTypeAccount, qdb)
 }

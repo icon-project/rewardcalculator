@@ -5,6 +5,7 @@ import (
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"log"
 	"os"
 	"path/filepath"
@@ -20,9 +21,14 @@ func queryCalcResultDB(input Input) {
 	defer qdb.Close()
 
 	if input.height == 0 {
-		iteratePrintDB(DataTypeCalcResult, qdb)
-		return
+		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixCalcResult)))
+		printEntries(entries, printCalcResult)
+	} else {
+		runQueryCalcResult(qdb, input.height)
 	}
+}
+
+func runQueryCalcResult(qdb db.Database, blockHeight uint64) {
 	bucket, err := qdb.GetBucket(db.PrefixCalcResult)
 	if err != nil {
 		log.Printf("Failed to get Bucket")
@@ -33,23 +39,18 @@ func queryCalcResultDB(input Input) {
 	if value == nil || err != nil {
 		return
 	}
-	printCalcResult(common.Uint64ToBytes(input.height), value, input.height)
+	printCalcResult(common.Uint64ToBytes(input.height), value)
+
 }
 
-func printCalcResult(key []byte, value []byte, blockHeight uint64) bool {
+func printCalcResult(key []byte, value []byte) {
 	var cr core.CalculationResult
 	err := cr.SetBytes(value)
 	if err != nil {
 		log.Printf("Failed to make calculateResult instance")
-		return false
+		return
 	}
 	cr.BlockHeight = common.BytesToUint64(key)
 
-	if blockHeight != 0 && blockHeight != cr.BlockHeight {
-		return false
-	}
-
 	fmt.Printf("%s\n", cr.String())
-
-	return true
 }

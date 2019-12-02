@@ -34,7 +34,7 @@ CMDS = $(patsubst $(CMDS_DIR)/%/., %, $(wildcard $(CMDS_DIR)/*/.))
 # Build flags for each command
 icon_rc_LDFLAGS = -ldflags "-X 'main.version=$(GL_VERSION)' -X 'main.build=$(BUILD_INFO)'"
 
-BUILD_TARGETS = icon_rc rctool dbtool
+BUILD_TARGETS = icon_rc rctool
 
 .DEFAULT_GOAL := all
 all : clean $(BUILD_TARGETS) ## Build the tools for current OS

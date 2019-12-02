@@ -6,6 +6,7 @@ import (
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"log"
 	"os"
 	"path/filepath"
@@ -21,12 +22,16 @@ func queryPreCommitDB(input Input) {
 	defer qdb.Close()
 
 	if input.address == "" && input.height == 0 {
-		iteratePrintDB(DataTypePreCommit, qdb)
-		return
+		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixClaim)))
+		printEntries(entries, printPreCommit)
+	}else {
+		address := common.NewAddressFromString(input.address)
+		runQueryPreCommit(qdb, address, input.height)
 	}
+}
 
-	addr := common.NewAddressFromString(input.address)
-	qPreCommitKeys := getKeys(qdb, *addr, input.height)
+func runQueryPreCommit(qdb db.Database, address *common.Address, blockHeight uint64){
+	qPreCommitKeys := getKeys(qdb, address, blockHeight)
 
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
 	if err != nil {
@@ -39,44 +44,34 @@ func queryPreCommitDB(input Input) {
 		if value == nil || err != nil {
 			continue
 		}
-		printPreCommit(key, value, addr, input.height)
+		printPreCommit(key, value)
 	}
+
 }
 
-func printPreCommit(key []byte, value []byte, address *common.Address, blockHeight uint64) bool {
+func printPreCommit(key []byte, value []byte) {
 	var pc core.PreCommit
 
 	err := pc.SetBytes(value)
 	if err != nil {
 		log.Printf("Failed to make preCommit instance")
-		return false
+		return
 	}
 	pc.BlockHeight = common.BytesToUint64(key[:core.BlockHeightSize])
 	pc.BlockHash = make([]byte, core.BlockHashSize)
 	copy(pc.BlockHash, key[core.BlockHeightSize:core.BlockHeightSize+core.BlockHashSize])
 
-	// check argument
-	if address != nil && pc.Address.Equal(address) == false {
-		return false
-	}
-
-	if blockHeight != 0 && pc.BlockHeight != blockHeight {
-		return false
-	}
-
 	fmt.Printf("%s\n", pc.String())
-
-	return true
 }
 
-func getKeys(qdb db.Database, address common.Address, blockHeight uint64) [][]byte{
+func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) [][]byte{
 	iter, err := qdb.GetIterator()
 	if err != nil {
 		fmt.Printf("Failed to get precommit db iterator")
 		os.Exit(1)
 	}
 
-	precommitKeys := [][]byte{}
+	preCommitKeys := [][]byte{}
 	iter.New(nil, nil)
 	keyExist := false
 	tmpAddress := new(common.Address)
@@ -87,17 +82,17 @@ func getKeys(qdb db.Database, address common.Address, blockHeight uint64) [][]by
 			if bytes.Equal(key[:core.BlockHeightSize], blockHeightBytesValue) &&
 				bytes.Equal(key[core.BlockHeightSize+core.BlockHashSize:], address.Bytes()) {
 				keyExist = true
-				precommitKeys = append(precommitKeys, key)
+				preCommitKeys = append(preCommitKeys, key)
 				break
 			}
 		}else{
 			if address.Equal(tmpAddress) == false &&
 				bytes.Equal(key[core.BlockHeightSize+core.BlockHashSize:], address.Bytes()){
 				keyExist = true
-				precommitKeys = append(precommitKeys, key)
+				preCommitKeys = append(preCommitKeys, key)
 			} else if blockHeight != 0 && bytes.Equal(key[:core.BlockHeightSize], blockHeightBytesValue){
 				keyExist = true
-				precommitKeys = append(precommitKeys, key)
+				preCommitKeys = append(preCommitKeys, key)
 			}
 		}
 	}
@@ -113,5 +108,5 @@ func getKeys(qdb db.Database, address common.Address, blockHeight uint64) [][]by
 		os.Exit(1)
 	}
 
-	return precommitKeys
+	return preCommitKeys
 }
