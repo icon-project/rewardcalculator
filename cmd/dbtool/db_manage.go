@@ -21,11 +21,13 @@ func queryManagementDB(input Input) {
 
 	switch input.data {
 	case "":
+		fmt.Println("==============print Database info==============")
 		printDBInfo(qdb)
 		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)))
+		fmt.Println("==============print governance variables==============")
 		printEntries(entries, printGV)
-		entries = getEntries(qdb, util.BytesPrefix([]byte(db.PrefixPRepCandidate)))
-		printEntries(entries, printPC)
+		fmt.Println("==============print PRep Candidate info==============")
+		queryPC(qdb, "")
 	case DataTypeDI:
 		printDBInfo(qdb)
 	case DataTypeGV:
@@ -37,6 +39,36 @@ func queryManagementDB(input Input) {
 		fmt.Printf("Invalid data type : %s\n", input.data)
 		os.Exit(1)
 	}
+}
+
+func queryPC(qdb db.Database, address string) {
+	if address == "" {
+		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixPRepCandidate)))
+		printEntries(entries, printPC)
+	} else {
+		addr := common.NewAddressFromString(address)
+		pc := runQueryPC(qdb, addr)
+		fmt.Println(pc.String())
+	}
+}
+
+func runQueryPC(qdb db.Database, address *common.Address) *core.PRepCandidate{
+	bucket, err := qdb.GetBucket(db.PrefixPRepCandidate)
+	if err != nil {
+		fmt.Println("error while getting prep candidate bucket")
+		os.Exit(1)
+	}
+	value, err := bucket.Get(address.Bytes())
+	if err != nil {
+		fmt.Println("error while Get value of prep candidate")
+		os.Exit(1)
+	}
+	pcPrefixLen := len(db.PrefixPRepCandidate)
+	qKey := make([]byte, pcPrefixLen+common.AddressBytes)
+	copy(qKey, db.PrefixPRepCandidate)
+	copy(qKey[pcPrefixLen:], address.Bytes())
+	pc := getPC(qKey, value)
+	return pc
 }
 
 func printDBInfo(qdb db.Database) {
@@ -62,37 +94,14 @@ func printGV(key []byte, value []byte) {
 	fmt.Println("Governance variable set", gv.GVData, " at ", gv.BlockHeight)
 }
 
-func queryPC(qdb db.Database, address string) {
-	if address == "" {
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixPRepCandidate)))
-		printEntries(entries, printPC)
-	} else {
-		addr := common.NewAddressFromString(address)
-		runQueryPC(qdb, addr)
-	}
-}
-
 func printPC(key []byte, value []byte) {
-	pc := new(core.PRepCandidate)
-	pc.SetBytes(value)
-	pc.Address = *common.NewAddress(key[len(db.PrefixPRepCandidate):])
-
+	pc := getPC(key, value)
 	fmt.Println("PRep Candidate : ", pc.String())
 }
 
-func runQueryPC(qdb db.Database, address *common.Address){
-	bucket, err := qdb.GetBucket(db.PrefixPRepCandidate)
-	if err != nil {
-		fmt.Println("error while getting prep candidate bucket")
-		os.Exit(1)
-	}
-	value, err := bucket.Get(address.Bytes())
-	if err != nil {
-		fmt.Println("error while Get value of prep candidate")
-	}
-	pcPrefixLen := len(db.PrefixPRepCandidate)
-	qKey := make([]byte, pcPrefixLen+common.AddressBytes)
-	copy(qKey, db.PrefixPRepCandidate)
-	copy(qKey[pcPrefixLen:], address.Bytes())
-	printPC(qKey, value)
+func getPC(key []byte, value []byte) *core.PRepCandidate{
+	pc := new(core.PRepCandidate)
+	pc.SetBytes(value)
+	pc.Address = *common.NewAddress(key[len(db.PrefixPRepCandidate):])
+	return pc
 }

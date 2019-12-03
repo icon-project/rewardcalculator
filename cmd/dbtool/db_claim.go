@@ -6,7 +6,6 @@ import (
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"log"
 	"os"
 	"path/filepath"
 )
@@ -25,33 +24,39 @@ func queryClaimDB(input Input) {
 		printEntries(entries, printClaim)
 	} else {
 		address := common.NewAddressFromString(input.address)
-		runQueryClaim(qdb, address)
+		claim := runQueryClaim(qdb, address)
+		fmt.Printf("%s\n", claim.String())
 	}
 }
 
-func runQueryClaim(qdb db.Database, address *common.Address){
+func runQueryClaim(qdb db.Database, address *common.Address) *core.Claim{
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
 	if err != nil {
-		log.Printf("Failed to get Bucket")
-		return
+		fmt.Printf("Failed to get claim Bucket")
+		os.Exit(1)
 	}
 	value, err := bucket.Get(address.Bytes())
-	if value == nil || err != nil {
-		return
+	if err != nil {
+		fmt.Printf("Error while get claim value")
+		os.Exit(1)
 	}
-
-	printClaim(address.Bytes(), value)
+	claim := getClaim(address.Bytes(), value)
+	return claim
 }
 
 func printClaim(key []byte, value []byte) {
+	claim := getClaim(key, value)
+	fmt.Printf("%s\n", claim.String())
+}
+
+func getClaim(key []byte, value []byte) *core.Claim {
 	claim, err := core.NewClaimFromBytes(value)
 	if err != nil {
-		log.Printf("Failed to make claim instance")
-		return
+		fmt.Printf("Failed to make claim instance")
+		os.Exit(1)
 	}
 	claim.Address = *common.NewAddress(key)
 
-	//check argument
 	fmt.Printf("%s\n", claim.String())
-	return
+	return claim
 }

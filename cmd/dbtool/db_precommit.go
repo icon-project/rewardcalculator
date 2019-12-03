@@ -7,7 +7,6 @@ import (
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"log"
 	"os"
 	"path/filepath"
 )
@@ -26,42 +25,57 @@ func queryPreCommitDB(input Input) {
 		printEntries(entries, printPreCommit)
 	}else {
 		address := common.NewAddressFromString(input.address)
-		runQueryPreCommit(qdb, address, input.height)
+		preCommits := runQueryPreCommits(qdb, address, input.height)
+		for _, v := range preCommits{
+			fmt.Println(v.String())
+		}
 	}
 }
 
-func runQueryPreCommit(qdb db.Database, address *common.Address, blockHeight uint64){
+func runQueryPreCommits(qdb db.Database, address *common.Address, blockHeight uint64) []*core.PreCommit{
+	var preCommits []*core.PreCommit
 	qPreCommitKeys := getKeys(qdb, address, blockHeight)
 
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
 	if err != nil {
-		log.Printf("Failed to get Bucket")
-		return
+		fmt.Printf("Failed to get preCommit Bucket")
+		os.Exit(1)
 	}
 
 	for _, key := range qPreCommitKeys {
 		value, err := bucket.Get(key)
-		if value == nil || err != nil {
+		if err != nil {
+			fmt.Println("Error while get preCommit")
+			os.Exit(1)
+		}
+		if value == nil {
 			continue
 		}
-		printPreCommit(key, value)
+		preCommit := getPreCommit(key, value)
+		preCommits = append(preCommits, preCommit)
 	}
-
+	return preCommits
 }
 
 func printPreCommit(key []byte, value []byte) {
-	var pc core.PreCommit
+	pc := getPreCommit(key, value)
+
+	fmt.Printf("%s\n", pc.String())
+}
+
+func getPreCommit(key []byte, value []byte) *core.PreCommit{
+	pc := new(core.PreCommit)
 
 	err := pc.SetBytes(value)
 	if err != nil {
-		log.Printf("Failed to make preCommit instance")
-		return
+		fmt.Printf("Failed to initialize preCommit instance")
+		os.Exit(1)
+
 	}
 	pc.BlockHeight = common.BytesToUint64(key[:core.BlockHeightSize])
 	pc.BlockHash = make([]byte, core.BlockHashSize)
 	copy(pc.BlockHash, key[core.BlockHeightSize:core.BlockHeightSize+core.BlockHashSize])
-
-	fmt.Printf("%s\n", pc.String())
+	return pc
 }
 
 func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) [][]byte{
@@ -77,7 +91,8 @@ func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) [][]b
 	tmpAddress := new(common.Address)
 	blockHeightBytesValue := common.Uint64ToBytes(blockHeight)
 	for iter.Next() {
-		key := iter.Key()
+		key := make([]byte, len(iter.Key()))
+		copy(key, iter.Key())
 		if address.Equal(tmpAddress) == false && blockHeight != 0 {
 			if bytes.Equal(key[:core.BlockHeightSize], blockHeightBytesValue) &&
 				bytes.Equal(key[core.BlockHeightSize+core.BlockHashSize:], address.Bytes()) {

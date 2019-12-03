@@ -22,7 +22,11 @@ func getEntries(qDB db.Database, prefix *util.Range) []Entry{
 	var entries []Entry
 	iter.New(prefix.Start, prefix.Limit)
 	for iter.Next() {
-		entry := Entry{key:iter.Key(), value: iter.Value()}
+		tmpKey := make([]byte, len(iter.Key()))
+		tmpValue := make([]byte, len(iter.Value()))
+		copy(tmpKey, iter.Key())
+		copy(tmpValue, iter.Value())
+		entry := Entry{tmpKey, tmpValue}
 		entries = append(entries, entry)
 	}
 	iter.Release()
