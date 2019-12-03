@@ -21,19 +21,14 @@ func queryPreCommitDB(input Input) {
 	defer qdb.Close()
 
 	if input.address == "" && input.height == 0 {
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixClaim)))
-		printEntries(entries, printPreCommit)
-	}else {
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixClaim)), printPreCommit)
+	} else {
 		address := common.NewAddressFromString(input.address)
-		preCommits := runQueryPreCommits(qdb, address, input.height)
-		for _, v := range preCommits{
-			fmt.Println(v.String())
-		}
+		runQueryPreCommits(qdb, address, input.height)
 	}
 }
 
-func runQueryPreCommits(qdb db.Database, address *common.Address, blockHeight uint64) []*core.PreCommit{
-	var preCommits []*core.PreCommit
+func runQueryPreCommits(qdb db.Database, address *common.Address, blockHeight uint64) {
 	qPreCommitKeys := getKeys(qdb, address, blockHeight)
 
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
@@ -51,10 +46,8 @@ func runQueryPreCommits(qdb db.Database, address *common.Address, blockHeight ui
 		if value == nil {
 			continue
 		}
-		preCommit := getPreCommit(key, value)
-		preCommits = append(preCommits, preCommit)
+		printPreCommit(key, value)
 	}
-	return preCommits
 }
 
 func printPreCommit(key []byte, value []byte) {
@@ -63,7 +56,7 @@ func printPreCommit(key []byte, value []byte) {
 	fmt.Printf("%s\n", pc.String())
 }
 
-func getPreCommit(key []byte, value []byte) *core.PreCommit{
+func getPreCommit(key []byte, value []byte) *core.PreCommit {
 	pc := new(core.PreCommit)
 
 	err := pc.SetBytes(value)
@@ -78,7 +71,7 @@ func getPreCommit(key []byte, value []byte) *core.PreCommit{
 	return pc
 }
 
-func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) [][]byte{
+func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) [][]byte {
 	iter, err := qdb.GetIterator()
 	if err != nil {
 		fmt.Printf("Failed to get precommit db iterator")
@@ -100,12 +93,12 @@ func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) [][]b
 				preCommitKeys = append(preCommitKeys, key)
 				break
 			}
-		}else{
+		} else {
 			if address.Equal(tmpAddress) == false &&
-				bytes.Equal(key[core.BlockHeightSize+core.BlockHashSize:], address.Bytes()){
+				bytes.Equal(key[core.BlockHeightSize+core.BlockHashSize:], address.Bytes()) {
 				keyExist = true
 				preCommitKeys = append(preCommitKeys, key)
-			} else if blockHeight != 0 && bytes.Equal(key[:core.BlockHeightSize], blockHeightBytesValue){
+			} else if blockHeight != 0 && bytes.Equal(key[:core.BlockHeightSize], blockHeightBytesValue) {
 				keyExist = true
 				preCommitKeys = append(preCommitKeys, key)
 			}

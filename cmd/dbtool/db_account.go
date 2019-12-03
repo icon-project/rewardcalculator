@@ -15,78 +15,97 @@ import (
 
 func queryAccountDB(input Input) {
 	if input.path != "" {
-		result := queryAccountWithAccountDBPath(input.path, input.address)
-		printIScoreAccountInstance(result)
+		queryAccountWithAccountDBPath(input.path, input.address)
 		return
-	} else if (input.rcDBRoot != "") && (input.accountType != "") {
-		// get db info
-		result := queryAccountWithRCRootPath(input.rcDBRoot, input.address, input.accountType)
-		printIScoreAccountInstance(result)
+	} else if input.rcDBRoot != "" {
+		queryAccountWithRCRootPath(input.rcDBRoot, input.address, input.accountType)
 		return
 	}
-	fmt.Println("DBPath or (rcDBPath and accountType) required")
+	fmt.Println("DBPath or rcDBPath required")
 	os.Exit(1)
 }
 
-func queryAccountWithAccountDBPath(path string, address string) *core.IScoreAccount{
+func queryAccountWithAccountDBPath(path string, address string) {
 	dir, name := filepath.Split(path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
 	if address == "" {
-		accountEntries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixIScore)))
-		printEntries(accountEntries, printAccount)
-		return nil
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIScore)), printAccount)
 	} else {
 		addr := common.NewAddressFromString(address)
-		iScoreAccount := runQueryAccount(qdb, addr)
-		return iScoreAccount
+		runQueryAccount(qdb, addr)
 	}
 }
 
-func queryAccountWithRCRootPath(path string, address string, accountType string) *core.IScoreAccount{
-	if accountType != "query" && accountType != "calculate" {
-		fmt.Println("invalid accountType")
-		os.Exit(1)
-	}
-	var result *core.IScoreAccount
-	accountDBCount := getAccountDBCount(path)
-	if address == "" {
-		printAllAccountsInRcDB(path, accountDBCount, accountType)
+func queryAccountWithRCRootPath(rcRoot string, address string, accountType string) {
+	accountDBCount := getAccountDBCount(rcRoot)
+	if (address == "") && (accountType == "") {
+		for i := 1; i <= accountDBCount; i++ {
+			path0 := getNThAccountDBPathWithIndex(i, accountDBCount, rcRoot, 0)
+			printAllEntriesInPath(path0, util.BytesPrefix([]byte(db.PrefixIScore)), printAccount)
+			path1 := getNThAccountDBPathWithIndex(i, accountDBCount, rcRoot, 1)
+			printAllEntriesInPath(path1, util.BytesPrefix([]byte(db.PrefixIScore)), printAccount)
+		}
+	} else if (address == "") && (accountType != "") {
+		printAllAccountsInRcDBWithSpecifiedType(rcRoot, accountDBCount, accountType)
+	} else if (address != "") && (accountType == "") {
+		fmt.Printf("=================Querying query data=================")
+		runQueryAccountWithRCRoot(rcRoot, accountDBCount, address, "query")
+		fmt.Printf("=====================Querying calculate data=====================")
+		runQueryAccountWithRCRoot(rcRoot, accountDBCount, address, "calculate")
 	} else {
-		account := runQueryAccountWithRCRoot(path, accountDBCount, address, accountType)
-		result = account
+		runQueryAccountWithRCRoot(rcRoot, accountDBCount, address, accountType)
 	}
-	return result
 }
 
-func runQueryAccount(qdb db.Database, address *common.Address) *core.IScoreAccount{
+func runQueryAccount(qdb db.Database, address *common.Address) {
+	iScoreAccount := getAccount(qdb, address)
+	printIScoreAccountInstance(iScoreAccount)
+}
+
+func getAccount(qdb db.Database, address *common.Address) *core.IScoreAccount {
 	bucket, err := qdb.GetBucket(db.PrefixIScore)
 	if err != nil {
 		fmt.Printf("Failed to get bucket")
-		return nil
+		os.Exit(1)
 	}
 
 	key := address.Bytes()
 	value, err := bucket.Get(address.Bytes())
-	if value == nil || err != nil {
-		fmt.Printf("failed to get value in DB")
+	if err != nil {
+		fmt.Printf("Error while get account value")
+		os.Exit(1)
+	}
+	if value == nil {
+		fmt.Printf("Failed to get account value")
 		return nil
 	}
-	iScoreAccount := getIScoreAccount(key, value)
-	return iScoreAccount
+	return getIScoreAccount(key, value)
 }
 
-func runQueryAccountWithRCRoot(rcRoot string, accountDBCount int, address string, accountType string) *core.IScoreAccount{
+func getAccountInSpecifiedPath(dbRoot string, address string) *core.IScoreAccount {
+	dir, name := filepath.Split(dbRoot)
+	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
+	defer qdb.Close()
+	addr := common.NewAddressFromString(address)
+	account := getAccount(qdb, addr)
+	return account
+}
+
+func runQueryAccountWithRCRoot(rcRoot string, accountDBCount int, address string, accountType string) {
+	if accountType != "query" && accountType != "calculate" {
+		fmt.Println("Invalid accountType")
+		os.Exit(1)
+	}
 	addr := common.NewAddressFromString(address)
 	prefix := int(addr.ID()[0]) % accountDBCount
 	index := prefix + 1
 	dbRoot0 := getNThAccountDBPathWithIndex(index, accountDBCount, rcRoot, 0)
-	account0 := queryAccountWithAccountDBPath(dbRoot0, address)
+	account0 := getAccountInSpecifiedPath(dbRoot0, address)
 	dbRoot1 := getNThAccountDBPathWithIndex(index, accountDBCount, rcRoot, 1)
-	account1 := queryAccountWithAccountDBPath(dbRoot1, address)
+	account1 := getAccountInSpecifiedPath(dbRoot1, address)
 	var calculateAccount *core.IScoreAccount
 	var queryAccount *core.IScoreAccount
-	var result *core.IScoreAccount
 	if account0 != nil {
 		if account0.BlockHeight >= account1.BlockHeight {
 			calculateAccount = account0
@@ -96,12 +115,11 @@ func runQueryAccountWithRCRoot(rcRoot string, accountDBCount int, address string
 			queryAccount = account0
 		}
 		if accountType == "query" {
-			result = queryAccount
+			printIScoreAccountInstance(queryAccount)
 		} else {
-			result = calculateAccount
+			printIScoreAccountInstance(calculateAccount)
 		}
 	}
-	return result
 }
 
 func printAccount(key []byte, value []byte) {
@@ -109,7 +127,7 @@ func printAccount(key []byte, value []byte) {
 	printIScoreAccountInstance(account)
 }
 
-func printIScoreAccountInstance(account *core.IScoreAccount){
+func printIScoreAccountInstance(account *core.IScoreAccount) {
 	if account != nil {
 		fmt.Printf("%s\n", account.String())
 	}
@@ -131,7 +149,7 @@ func getAccountDBCount(path string) int {
 	return result
 }
 
-func getIScoreAccount(key []byte, value []byte) *core.IScoreAccount{
+func getIScoreAccount(key []byte, value []byte) *core.IScoreAccount {
 	account, err := core.NewIScoreAccountFromBytes(value)
 	if err != nil {
 		log.Printf("Failed to make account instance")
@@ -141,64 +159,77 @@ func getIScoreAccount(key []byte, value []byte) *core.IScoreAccount{
 	return account
 }
 
-func getAllAccounts(dbPath string) []*core.IScoreAccount{
+func getFirstAccount(dbPath string) *core.IScoreAccount {
+	var account *core.IScoreAccount
 	dir, name := filepath.Split(dbPath)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
 
-	var accounts []*core.IScoreAccount
-	entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixIScore)))
-	for _, v := range entries{
-		account := getIScoreAccount(v.key, v.value)
-		accounts = append(accounts, account)
+	iter, err := qdb.GetIterator()
+	if err != nil {
+		fmt.Printf("Failed to get iterator")
+		os.Exit(1)
 	}
-	return accounts
+
+	prefix := util.BytesPrefix([]byte(db.PrefixIScore))
+	iter.New(prefix.Start, prefix.Limit)
+	var key []byte
+	var value []byte
+	for iter.Next() {
+		key = iter.Key()
+		value = iter.Value()
+		break
+	}
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		fmt.Printf("Error while iterate. %+v", err)
+		os.Exit(1)
+	}
+	if key != nil {
+		account = getIScoreAccount(key, value)
+	}
+	return account
 }
 
-func printAllAccountsInRcDB(rcRoot string, accountDBCount int, accountType string){
+func printAllAccountsInRcDBWithSpecifiedType(rcRoot string, accountDBCount int, accountType string) {
 	dbIndex := 0
 	var dbPath string
-	var accounts []*core.IScoreAccount
 	found := false
 	for i := 1; i <= accountDBCount; i++ {
 		if !found {
 			dbPath0 := getNThAccountDBPathWithIndex(i, accountDBCount, rcRoot, 0)
-			accounts0 := getAllAccounts(dbPath0)
+			account0 := getFirstAccount(dbPath0)
 			dbPath1 := getNThAccountDBPathWithIndex(i, accountDBCount, rcRoot, 1)
-			accounts1 := getAllAccounts(dbPath1)
+			account1 := getFirstAccount(dbPath1)
 			dbPath = dbPath0
-			if len(accounts0) > 0 {
+			fmt.Printf("=================Querying DB in %s=================\n", dbPath)
+			if account0 != nil {
 				found = true
-				if accounts0[0].BlockHeight >= accounts1[0].BlockHeight {
+				if account0.BlockHeight >= account1.BlockHeight {
 					if accountType == "query" {
 						dbIndex = 1
-						accounts = accounts1
 						dbPath = dbPath1
 					} else {
 						dbIndex = 0
-						accounts = accounts0
 						dbPath = dbPath0
 					}
 				} else {
 					if accountType == "query" {
 						dbIndex = 0
-						accounts = accounts0
 						dbPath = dbPath0
 					} else {
 						dbIndex = 1
-						accounts = accounts1
 						dbPath = dbPath1
 					}
 				}
+				queryAccountWithAccountDBPath(dbPath, "")
 			}
 
 		} else {
-			dbPath = getNThAccountDBPathWithIndex(i, accountDBCount , rcRoot, dbIndex)
-			accounts = getAllAccounts(dbPath)
-		}
-		fmt.Printf("=================Querying DB in %s=====================\n", dbPath)
-		for _, v := range accounts{
-			printIScoreAccountInstance(v)
+			dbPath = getNThAccountDBPathWithIndex(i, accountDBCount, rcRoot, dbIndex)
+			fmt.Printf("=====================Querying DB in %s=================\n", dbPath)
+			queryAccountWithAccountDBPath(dbPath, "")
 		}
 	}
 
@@ -209,4 +240,3 @@ func getNThAccountDBPathWithIndex(n int, accountDBCount int, rcRootPath string, 
 	accountDBRoot := filepath.Join(rcRootPath, accountDBPath)
 	return accountDBRoot
 }
-

@@ -23,16 +23,14 @@ func queryManagementDB(input Input) {
 	case "":
 		fmt.Println("==============print Database info==============")
 		printDBInfo(qdb)
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)))
 		fmt.Println("==============print governance variables==============")
-		printEntries(entries, printGV)
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV)
 		fmt.Println("==============print PRep Candidate info==============")
 		queryPC(qdb, "")
 	case DataTypeDI:
 		printDBInfo(qdb)
 	case DataTypeGV:
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)))
-		printEntries(entries, printGV)
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV)
 	case DataTypePC:
 		queryPC(qdb, input.address)
 	default:
@@ -43,16 +41,14 @@ func queryManagementDB(input Input) {
 
 func queryPC(qdb db.Database, address string) {
 	if address == "" {
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixPRepCandidate)))
-		printEntries(entries, printPC)
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRepCandidate)), printPC)
 	} else {
 		addr := common.NewAddressFromString(address)
-		pc := runQueryPC(qdb, addr)
-		fmt.Println(pc.String())
+		runQueryPC(qdb, addr)
 	}
 }
 
-func runQueryPC(qdb db.Database, address *common.Address) *core.PRepCandidate{
+func runQueryPC(qdb db.Database, address *common.Address) {
 	bucket, err := qdb.GetBucket(db.PrefixPRepCandidate)
 	if err != nil {
 		fmt.Println("error while getting prep candidate bucket")
@@ -67,8 +63,7 @@ func runQueryPC(qdb db.Database, address *common.Address) *core.PRepCandidate{
 	qKey := make([]byte, pcPrefixLen+common.AddressBytes)
 	copy(qKey, db.PrefixPRepCandidate)
 	copy(qKey[pcPrefixLen:], address.Bytes())
-	pc := getPC(qKey, value)
-	return pc
+	printPC(qKey, value)
 }
 
 func printDBInfo(qdb db.Database) {
@@ -83,7 +78,7 @@ func printDBInfo(qdb db.Database) {
 		fmt.Println("error while Get value of Database info")
 	}
 	dbInfo.SetBytes(value)
-	fmt.Println("Database info : ", dbInfo.String())
+	fmt.Println(dbInfo.String())
 }
 
 func printGV(key []byte, value []byte) {
@@ -91,15 +86,15 @@ func printGV(key []byte, value []byte) {
 	gv.SetBytes(value)
 	gv.BlockHeight = common.BytesToUint64(key[len(db.PrefixGovernanceVariable):])
 
-	fmt.Println("Governance variable set", gv.GVData, " at ", gv.BlockHeight)
+	fmt.Println(gv.String())
 }
 
 func printPC(key []byte, value []byte) {
 	pc := getPC(key, value)
-	fmt.Println("PRep Candidate : ", pc.String())
+	fmt.Println(pc.String())
 }
 
-func getPC(key []byte, value []byte) *core.PRepCandidate{
+func getPC(key []byte, value []byte) *core.PRepCandidate {
 	pc := new(core.PRepCandidate)
 	pc.SetBytes(value)
 	pc.Address = *common.NewAddress(key[len(db.PrefixPRepCandidate):])

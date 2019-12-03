@@ -20,16 +20,14 @@ func queryClaimDB(input Input) {
 	defer qdb.Close()
 
 	if input.address == "" {
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixClaim)))
-		printEntries(entries, printClaim)
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixClaim)), printClaim)
 	} else {
 		address := common.NewAddressFromString(input.address)
-		claim := runQueryClaim(qdb, address)
-		fmt.Printf("%s\n", claim.String())
+		runQueryClaim(qdb, address)
 	}
 }
 
-func runQueryClaim(qdb db.Database, address *common.Address) *core.Claim{
+func runQueryClaim(qdb db.Database, address *common.Address) {
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
 	if err != nil {
 		fmt.Printf("Failed to get claim Bucket")
@@ -40,8 +38,7 @@ func runQueryClaim(qdb db.Database, address *common.Address) *core.Claim{
 		fmt.Printf("Error while get claim value")
 		os.Exit(1)
 	}
-	claim := getClaim(address.Bytes(), value)
-	return claim
+	printClaim(address.Bytes(), value)
 }
 
 func printClaim(key []byte, value []byte) {

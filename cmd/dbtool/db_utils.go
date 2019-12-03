@@ -5,29 +5,20 @@ import (
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"os"
+	"path/filepath"
 )
 
-type Entry struct {
-	key []byte
-	value []byte
-}
-func getEntries(qDB db.Database, prefix *util.Range) []Entry{
+func iteratePrintDB(qdb db.Database, prefix *util.Range, printFunc func([]byte, []byte)) {
 	// iterate
-	iter, err := qDB.GetIterator()
+	iter, err := qdb.GetIterator()
 	if err != nil {
 		fmt.Printf("Failed to get iterator")
 		os.Exit(1)
 	}
 
-	var entries []Entry
 	iter.New(prefix.Start, prefix.Limit)
 	for iter.Next() {
-		tmpKey := make([]byte, len(iter.Key()))
-		tmpValue := make([]byte, len(iter.Value()))
-		copy(tmpKey, iter.Key())
-		copy(tmpValue, iter.Value())
-		entry := Entry{tmpKey, tmpValue}
-		entries = append(entries, entry)
+		printFunc(iter.Key(), iter.Value())
 	}
 	iter.Release()
 
@@ -36,11 +27,12 @@ func getEntries(qDB db.Database, prefix *util.Range) []Entry{
 		fmt.Printf("Error while iterate. %+v", err)
 		os.Exit(1)
 	}
-	return entries
 }
 
-func printEntries(entries []Entry, printFunc func([]byte, []byte)){
-	for _, v := range entries{
-		printFunc(v.key, v.value)
-	}
+func printAllEntriesInPath(path string, prefix *util.Range, printFunc func([]byte, []byte)) {
+	fmt.Printf("=====================Querying data in %s=============\n", path)
+	dir, name := filepath.Split(path)
+	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
+	defer qdb.Close()
+	iteratePrintDB(qdb, prefix, printFunc)
 }

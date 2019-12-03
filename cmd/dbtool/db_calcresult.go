@@ -20,15 +20,13 @@ func queryCalcResultDB(input Input) {
 	defer qdb.Close()
 
 	if input.height == 0 {
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixCalcResult)))
-		printEntries(entries, printCalcResult)
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixCalcResult)), printCalcResult)
 	} else {
-		calcResult := runQueryCalcResult(qdb, input.height)
-		fmt.Printf("%s\n", calcResult)
+		runQueryCalcResult(qdb, input.height)
 	}
 }
 
-func runQueryCalcResult(qdb db.Database, blockHeight uint64) *core.CalculationResult{
+func runQueryCalcResult(qdb db.Database, blockHeight uint64) {
 	bucket, err := qdb.GetBucket(db.PrefixCalcResult)
 	if err != nil {
 		fmt.Printf("Failed to get Bucket")
@@ -43,8 +41,7 @@ func runQueryCalcResult(qdb db.Database, blockHeight uint64) *core.CalculationRe
 	if value == nil {
 		fmt.Println("Failed to get calculateResult value")
 	}
-	calcResult := getCalcResult(common.Uint64ToBytes(blockHeight), value)
-	return calcResult
+	printCalcResult(common.Uint64ToBytes(blockHeight), value)
 }
 
 func printCalcResult(key []byte, value []byte) {
@@ -52,7 +49,7 @@ func printCalcResult(key []byte, value []byte) {
 	fmt.Printf("%s\n", cr.String())
 }
 
-func getCalcResult(key []byte, value []byte) *core.CalculationResult{
+func getCalcResult(key []byte, value []byte) *core.CalculationResult {
 	cr, err := core.NewCalculationResultFromBytes(value)
 	if err != nil {
 		fmt.Println("Error while initialize calcResult")

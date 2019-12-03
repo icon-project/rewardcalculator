@@ -49,46 +49,31 @@ func queryIISSDB(input Input) {
 
 func queryBP(qdb db.Database, blockHeight uint64) {
 	if blockHeight == 0 {
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixIISSBPInfo)))
-		printEntries(entries, printBP)
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSBPInfo)), printBP)
 	} else {
-		bp := runQueryBP(qdb, blockHeight)
-		if bp != nil {
-			fmt.Println(bp.String())
-		}
+		runQueryBP(qdb, blockHeight)
 	}
 }
 
 func queryPRep(qdb db.Database, blockHeight uint64) {
 	if blockHeight == 0 {
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixPRep)))
-		printEntries(entries, printPRep)
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRep)), printPRep)
 	} else {
-		prep := runQueryPRep(qdb, blockHeight)
-		if prep != nil {
-			fmt.Println(prep.String())
-		}
+		runQueryPRep(qdb, blockHeight)
 	}
 }
 
 func queryTX(qdb db.Database, blockHeight uint64) {
 	if blockHeight == 0 {
-		entries := getEntries(qdb, util.BytesPrefix([]byte(db.PrefixIISSTX)))
-		printEntries(entries, printTX)
+		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSTX)), printTX)
 	} else {
-		transactions := runQueryTX(qdb, blockHeight)
-		if len(transactions) == 0 {
-			fmt.Println("There is no transaction data in block : ", blockHeight)
-		}
-		for _, v := range transactions{
-			fmt.Println(v.String())
-		}
+		runQueryTX(qdb, blockHeight)
 	}
 }
 
 func printHeader(qdb db.Database) {
 	header := getHeader(qdb)
-	fmt.Println("iiss header info : ", header.String())
+	fmt.Println(header.String())
 }
 
 func printIISSGV(qdb db.Database) {
@@ -109,12 +94,12 @@ func printIISSGV(qdb db.Database) {
 		copy(value, iter.Value())
 		gv.BlockHeight = common.BytesToUint64(key)
 		gv.SetBytes(value, version)
-		fmt.Println("Governance Variable : ", gv.String())
+		fmt.Println(gv.String())
 	}
 	iter.Release()
 }
 
-func printBP(key []byte, value []byte){
+func printBP(key []byte, value []byte) {
 	bpInfo := getBP(key, value)
 	fmt.Println(bpInfo.String())
 }
@@ -124,10 +109,14 @@ func printPRep(key []byte, value []byte) {
 }
 func printTX(key []byte, value []byte) {
 	tx := getTX(key, value)
+	printTXInstance(tx)
+}
+
+func printTXInstance(tx *core.IISSTX) {
 	fmt.Printf("%s\n", tx.String())
 }
 
-func runQueryPRep(qdb db.Database, blockHeight uint64) *core.PRep{
+func runQueryPRep(qdb db.Database, blockHeight uint64) {
 	bucket, err := qdb.GetBucket(db.PrefixIISSPRep)
 	if err != nil {
 		fmt.Printf("Failed to get Bucket")
@@ -143,13 +132,12 @@ func runQueryPRep(qdb db.Database, blockHeight uint64) *core.PRep{
 	}
 	if value == nil {
 		fmt.Println("There is no prep info at ", blockHeight)
-		return nil
+		return
 	}
-	prep := getPRep(pRep.ID(), value)
-	return prep
+	printPRep(pRep.ID(), value)
 }
 
-func runQueryTX(qdb db.Database, blockHeight uint64) []*core.IISSTX{
+func runQueryTX(qdb db.Database, blockHeight uint64) {
 	iter, err := qdb.GetIterator()
 	if err != nil {
 		fmt.Println("error while getting iiss db iterator")
@@ -159,6 +147,7 @@ func runQueryTX(qdb db.Database, blockHeight uint64) []*core.IISSTX{
 	iter.New(prefix.Start, prefix.Limit)
 
 	var transactions []*core.IISSTX
+	found := false
 	for iter.Next() {
 		tx := new(core.IISSTX)
 		key := make([]byte, len(iter.Key()))
@@ -168,15 +157,22 @@ func runQueryTX(qdb db.Database, blockHeight uint64) []*core.IISSTX{
 		tx.Index = common.BytesToUint64(key)
 		tx.SetBytes(value)
 		if tx.BlockHeight == blockHeight {
+			found = true
 			transactions = append(transactions, tx)
 		}
 	}
 	iter.Release()
 
-	return transactions
+	if !found {
+		fmt.Println("There is no transaction related iiss in block : ", blockHeight)
+	} else {
+		for _, tx := range transactions {
+			printTXInstance(tx)
+		}
+	}
 }
 
-func runQueryBP(qdb db.Database, blockHeight uint64) *core.IISSBlockProduceInfo{
+func runQueryBP(qdb db.Database, blockHeight uint64) {
 	bucket, err := qdb.GetBucket(db.PrefixIISSBPInfo)
 	if err != nil {
 		fmt.Printf("error while getting block produce info bucket")
@@ -192,27 +188,26 @@ func runQueryBP(qdb db.Database, blockHeight uint64) *core.IISSBlockProduceInfo{
 	}
 	if value == nil {
 		fmt.Println("There is no block produce info at ", blockHeight)
-		return nil
+		return
 	}
-	result := getBP(bp.ID(), value)
-	return result
+	printBP(bp.ID(), value)
 }
 
-func getBP(key []byte, value []byte) *core.IISSBlockProduceInfo{
+func getBP(key []byte, value []byte) *core.IISSBlockProduceInfo {
 	bpInfo := new(core.IISSBlockProduceInfo)
 	bpInfo.SetBytes(value)
 	bpInfo.BlockHeight = common.BytesToUint64(key[len(db.PrefixIISSBPInfo):])
 	return bpInfo
 }
 
-func getPRep(key []byte, value []byte) *core.PRep{
+func getPRep(key []byte, value []byte) *core.PRep {
 	prep := new(core.PRep)
 	prep.SetBytes(value)
 	prep.BlockHeight = common.BytesToUint64(key[len(db.PrefixIISSPRep):])
 	return prep
 }
 
-func getTX(key []byte, value []byte) *core.IISSTX{
+func getTX(key []byte, value []byte) *core.IISSTX {
 	tx := new(core.IISSTX)
 	tx.Index = common.BytesToUint64(key)
 	tx.SetBytes(value)
