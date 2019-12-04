@@ -26,12 +26,12 @@ func queryAccountDB(input Input) {
 }
 
 func queryAccountWithAccountDBPath(path string, address string) {
-	dir, name := filepath.Split(path)
-	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
-	defer qdb.Close()
 	if address == "" {
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIScore)), printAccount)
+		printAllEntriesInPath(path, util.BytesPrefix([]byte(db.PrefixIScore)), printAccount)
 	} else {
+		dir, name := filepath.Split(path)
+		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
+		defer qdb.Close()
 		addr := common.NewAddressFromString(address)
 		runQueryAccount(qdb, addr)
 	}
@@ -93,7 +93,7 @@ func getAccountInSpecifiedPath(dbRoot string, address string) *core.IScoreAccoun
 }
 
 func runQueryAccountWithRCRoot(rcRoot string, accountDBCount int, address string, accountType string) {
-	if accountType != "query" && accountType != "calculate" {
+	if accountType != AccountTypeQuery && accountType != AccountTypeCalculate {
 		fmt.Println("Invalid accountType")
 		os.Exit(1)
 	}
@@ -114,7 +114,7 @@ func runQueryAccountWithRCRoot(rcRoot string, accountDBCount int, address string
 			calculateAccount = account1
 			queryAccount = account0
 		}
-		if accountType == "query" {
+		if accountType == AccountTypeQuery {
 			printIScoreAccountInstance(queryAccount)
 		} else {
 			printIScoreAccountInstance(calculateAccount)
@@ -193,6 +193,10 @@ func getFirstAccount(dbPath string) *core.IScoreAccount {
 }
 
 func printAllAccountsInRcDBWithSpecifiedType(rcRoot string, accountDBCount int, accountType string) {
+	if accountType != AccountTypeQuery && accountType != AccountTypeCalculate {
+		fmt.Println("Invalid accountType")
+		os.Exit(1)
+	}
 	dbIndex := 0
 	var dbPath string
 	found := false

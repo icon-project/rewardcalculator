@@ -16,13 +16,13 @@ func queryPreCommitDB(input Input) {
 		fmt.Println("Enter dbPath")
 		os.Exit(1)
 	}
-	dir, name := filepath.Split(input.path)
-	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
-	defer qdb.Close()
 
 	if input.address == "" && input.height == 0 {
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixClaim)), printPreCommit)
+		printAllEntriesInPath(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printPreCommit)
 	} else {
+		dir, name := filepath.Split(input.path)
+		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
+		defer qdb.Close()
 		address := common.NewAddressFromString(input.address)
 		runQueryPreCommits(qdb, address, input.height)
 	}

@@ -15,13 +15,13 @@ func queryClaimDB(input Input) {
 		fmt.Println("Enter dbPath")
 		os.Exit(1)
 	}
-	dir, name := filepath.Split(input.path)
-	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
-	defer qdb.Close()
 
 	if input.address == "" {
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixClaim)), printClaim)
+		printAllEntriesInPath(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printClaim)
 	} else {
+		dir, name := filepath.Split(input.path)
+		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
+		defer qdb.Close()
 		address := common.NewAddressFromString(input.address)
 		runQueryClaim(qdb, address)
 	}

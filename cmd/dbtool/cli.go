@@ -14,10 +14,6 @@ const (
 	DBNameCalcResult = "calcResult"
 	DBNameIISS       = "iiss"
 
-	DataTypeAccount    = DBNameAccount
-	DataTypeClaim      = DBNameClaim
-	DataTypePreCommit  = DBNamePreCommit
-	DataTypeCalcResult = DBNameCalcResult
 	DataTypeGV         = "gv"
 	DataTypePRep       = "prep"
 	DataTypeTX         = "tx"
@@ -25,6 +21,9 @@ const (
 	DataTypeBP         = "bp"
 	DataTypeDI         = "di"
 	DataTypePC         = "pc"
+
+	AccountTypeQuery = "query"
+	AccountTypeCalculate = "calculate"
 )
 
 func printUsage() {

@@ -15,13 +15,13 @@ func queryCalcResultDB(input Input) {
 		fmt.Println("Enter dbPath")
 		os.Exit(1)
 	}
-	dir, name := filepath.Split(input.path)
-	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
-	defer qdb.Close()
 
 	if input.height == 0 {
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixCalcResult)), printCalcResult)
+		printAllEntriesInPath(input.path, util.BytesPrefix([]byte(db.PrefixCalcResult)), printCalcResult)
 	} else {
+		dir, name := filepath.Split(input.path)
+		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
+		defer qdb.Close()
 		runQueryCalcResult(qdb, input.height)
 	}
 }
