@@ -59,7 +59,7 @@ func TestDBMNGDBInfo_NewDBInfo(t *testing.T) {
 	assert.Equal(t, string(db.GoLevelDBBackend), dbInfo.DBType)
 	assert.Equal(t, 1, dbInfo.DBCount)
 	assert.False(t, dbInfo.QueryDBIsZero)
-	assert.True(t, dbInfo.Current.checkValue(uint64(0), zeroBlockHash))
+	assert.True(t, dbInfo.Current.checkValue(uint64(0), zeroHash))
 	assert.Equal(t, uint64(0), dbInfo.CalcDone)
 	assert.Equal(t, uint64(0), dbInfo.PrevCalcDone)
 	assert.Equal(t, uint64(0), dbInfo.Calculating)
@@ -375,5 +375,5 @@ func TestDBMNGDBInfo_backwardCompatibility(t *testing.T) {
 	assert.Equal(t, v1.BlockHeight, dbi.CalcDone)
 	assert.Equal(t, v1.BlockHeight, dbi.Calculating)
 	assert.Equal(t, v1.BlockHeight, dbi.PrevCalcDone)
-	assert.True(t, dbi.Current.checkValue(uint64(0), zeroBlockHash))
+	assert.True(t, dbi.Current.checkValue(uint64(0), zeroHash))
 }

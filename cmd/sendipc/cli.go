@@ -28,8 +28,11 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("ADDRESS         Unix domain socket path\n")
 	fmt.Printf("COMMAND\n")
 	fmt.Printf("\t version                   Send a VERSION message\n")
+	fmt.Printf("\t init                      Send a INIT message\n")
 	fmt.Printf("\t query                     Send a QUERY message to query I-Score\n")
 	fmt.Printf("\t claim                     Send a CLAIM message to claim I-Score\n")
+	fmt.Printf("\t commitclaim               Send a COMMIT_CLAIM message to commit CLAIM message\n")
+	fmt.Printf("\t commitblock               Send a COMMIT_BLOCK message to commit block\n")
 	fmt.Printf("\t calculate                 Send a CALCULATE message to update I-Score DB\n")
 	fmt.Printf("\t query_calculate_status    Send a QUERY_CALCULATE_STATUS message\n")
 	fmt.Printf("\t query_calculate_result    Send a QUERY_CALCULATE_RESULT message\n")
@@ -52,12 +55,33 @@ func (cli *CLI) Run() {
 
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
 
+	initCmd := flag.NewFlagSet("init", flag.ExitOnError)
+	initBlockHeight := initCmd.Uint64("blockheight", 0, "Block height")
+
 	queryCmd := flag.NewFlagSet("query", flag.ExitOnError)
 	queryAddress := queryCmd.String("address", "", "Account address")
 
 	claimCmd := flag.NewFlagSet("claim", flag.ExitOnError)
 	claimAddress := claimCmd.String("address", "", "Account address")
 	claimBlockHeight := claimCmd.Uint64("blockheight", 0, "Block height")
+	claimBlockHash := claimCmd.String("blockhash", "", "Block hash")
+	claimTXIndex := claimCmd.Uint64("txindex", 0, "TX index")
+	claimTXHash := claimCmd.String("txhash", "", "TX hash")
+	claimNoCommit := claimCmd.Bool("no-commit", false, "Do not send COMMIT_CLAIM for CLAIM TX")
+	claimNoCommitBlock := claimCmd.Bool("no-commit-block", false, "Do not send COMMIT_BLOCK for CLAIM Block")
+
+	commitClaimCmd := flag.NewFlagSet("commitclaim", flag.ExitOnError)
+	commitClaimFail := commitClaimCmd.Bool("fail", true, "Success")
+	commitClaimAddress := commitClaimCmd.String("address", "", "Account address")
+	commitClaimBlockHeight := commitClaimCmd.Uint64("blockheight", 0, "Block height")
+	commitClaimBlockHash := commitClaimCmd.String("blockhash", "", "Block hash")
+	commitClaimTXIndex := commitClaimCmd.Uint64("txindex", 0, "TX index")
+	commitClaimTXHash := commitClaimCmd.String("txhash", "", "TX hash")
+
+	commitBlockCmd := flag.NewFlagSet("commitblock", flag.ExitOnError)
+	commitBlockFail := commitBlockCmd.Bool("fail", true, "Success")
+	commitBlockBlockHeight := commitBlockCmd.Uint64("blockheight", 0, "Block height")
+	commitBlockBlockHash := commitBlockCmd.String("blockhash", "", "Block hash")
 
 	calculateCmd := flag.NewFlagSet("calculate", flag.ExitOnError)
 	calculateIISSData := calculateCmd.String("iissdata", "", "IISS data DB path(Required)")
@@ -84,6 +108,12 @@ func (cli *CLI) Run() {
 			versionCmd.PrintDefaults()
 			os.Exit(1)
 		}
+	case "init":
+		err := initCmd.Parse(os.Args[3:])
+		if err != nil {
+			initCmd.PrintDefaults()
+			os.Exit(1)
+		}
 	case "query":
 		err := queryCmd.Parse(os.Args[3:])
 		if err != nil {
@@ -94,6 +124,18 @@ func (cli *CLI) Run() {
 		err := claimCmd.Parse(os.Args[3:])
 		if err != nil {
 			claimCmd.PrintDefaults()
+			os.Exit(1)
+		}
+	case "commitclaim":
+		err := commitClaimCmd.Parse(os.Args[3:])
+		if err != nil {
+			commitClaimCmd.PrintDefaults()
+			os.Exit(1)
+		}
+	case "commitblock":
+		err := commitBlockCmd.Parse(os.Args[3:])
+		if err != nil {
+			commitBlockCmd.PrintDefaults()
 			os.Exit(1)
 		}
 	case "calculate":
@@ -156,19 +198,34 @@ func (cli *CLI) Run() {
 		cli.version(conn)
 	}
 
+	if initCmd.Parsed() {
+		// send INIT message
+		cli.init(conn, *initBlockHeight)
+	}
+
 	if claimCmd.Parsed() {
-		if *claimAddress == "" || *claimBlockHeight == 0 {
+		if *claimAddress == "" {
 			claimCmd.PrintDefaults()
 			os.Exit(1)
 		}
-		start := time.Now()
-
 		// send CLAIM message
-		cli.claim(conn, *claimAddress, *claimBlockHeight)
+		cli.claim(conn, *claimAddress, *claimBlockHeight, *claimBlockHash, *claimTXIndex, *claimTXHash,
+			*claimNoCommit, *claimNoCommitBlock)
+	}
 
-		end := time.Now()
-		diff := end.Sub(start)
-		fmt.Printf("Duration : %v\n", diff)
+	if commitClaimCmd.Parsed() {
+		if *commitClaimAddress == "" {
+			claimCmd.PrintDefaults()
+			os.Exit(1)
+		}
+		// send COMMIT_CLAIM message
+		cli.commitClaim(conn, *commitClaimFail, *commitClaimAddress, *commitClaimBlockHeight, *commitClaimBlockHash,
+			*commitClaimTXIndex, *commitClaimTXHash)
+	}
+
+	if commitBlockCmd.Parsed() {
+		// send COMMIT_BLOCK message
+		cli.commitBlock(conn, *commitBlockFail, *commitBlockBlockHeight, *commitBlockBlockHash)
 	}
 
 	if queryCmd.Parsed() {
@@ -176,14 +233,8 @@ func (cli *CLI) Run() {
 			queryCmd.PrintDefaults()
 			os.Exit(1)
 		}
-		start := time.Now()
-
 		// send QUERY message
 		cli.query(conn, *queryAddress)
-
-		end := time.Now()
-		diff := end.Sub(start)
-		fmt.Printf("Duration : %v\n", diff)
 	}
 
 	if calculateCmd.Parsed() {

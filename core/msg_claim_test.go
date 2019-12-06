@@ -28,13 +28,16 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 	dbContent2.IScore.SetUint64(db2IScore)
 
 	claim :=
-		ClaimMessage {BlockHeight: 101, BlockHash: []byte("1-1"), Address: *address}
+		ClaimMessage {BlockHeight: 101, BlockHash: []byte("1-1"), TXIndex: 0, Address: *address}
+
+	alreadyClaimedInCurrentBlockClaim :=
+		ClaimMessage {BlockHeight: 101, BlockHash: []byte("1-1"), TXIndex: 1, Address: *address}
 
 	invalidAddressClaim :=
 		ClaimMessage {BlockHeight: 101, BlockHash: []byte("1-1"), Address: *common.NewAddressFromString("hx33")}
 
 	alreadyClaimedInCurrentPeriodClaim :=
-		ClaimMessage{BlockHeight: 102, BlockHash: []byte("1-1"), Address: *address}
+		ClaimMessage {BlockHeight: 102, BlockHash: []byte("1-2"), Address: *address}
 
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
@@ -62,8 +65,13 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 		CommitClaim{Success:true, Address: claim.Address, BlockHeight:claim.BlockHeight, BlockHash:claim.BlockHash}
 	DoCommitClaim(ctx, &commit)
 
-	// already claimed in current block
+	// re-invoke same claim TX
 	blockHeight, iScore = DoClaim(ctx, &claim)
+	assert.Equal(t, claim.BlockHeight, blockHeight)
+	assert.Equal(t, uint64(db1IScore - (db1IScore % claimMinIScore)), iScore.Uint64())
+
+	// already claimed in current block
+	blockHeight, iScore = DoClaim(ctx, &alreadyClaimedInCurrentBlockClaim)
 	assert.Equal(t, claim.BlockHeight, blockHeight)
 	assert.Nil(t, iScore)
 

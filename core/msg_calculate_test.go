@@ -635,7 +635,7 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	defer finalizeTest(ctx)
 
 	iissDBDir := testDBDir + "/iiss"
-	req := CalculateRequest{Path: iissDBDir, BlockHeight:100, BlockHash:testBlockHash}
+	req := CalculateRequest{Path: iissDBDir, BlockHeight:100, BlockHash: testHash}
 
 	// get CALCULATE message while processing CALCULATE message
 	ctx.DB.setCalculatingBH(uint64(50))

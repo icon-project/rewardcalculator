@@ -63,7 +63,6 @@ func (m *manager) Loop() error {
 		}
 	} else {
 		return m.server.Loop()
-
 	}
 }
 
