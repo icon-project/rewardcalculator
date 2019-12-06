@@ -19,6 +19,10 @@ const (
 	AccountDBNameFormat = "calculate_%d_%d_%d"
 	BackupDBNamePrefix  = "backup_"
 	BackupDBNameFormat  = BackupDBNamePrefix + "%d_%d"	// CalcBH_accountDBIndex
+
+	Revision8 uint64    = 8
+	RevisionMin = Revision8
+	RevisionMax = Revision8
 )
 
 type IScoreDB struct {
