@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/core"
-	"github.com/natefinch/lumberjack"
 )
 
 var (
@@ -36,14 +36,7 @@ func main() {
 	flag.BoolVar(&optVersion, "version", false, "Print version information")
 	flag.Parse()
 
-	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
-	log.SetOutput(&lumberjack.Logger{
-		Filename:   cfg.LogFile,
-		MaxSize:    cfg.LogMaxSize,
-		MaxBackups: cfg.LogMaxBackups,
-		LocalTime:  true,
-	})
-
+	common.SetLog(cfg.LogFile, cfg.LogMaxSize, cfg.LogMaxBackups, true)
 
 	if optVersion {
 		fmt.Printf("icon_rc %s, %s\n", version, build)
