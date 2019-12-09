@@ -1,60 +1,80 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"os"
 	"path/filepath"
 )
 
-func queryCalcResultDB(input Input) {
+func queryCalcResultDB(input Input)  error {
 	if input.path == "" {
 		fmt.Println("Enter dbPath")
-		os.Exit(1)
+		return errors.New("invalid db path")
 	}
 
 	if input.height == 0 {
-		printAllEntriesInPath(input.path, util.BytesPrefix([]byte(db.PrefixCalcResult)), printCalcResult)
+		err := printDB(input.path, util.BytesPrefix([]byte(db.PrefixCalcResult)), printCalcResult)
+		return err
 	} else {
 		dir, name := filepath.Split(input.path)
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 		defer qdb.Close()
-		runQueryCalcResult(qdb, input.height)
+
+		if cr, err := getCalcResult(qdb, input.height); err != nil {
+			return err
+		} else {
+			printCalculationResult(cr)
+		}
 	}
+	return nil
 }
 
-func runQueryCalcResult(qdb db.Database, blockHeight uint64) {
+func getCalcResult(qdb db.Database, blockHeight uint64) (*core.CalculationResult, error) {
 	bucket, err := qdb.GetBucket(db.PrefixCalcResult)
 	if err != nil {
 		fmt.Printf("Failed to get Bucket")
-		os.Exit(1)
+		return nil, err
 	}
 
-	value, err := bucket.Get(common.Uint64ToBytes(blockHeight))
+	key := common.Uint64ToBytes(blockHeight)
+	value, err := bucket.Get(key)
 	if err != nil {
 		fmt.Println("Error while get calculateResult value")
-		os.Exit(1)
+		return nil, err
 	}
 	if value == nil {
 		fmt.Println("Failed to get calculateResult value")
+		return nil, nil
 	}
-	printCalcResult(common.Uint64ToBytes(blockHeight), value)
+	return newCalcResult(key, value)
+
 }
 
-func printCalcResult(key []byte, value []byte) {
-	cr := getCalcResult(key, value)
-	fmt.Printf("%s\n", cr.String())
+func printCalcResult(key []byte, value []byte) error {
+	if cr, err := newCalcResult(key, value); err != nil {
+		return err
+	} else {
+		printCalculationResult(cr)
+		return nil
+	}
 }
 
-func getCalcResult(key []byte, value []byte) *core.CalculationResult {
-	cr, err := core.NewCalculationResultFromBytes(value)
-	if err != nil {
+func printCalculationResult(cr *core.CalculationResult) {
+	if cr != nil {
+		fmt.Printf("%s\n", cr.String())
+	}
+}
+
+func newCalcResult(key []byte, value []byte) (*core.CalculationResult, error) {
+	if cr, err := core.NewCalculationResultFromBytes(value); err != nil {
 		fmt.Println("Error while initialize calcResult")
-		os.Exit(1)
+		return nil, err
+	} else {
+		cr.BlockHeight = common.BytesToUint64(key)
+		return cr, nil
 	}
-	cr.BlockHeight = common.BytesToUint64(key)
-	return cr
 }

@@ -1,19 +1,19 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"os"
 	"path/filepath"
 )
 
-func queryManagementDB(input Input) {
+func queryManagementDB(input Input) (err error) {
 	if input.path == "" {
 		fmt.Println("Enter dbPath")
-		os.Exit(1)
+		return errors.New("invalid db ")
 	}
 	dir, name := filepath.Split(input.path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
@@ -22,81 +22,122 @@ func queryManagementDB(input Input) {
 	switch input.data {
 	case "":
 		fmt.Println("==============print Database info==============")
-		printDBInfo(qdb)
+		if err = queryDBInfo(qdb); err != nil {
+			return
+		}
 		fmt.Println("==============print governance variables==============")
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV)
+		if err = iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV); err != nil {
+			return
+		}
 		fmt.Println("==============print PRep Candidate info==============")
-		queryPC(qdb, "")
+		if err = queryPC(qdb, ""); err != nil {
+			return
+		}
 	case DataTypeDI:
-		printDBInfo(qdb)
+		if err = queryDBInfo(qdb); err != nil {
+			return
+		}
 	case DataTypeGV:
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV)
+		if err = iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV); err != nil {
+			return
+		}
 	case DataTypePC:
-		queryPC(qdb, input.address)
+		if err = queryPC(qdb, input.address); err != nil {
+			return
+		}
 	default:
-		fmt.Printf("Invalid data type : %s\n", input.data)
-		os.Exit(1)
+		return errors.New("invalid data type.")
 	}
+	return nil
 }
 
-func queryPC(qdb db.Database, address string) {
+func queryPC(qdb db.Database, address string) error {
 	if address == "" {
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRepCandidate)), printPC)
+		err := iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRepCandidate)), printPC)
+		return err
 	} else {
 		addr := common.NewAddressFromString(address)
-		runQueryPC(qdb, addr)
+		if pc, err := getPC(qdb, addr); err != nil {
+			return err
+		} else {
+			printPRepCandidate(pc)
+		}
 	}
+	return nil
 }
 
-func runQueryPC(qdb db.Database, address *common.Address) {
+func queryDBInfo(qdb db.Database) error {
+	bucket, err := qdb.GetBucket(db.PrefixManagement)
+	if err != nil {
+		fmt.Println("error while getting database info bucket")
+		return err
+	}
+	dbInfo := new(core.DBInfo)
+	value, e := bucket.Get(dbInfo.ID())
+	if e != nil {
+		fmt.Println("error while Get value of Database info")
+		return e
+	}
+	if err = dbInfo.SetBytes(value); err != nil {
+	} else {
+		fmt.Println(dbInfo.String())
+	}
+	return nil
+}
+
+func getPC(qdb db.Database, address *common.Address) (*core.PRepCandidate, error) {
 	bucket, err := qdb.GetBucket(db.PrefixPRepCandidate)
 	if err != nil {
 		fmt.Println("error while getting prep candidate bucket")
-		os.Exit(1)
+		return nil, err
 	}
-	value, err := bucket.Get(address.Bytes())
-	if err != nil {
+	value, e := bucket.Get(address.Bytes())
+	if e != nil {
 		fmt.Println("error while Get value of prep candidate")
-		os.Exit(1)
+		return nil, e
 	}
 	pcPrefixLen := len(db.PrefixPRepCandidate)
 	qKey := make([]byte, pcPrefixLen+common.AddressBytes)
 	copy(qKey, db.PrefixPRepCandidate)
 	copy(qKey[pcPrefixLen:], address.Bytes())
-	printPC(qKey, value)
+	pc, eValue := newPC(qKey, value)
+	return pc, eValue
+
 }
 
-func printDBInfo(qdb db.Database) {
-	bucket, err := qdb.GetBucket(db.PrefixManagement)
-	if err != nil {
-		fmt.Println("error while getting database info bucket")
-		os.Exit(1)
-	}
-	dbInfo := new(core.DBInfo)
-	value, err := bucket.Get(dbInfo.ID())
-	if err != nil {
-		fmt.Println("error while Get value of Database info")
-	}
-	dbInfo.SetBytes(value)
-	fmt.Println(dbInfo.String())
-}
-
-func printGV(key []byte, value []byte) {
+func printGV(key []byte, value []byte) error {
 	gv := new(core.GovernanceVariable)
-	gv.SetBytes(value)
+	if err := gv.SetBytes(value); err != nil {
+		fmt.Printf("Error while initialize GovernanceVariable")
+		return err
+	}
 	gv.BlockHeight = common.BytesToUint64(key[len(db.PrefixGovernanceVariable):])
-
 	fmt.Println(gv.String())
+	return nil
 }
 
-func printPC(key []byte, value []byte) {
-	pc := getPC(key, value)
-	fmt.Println(pc.String())
+func printPC(key []byte, value []byte) error {
+	if pc, err := newPC(key, value); err != nil {
+		fmt.Printf("failed to initialize PRepCandidate")
+		return err
+	} else {
+		fmt.Println(pc.String())
+		return err
+	}
 }
 
-func getPC(key []byte, value []byte) *core.PRepCandidate {
-	pc := new(core.PRepCandidate)
-	pc.SetBytes(value)
+func printPRepCandidate(pc *core.PRepCandidate) {
+	if pc != nil {
+		fmt.Printf("%s\n", pc.String())
+	}
+}
+
+func newPC(key []byte, value []byte) (pc *core.PRepCandidate, err error) {
+	pc = new(core.PRepCandidate)
+	if err = pc.SetBytes(value); err != nil {
+		fmt.Printf("Error while initilize PrepCandidate")
+		return nil, err
+	}
 	pc.Address = *common.NewAddress(key[len(db.PrefixPRepCandidate):])
-	return pc
+	return
 }

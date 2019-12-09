@@ -1,59 +1,72 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"os"
 	"path/filepath"
 )
 
-func queryClaimDB(input Input) {
+func queryClaimDB(input Input) (err error) {
 	if input.path == "" {
 		fmt.Println("Enter dbPath")
-		os.Exit(1)
+		return errors.New("invalid db path")
 	}
 
 	if input.address == "" {
-		printAllEntriesInPath(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printClaim)
+		err = printDB(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printClaim)
 	} else {
 		dir, name := filepath.Split(input.path)
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 		defer qdb.Close()
 		address := common.NewAddressFromString(input.address)
-		runQueryClaim(qdb, address)
+		if claim, err := getClaim(qdb, address); err != nil {
+		} else {
+			printClaimInstance(claim)
+		}
 	}
+	return
 }
 
-func runQueryClaim(qdb db.Database, address *common.Address) {
+func getClaim(qdb db.Database, address *common.Address) (*core.Claim, error) {
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
 	if err != nil {
 		fmt.Printf("Failed to get claim Bucket")
-		os.Exit(1)
+		return nil, err
 	}
-	value, err := bucket.Get(address.Bytes())
-	if err != nil {
+	key := address.Bytes()
+	value, e := bucket.Get(key)
+	if e != nil {
 		fmt.Printf("Error while get claim value")
-		os.Exit(1)
+		return nil, e
 	}
-	printClaim(address.Bytes(), value)
+	return newClaim(key, value)
 }
 
-func printClaim(key []byte, value []byte) {
-	claim := getClaim(key, value)
-	fmt.Printf("%s\n", claim.String())
+func printClaim(key []byte, value []byte) (err error) {
+	if claim, e := newClaim(key, value); e != nil {
+		return e
+	} else {
+		printClaimInstance(claim)
+		return nil
+	}
 }
 
-func getClaim(key []byte, value []byte) *core.Claim {
-	claim, err := core.NewClaimFromBytes(value)
-	if err != nil {
+func printClaimInstance(claim *core.Claim) {
+	if claim != nil {
+		fmt.Printf("%s\n", claim.String())
+	}
+}
+
+func newClaim(key []byte, value []byte) (*core.Claim, error) {
+	if claim, err := core.NewClaimFromBytes(value); err != nil {
 		fmt.Printf("Failed to make claim instance")
-		os.Exit(1)
+		return nil, err
+	} else {
+		claim.Address = *common.NewAddress(key)
+		return claim, nil
 	}
-	claim.Address = *common.NewAddress(key)
-
-	fmt.Printf("%s\n", claim.String())
-	return claim
 }

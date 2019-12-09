@@ -2,83 +2,95 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"os"
 	"path/filepath"
 )
 
-func queryPreCommitDB(input Input) {
+func queryPreCommitDB(input Input) (err error) {
 	if input.path == "" {
 		fmt.Println("Enter dbPath")
-		os.Exit(1)
+		return errors.New("invalid db path")
 	}
 
 	if input.address == "" && input.height == 0 {
-		printAllEntriesInPath(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printPreCommit)
+		err = printDB(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printPreCommit)
 	} else {
 		dir, name := filepath.Split(input.path)
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 		defer qdb.Close()
 		address := common.NewAddressFromString(input.address)
-		runQueryPreCommits(qdb, address, input.height)
+		err = queryPreCommits(qdb, address, input.height)
 	}
+	return
 }
 
-func runQueryPreCommits(qdb db.Database, address *common.Address, blockHeight uint64) {
-	qPreCommitKeys := getKeys(qdb, address, blockHeight)
-
+func queryPreCommits(qdb db.Database, address *common.Address, blockHeight uint64) error {
+	qPreCommitKeys, err := getKeys(qdb, address, blockHeight)
+	if err != nil {
+		return err
+	}
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
 	if err != nil {
 		fmt.Printf("Failed to get preCommit Bucket")
-		os.Exit(1)
+		return err
 	}
 
 	for _, key := range qPreCommitKeys {
 		value, err := bucket.Get(key)
 		if err != nil {
 			fmt.Println("Error while get preCommit")
-			os.Exit(1)
+			return err
 		}
 		if value == nil {
 			continue
 		}
-		printPreCommit(key, value)
+		pc, err := newPreCommit(key, value)
+		printPreCommitInstance(pc)
+	}
+	return nil
+}
+
+func printPreCommit(key []byte, value []byte) error {
+	if pc, e := newPreCommit(key, value); e != nil {
+		return e
+	} else {
+		printPreCommitInstance(pc)
+		return nil
 	}
 }
 
-func printPreCommit(key []byte, value []byte) {
-	pc := getPreCommit(key, value)
-
+func printPreCommitInstance(pc *core.PreCommit) {
 	fmt.Printf("%s\n", pc.String())
 }
 
-func getPreCommit(key []byte, value []byte) *core.PreCommit {
-	pc := new(core.PreCommit)
+func newPreCommit(key []byte, value []byte) (pc *core.PreCommit, err error) {
+	pc = new(core.PreCommit)
 
-	err := pc.SetBytes(value)
+	err = pc.SetBytes(value)
 	if err != nil {
 		fmt.Printf("Failed to initialize preCommit instance")
-		os.Exit(1)
+		return nil, err
 
 	}
 	pc.BlockHeight = common.BytesToUint64(key[:core.BlockHeightSize])
 	pc.BlockHash = make([]byte, core.BlockHashSize)
 	copy(pc.BlockHash, key[core.BlockHeightSize:core.BlockHeightSize+core.BlockHashSize])
-	return pc
+	return pc, nil
 }
 
-func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) [][]byte {
+func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) ([][]byte, error) {
 	iter, err := qdb.GetIterator()
 	if err != nil {
 		fmt.Printf("Failed to get precommit db iterator")
-		os.Exit(1)
+		return nil, err
 	}
 
-	preCommitKeys := [][]byte{}
+	preCommitKeys := make([][]byte, 0)
 	iter.New(nil, nil)
 	keyExist := false
 	tmpAddress := new(common.Address)
@@ -108,13 +120,13 @@ func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) [][]b
 
 	if keyExist == false {
 		fmt.Printf("Can not find key using given information")
-		os.Exit(1)
+		return nil, errors.New("preCommit key does not exiest")
 	}
 	err = iter.Error()
 	if err != nil {
 		fmt.Printf("Error while iterate")
-		os.Exit(1)
+		return nil, err
 	}
 
-	return preCommitKeys
+	return preCommitKeys, err
 }

@@ -1,19 +1,19 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"os"
 	"path/filepath"
 )
 
-func queryIISSDB(input Input) {
+func queryIISSDB(input Input) (err error) {
 	if input.path == "" {
 		fmt.Println("Enter dbPath")
-		os.Exit(1)
+		return errors.New("invalid db path")
 	}
 	dir, name := filepath.Split(input.path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
@@ -22,68 +22,108 @@ func queryIISSDB(input Input) {
 	switch input.data {
 	case "":
 		fmt.Println("==============print block produce info==============")
-		queryBP(qdb, 0)
+		if err = queryBP(qdb, 0); err != nil {
+			return
+		}
 		fmt.Println("==============print prep info==============")
-		queryPRep(qdb, 0)
+		if err = queryPRep(qdb, 0); err != nil {
+			return
+		}
 		fmt.Println("==============print header==============")
-		printHeader(qdb)
+		if err = queryHeader(qdb); err != nil {
+			return
+		}
 		fmt.Println("==============print governance variables==============")
-		printIISSGV(qdb)
+		if err = queryIISSGV(qdb); err != nil {
+			return
+		}
 		fmt.Println("==============print transactions==============")
-		queryTX(qdb, 0)
+		if err = queryTX(qdb, 0); err != nil {
+			return
+		}
 	case DataTypeGV:
-		printIISSGV(qdb)
+		if err = queryIISSGV(qdb); err != nil {
+			return
+		}
 	case DataTypeHeader:
-		printHeader(qdb)
+		if err = queryHeader(qdb); err != nil {
+			return
+		}
 	case DataTypeBP:
-		queryBP(qdb, input.height)
+		if err = queryBP(qdb, input.height); err != nil {
+			return
+		}
 	case DataTypePRep:
-		queryPRep(qdb, input.height)
+		if err = queryPRep(qdb, input.height); err != nil {
+			return
+		}
 	case DataTypeTX:
-		queryTX(qdb, input.height)
+		if err = queryTX(qdb, input.height); err != nil {
+			return
+		}
 	default:
-		fmt.Println("invalid iiss data type")
-		os.Exit(1)
+		return errors.New("invalid iiss data type")
 	}
+	return nil
 }
 
-func queryBP(qdb db.Database, blockHeight uint64) {
+func queryBP(qdb db.Database, blockHeight uint64) error {
 	if blockHeight == 0 {
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSBPInfo)), printBP)
+		err := iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSBPInfo)), printBP)
+		return err
 	} else {
-		runQueryBP(qdb, blockHeight)
+		if bp, err := getBP(qdb, blockHeight); err != nil {
+			return err
+		} else {
+			printBlockProduceInfo(bp)
+			return nil
+		}
 	}
 }
 
-func queryPRep(qdb db.Database, blockHeight uint64) {
+func queryPRep(qdb db.Database, blockHeight uint64) error {
 	if blockHeight == 0 {
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRep)), printPRep)
+		err := iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRep)), printPRep)
+		return err
 	} else {
-		runQueryPRep(qdb, blockHeight)
+		if prep, err := getPRep(qdb, blockHeight); err != nil {
+			return err
+		} else {
+			fmt.Printf(prep.String())
+			return nil
+		}
 	}
 }
 
-func queryTX(qdb db.Database, blockHeight uint64) {
+func queryTX(qdb db.Database, blockHeight uint64) (err error) {
 	if blockHeight == 0 {
-		iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSTX)), printTX)
+		err = iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSTX)), printTX)
 	} else {
-		runQueryTX(qdb, blockHeight)
+		err = queryTransaction(qdb, blockHeight)
+	}
+	return
+}
+
+func queryHeader(qdb db.Database) (err error) {
+	if header, e := newHeader(qdb); e != nil {
+		return e
+	} else {
+		fmt.Println(header.String())
+		return
 	}
 }
 
-func printHeader(qdb db.Database) {
-	header := getHeader(qdb)
-	fmt.Println(header.String())
-}
-
-func printIISSGV(qdb db.Database) {
+func queryIISSGV(qdb db.Database) error {
 	iter, err := qdb.GetIterator()
 	if err != nil {
 		fmt.Println("error while getting iiss db iterator")
-		os.Exit(1)
+		return err
 	}
 	prefix := util.BytesPrefix([]byte(db.PrefixIISSGV))
-	header := getHeader(qdb)
+	header, e := newHeader(qdb)
+	if e != nil {
+		return e
+	}
 	version := header.Version
 	iter.New(prefix.Start, prefix.Limit)
 	for iter.Next() {
@@ -93,55 +133,43 @@ func printIISSGV(qdb db.Database) {
 		copy(key, iter.Key())
 		copy(value, iter.Value())
 		gv.BlockHeight = common.BytesToUint64(key)
-		gv.SetBytes(value, version)
+		if err = gv.SetBytes(value, version); err != nil {
+			fmt.Printf("Error while initialize IISS governance variable")
+			return err
+		}
 		fmt.Println(gv.String())
 	}
 	iter.Release()
+	return nil
 }
 
-func printBP(key []byte, value []byte) {
-	bpInfo := getBP(key, value)
-	fmt.Println(bpInfo.String())
-}
-func printPRep(key []byte, value []byte) {
-	prep := getPRep(key, value)
-	fmt.Println(prep.String())
-}
-func printTX(key []byte, value []byte) {
-	tx := getTX(key, value)
-	printTXInstance(tx)
-}
-
-func printTXInstance(tx *core.IISSTX) {
-	fmt.Printf("%s\n", tx.String())
-}
-
-func runQueryPRep(qdb db.Database, blockHeight uint64) {
+func getPRep(qdb db.Database, blockHeight uint64) (prep *core.PRep, err error) {
 	bucket, err := qdb.GetBucket(db.PrefixIISSPRep)
 	if err != nil {
 		fmt.Printf("Failed to get Bucket")
-		os.Exit(1)
+		return nil, err
 	}
 
-	pRep := new(core.PRep)
-	pRep.BlockHeight = blockHeight
-	value, err := bucket.Get(pRep.ID())
+	prep = new(core.PRep)
+	prep.BlockHeight = blockHeight
+	key := prep.ID()
+	value, err := bucket.Get(key)
 	if err != nil {
 		fmt.Println("Error while getting prep info")
-		os.Exit(1)
+		return nil, err
 	}
 	if value == nil {
 		fmt.Println("There is no prep info at ", blockHeight)
-		return
+		return nil, nil
 	}
-	printPRep(pRep.ID(), value)
+	return newPRep(key, value)
 }
 
-func runQueryTX(qdb db.Database, blockHeight uint64) {
+func queryTransaction(qdb db.Database, blockHeight uint64) error {
 	iter, err := qdb.GetIterator()
 	if err != nil {
 		fmt.Println("error while getting iiss db iterator")
-		os.Exit(1)
+		return err
 	}
 	prefix := util.BytesPrefix([]byte(db.PrefixIISSTX))
 	iter.New(prefix.Start, prefix.Limit)
@@ -170,61 +198,110 @@ func runQueryTX(qdb db.Database, blockHeight uint64) {
 			printTXInstance(tx)
 		}
 	}
+	return nil
 }
 
-func runQueryBP(qdb db.Database, blockHeight uint64) {
+func getBP(qdb db.Database, blockHeight uint64) (*core.IISSBlockProduceInfo, error) {
 	bucket, err := qdb.GetBucket(db.PrefixIISSBPInfo)
 	if err != nil {
 		fmt.Printf("error while getting block produce info bucket")
-		os.Exit(1)
+		return nil, err
 	}
 
 	bp := new(core.IISSBlockProduceInfo)
 	bp.BlockHeight = blockHeight
-	value, err := bucket.Get(bp.ID())
-	if err != nil {
+	key := bp.ID()
+	value, e := bucket.Get(key)
+	if e != nil {
 		fmt.Println("Error while getting block produce data")
-		os.Exit(1)
+		return nil, e
 	}
 	if value == nil {
 		fmt.Println("There is no block produce info at ", blockHeight)
-		return
+		return nil, nil
 	}
-	printBP(bp.ID(), value)
+	return newBP(key, value)
 }
 
-func getBP(key []byte, value []byte) *core.IISSBlockProduceInfo {
-	bpInfo := new(core.IISSBlockProduceInfo)
-	bpInfo.SetBytes(value)
-	bpInfo.BlockHeight = common.BytesToUint64(key[len(db.PrefixIISSBPInfo):])
-	return bpInfo
+func printBP(key []byte, value []byte) error {
+	if bpInfo, e := newBP(key, value); e != nil {
+		return e
+	} else {
+		printBlockProduceInfo(bpInfo)
+		return e
+	}
 }
 
-func getPRep(key []byte, value []byte) *core.PRep {
-	prep := new(core.PRep)
-	prep.SetBytes(value)
+func printBlockProduceInfo(bp *core.IISSBlockProduceInfo) {
+	if bp != nil {
+		fmt.Println(bp.String())
+	}
+}
+
+func printPRep(key []byte, value []byte) (err error) {
+	if prep, err := newPRep(key, value); err != nil {
+		return err
+	} else {
+		fmt.Println(prep.String())
+		return nil
+	}
+}
+
+func printTX(key []byte, value []byte) (err error) {
+	if tx, err := newTX(key, value); err != nil {
+	} else {
+		printTXInstance(tx)
+	}
+	return
+}
+
+func printTXInstance(tx *core.IISSTX) {
+	fmt.Printf("%s\n", tx.String())
+}
+
+func newBP(key []byte, value []byte) (bp *core.IISSBlockProduceInfo, err error) {
+	bp = new(core.IISSBlockProduceInfo)
+	if err = bp.SetBytes(value); err != nil {
+		fmt.Printf("Error while initialize IISSBlockProduceInfo")
+		return nil, err
+	}
+	bp.BlockHeight = common.BytesToUint64(key[len(db.PrefixIISSBPInfo):])
+	return
+}
+
+func newPRep(key []byte, value []byte) (prep *core.PRep, err error) {
+	prep = new(core.PRep)
+	if err = prep.SetBytes(value); err != nil {
+		return nil, err
+	}
 	prep.BlockHeight = common.BytesToUint64(key[len(db.PrefixIISSPRep):])
-	return prep
+	return
 }
 
-func getTX(key []byte, value []byte) *core.IISSTX {
-	tx := new(core.IISSTX)
+func newTX(key []byte, value []byte) (tx *core.IISSTX, err error) {
+	tx = new(core.IISSTX)
 	tx.Index = common.BytesToUint64(key)
-	tx.SetBytes(value)
-	return tx
+	if err = tx.SetBytes(value); err != nil {
+		return nil, err
+	}
+	return
 }
 
-func getHeader(qdb db.Database) *core.IISSHeader {
+func newHeader(qdb db.Database) (*core.IISSHeader, error) {
 	bucket, err := qdb.GetBucket(db.PrefixIISSHeader)
 	if err != nil {
 		fmt.Println("error while getting iiss header bucket")
-		os.Exit(1)
+		return nil, err
 	}
 	header := new(core.IISSHeader)
-	value, err := bucket.Get(header.ID())
-	if err != nil {
+	value, e := bucket.Get(header.ID())
+	if e != nil {
 		fmt.Println("error while Get value of iiss header info")
+		return nil, e
 	}
-	header.SetBytes(value)
-	return header
+	if err = header.SetBytes(value); e != nil {
+		fmt.Println("error while initialize iiss header")
+		return nil, e
+	}
+	return header, nil
 }

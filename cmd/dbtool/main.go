@@ -1,5 +1,9 @@
 package main
 
+import "fmt"
+
 func main() {
-	Run()
+	if err := Run(); err != nil {
+		fmt.Println(err.Error())
+	}
 }
