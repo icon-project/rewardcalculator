@@ -51,7 +51,7 @@ func (mh *msgHandler) rollback(c ipc.Connection, id uint32, data []byte) error {
 	copy(resp.BlockHash, req.BlockHash)
 
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgRollBack), id, resp.String())
-	return c.Send(MsgRollBack, 0, &resp)
+	return c.Send(MsgRollBack, id, &resp)
 }
 
 func DoRollBack(ctx *Context, req *RollBackRequest) error {
