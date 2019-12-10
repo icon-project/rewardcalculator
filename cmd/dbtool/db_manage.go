@@ -21,15 +21,19 @@ func queryManagementDB(input Input) (err error) {
 
 	switch input.data {
 	case "":
-		fmt.Println("==============print Database info==============")
+		fmt.Println("============== Database info ==============")
 		if err = queryDBInfo(qdb); err != nil {
 			return
 		}
-		fmt.Println("==============print governance variables==============")
+		fmt.Println("\n============== Governance variables ==============")
 		if err = iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV); err != nil {
 			return
 		}
-		fmt.Println("==============print PRep Candidate info==============")
+		fmt.Println("\n============== P-Rep ==============")
+		if err = queryPRep(qdb, 0); err != nil {
+			return
+		}
+		fmt.Println("\n============== P-Rep Candidates ==============")
 		if err = queryPC(qdb, ""); err != nil {
 			return
 		}
@@ -41,12 +45,16 @@ func queryManagementDB(input Input) (err error) {
 		if err = iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV); err != nil {
 			return
 		}
+	case DataTypePRep:
+		if err = queryPRep(qdb, input.height); err != nil {
+			return
+		}
 	case DataTypePC:
 		if err = queryPC(qdb, input.address); err != nil {
 			return
 		}
 	default:
-		return errors.New("invalid data type.")
+		return errors.New("invalid data type")
 	}
 	return nil
 }
@@ -121,7 +129,7 @@ func printPC(key []byte, value []byte) error {
 		fmt.Printf("failed to initialize PRepCandidate")
 		return err
 	} else {
-		fmt.Println(pc.String())
+		printPRepCandidate(pc)
 		return err
 	}
 }

@@ -36,7 +36,7 @@ func queryCalcResultDB(input Input)  error {
 func getCalcResult(qdb db.Database, blockHeight uint64) (*core.CalculationResult, error) {
 	bucket, err := qdb.GetBucket(db.PrefixCalcResult)
 	if err != nil {
-		fmt.Printf("Failed to get Bucket")
+		fmt.Printf("Failed to get Bucket\n")
 		return nil, err
 	}
 

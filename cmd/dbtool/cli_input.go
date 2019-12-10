@@ -26,7 +26,7 @@ const (
 
 func initManageInput(flagSet *flag.FlagSet) *Input {
 	input := new(Input)
-	ManageDataUsage := "Data type to query. One of gv(governance variables), di(db info) and pc(prep candidate). if this option has not given, Print all manage data"
+	ManageDataUsage := "Data type to query. One of di(db info), gv(governance variables), prep and pc(prep candidate). if this option has not given, Print all manage data"
 	flagSet.StringVar(&input.path, "path", "", pathUsage)
 	flagSet.StringVar(&input.path, "p", "", pathUsage)
 	flagSet.StringVar(&input.data, "data", "", ManageDataUsage)
@@ -46,7 +46,7 @@ func initAccountInput(flagSet *flag.FlagSet) *Input {
 	flagSet.StringVar(&input.address, "address", "", AddressUsage)
 	flagSet.StringVar(&input.address, "a", "", AddressUsage)
 	flagSet.StringVar(&input.rcDBRoot, "dbroot", "", RCDBRootUsage)
-	flagSet.StringVar(&input.rcDBRoot, "r", "", RCDBRootUsage)
+	flagSet.StringVar(&input.rcDBRoot, "d", "", RCDBRootUsage)
 	flagSet.StringVar(&input.accountType, "type", "", AccountQueryTypeUsage)
 	flagSet.StringVar(&input.accountType, "t", "", AccountQueryTypeUsage)
 	flagSet.BoolVar(&input.help, "help", false, HelpMsgUsage)
@@ -69,7 +69,7 @@ func initCalcResultInput(flagSet *flag.FlagSet) *Input {
 	input := new(Input)
 	flagSet.StringVar(&input.path, "path", "", pathUsage)
 	flagSet.StringVar(&input.path, "p", "", pathUsage)
-	flagSet.Uint64Var(&input.height, "height", 0, BlockHeightUsage)
+	flagSet.Uint64Var(&input.height, "blockheight", 0, BlockHeightUsage)
 	flagSet.Uint64Var(&input.height, "b", 0, BlockHeightUsage)
 	flagSet.BoolVar(&input.help, "help", false, HelpMsgUsage)
 	flagSet.BoolVar(&input.help, "h", false, HelpMsgUsage)
@@ -82,7 +82,7 @@ func initPreCommitInput(flagSet *flag.FlagSet) *Input {
 	flagSet.StringVar(&input.path, "p", "", pathUsage)
 	flagSet.StringVar(&input.address, "address", "", AddressUsage)
 	flagSet.StringVar(&input.address, "a", "", AddressUsage)
-	flagSet.Uint64Var(&input.height, "height", 0, BlockHeightUsage)
+	flagSet.Uint64Var(&input.height, "blockheight", 0, BlockHeightUsage)
 	flagSet.Uint64Var(&input.height, "b", 0, BlockHeightUsage)
 	flagSet.BoolVar(&input.help, "help", false, HelpMsgUsage)
 	flagSet.BoolVar(&input.help, "h", false, HelpMsgUsage)
@@ -95,7 +95,7 @@ func initIISS(flagSet *flag.FlagSet) *Input {
 	flagSet.StringVar(&input.path, "p", "", pathUsage)
 	flagSet.StringVar(&input.data, "data", "", IISSDataUsage)
 	flagSet.StringVar(&input.data, "d", "", IISSDataUsage)
-	flagSet.Uint64Var(&input.height, "height", 0, BlockHeightUsage)
+	flagSet.Uint64Var(&input.height, "blockheight", 0, BlockHeightUsage)
 	flagSet.Uint64Var(&input.height, "b", 0, BlockHeightUsage)
 	flagSet.BoolVar(&input.help, "help", false, HelpMsgUsage)
 	flagSet.BoolVar(&input.help, "h", false, HelpMsgUsage)

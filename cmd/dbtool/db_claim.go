@@ -34,16 +34,19 @@ func queryClaimDB(input Input) (err error) {
 func getClaim(qdb db.Database, address *common.Address) (*core.Claim, error) {
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
 	if err != nil {
-		fmt.Printf("Failed to get claim Bucket")
+		fmt.Println("Failed to get claim Bucket")
 		return nil, err
 	}
 	key := address.Bytes()
 	value, e := bucket.Get(key)
 	if e != nil {
-		fmt.Printf("Error while get claim value")
+		fmt.Println("Error while get claim value")
 		return nil, e
 	}
-	return newClaim(key, value)
+	if value != nil {
+		return newClaim(key, value)
+	}
+	return nil, nil
 }
 
 func printClaim(key []byte, value []byte) (err error) {
@@ -63,7 +66,7 @@ func printClaimInstance(claim *core.Claim) {
 
 func newClaim(key []byte, value []byte) (*core.Claim, error) {
 	if claim, err := core.NewClaimFromBytes(value); err != nil {
-		fmt.Printf("Failed to make claim instance")
+		fmt.Println("Failed to make claim instance")
 		return nil, err
 	} else {
 		claim.Address = *common.NewAddress(key)

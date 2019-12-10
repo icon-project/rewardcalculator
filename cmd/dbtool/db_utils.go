@@ -11,14 +11,14 @@ func iteratePrintDB(qdb db.Database, prefix *util.Range, printFunc func([]byte, 
 	// iterate
 	iter, err := qdb.GetIterator()
 	if err != nil {
-		fmt.Printf("Failed to get iterator")
+		fmt.Println("Failed to get iterator")
 		return err
 	}
 
 	iter.New(prefix.Start, prefix.Limit)
 	for iter.Next() {
 		if err = printFunc(iter.Key(), iter.Value()); err != nil {
-			fmt.Printf("Error while iterate")
+			fmt.Println("Error while iterate")
 			return err
 		}
 	}
@@ -26,14 +26,14 @@ func iteratePrintDB(qdb db.Database, prefix *util.Range, printFunc func([]byte, 
 
 	err = iter.Error()
 	if err != nil {
-		fmt.Printf("Error while iterate. %+v", err)
+		fmt.Printf("Error while iterate. %+v\n", err)
 		return err
 	}
 	return nil
 }
 
 func printDB(path string, prefix *util.Range, printFunc func([]byte, []byte) error) (err error) {
-	fmt.Printf("=====================Querying data in %s=============\n", path)
+	fmt.Printf("===================== Data in %s =============\n", path)
 	dir, name := filepath.Split(path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()

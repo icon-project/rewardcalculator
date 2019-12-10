@@ -36,7 +36,7 @@ func queryPreCommits(qdb db.Database, address *common.Address, blockHeight uint6
 	}
 	bucket, err := qdb.GetBucket(db.PrefixClaim)
 	if err != nil {
-		fmt.Printf("Failed to get preCommit Bucket")
+		fmt.Println("Failed to get preCommit Bucket")
 		return err
 	}
 
@@ -50,7 +50,11 @@ func queryPreCommits(qdb db.Database, address *common.Address, blockHeight uint6
 			continue
 		}
 		pc, err := newPreCommit(key, value)
-		printPreCommitInstance(pc)
+		if err != nil {
+			return err
+		} else {
+			printPreCommitInstance(pc)
+		}
 	}
 	return nil
 }
@@ -73,7 +77,7 @@ func newPreCommit(key []byte, value []byte) (pc *core.PreCommit, err error) {
 
 	err = pc.SetBytes(value)
 	if err != nil {
-		fmt.Printf("Failed to initialize preCommit instance")
+		fmt.Printf("Failed to initialize preCommit instance\n")
 		return nil, err
 
 	}
@@ -86,7 +90,7 @@ func newPreCommit(key []byte, value []byte) (pc *core.PreCommit, err error) {
 func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) ([][]byte, error) {
 	iter, err := qdb.GetIterator()
 	if err != nil {
-		fmt.Printf("Failed to get precommit db iterator")
+		fmt.Println("Failed to get precommit db iterator")
 		return nil, err
 	}
 
@@ -119,12 +123,12 @@ func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) ([][]
 	iter.Release()
 
 	if keyExist == false {
-		fmt.Printf("Can not find key using given information")
+		fmt.Println("Can not find key using given information")
 		return nil, errors.New("preCommit key does not exiest")
 	}
 	err = iter.Error()
 	if err != nil {
-		fmt.Printf("Error while iterate")
+		fmt.Println("Error while iterate")
 		return nil, err
 	}
 

@@ -28,7 +28,7 @@ const (
 )
 
 func printUsage() {
-	fmt.Printf("Usage: %s [db_name](DB to query)\n", os.Args[0])
+	fmt.Printf("Usage: %s [db_name] [[options]]\n", os.Args[0])
 	fmt.Printf("\t db_name     DB Name (%s, %s, %s, %s, %s, %s)\n",
 		DBNameManagement,
 		DBNameAccount,

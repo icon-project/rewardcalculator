@@ -21,23 +21,23 @@ func queryIISSDB(input Input) (err error) {
 
 	switch input.data {
 	case "":
-		fmt.Println("==============print block produce info==============")
-		if err = queryBP(qdb, 0); err != nil {
-			return
-		}
-		fmt.Println("==============print prep info==============")
-		if err = queryPRep(qdb, 0); err != nil {
-			return
-		}
-		fmt.Println("==============print header==============")
+		fmt.Println("============== Header ==============")
 		if err = queryHeader(qdb); err != nil {
 			return
 		}
-		fmt.Println("==============print governance variables==============")
+		fmt.Println("\n============== Governance variables ==============")
 		if err = queryIISSGV(qdb); err != nil {
 			return
 		}
-		fmt.Println("==============print transactions==============")
+		fmt.Println("\n============== P-Rep ==============")
+		if err = queryPRep(qdb, 0); err != nil {
+			return
+		}
+		fmt.Println("\n============== Block produce info ==============")
+		if err = queryBP(qdb, 0); err != nil {
+			return
+		}
+		fmt.Println("\n============== Transactions ==============")
 		if err = queryTX(qdb, 0); err != nil {
 			return
 		}
@@ -134,7 +134,7 @@ func queryIISSGV(qdb db.Database) error {
 		copy(value, iter.Value())
 		gv.BlockHeight = common.BytesToUint64(key)
 		if err = gv.SetBytes(value, version); err != nil {
-			fmt.Printf("Error while initialize IISS governance variable")
+			fmt.Println("Error while initialize IISS governance variable")
 			return err
 		}
 		fmt.Println(gv.String())
@@ -146,7 +146,7 @@ func queryIISSGV(qdb db.Database) error {
 func getPRep(qdb db.Database, blockHeight uint64) (prep *core.PRep, err error) {
 	bucket, err := qdb.GetBucket(db.PrefixIISSPRep)
 	if err != nil {
-		fmt.Printf("Failed to get Bucket")
+		fmt.Println("Failed to get Bucket")
 		return nil, err
 	}
 
@@ -204,7 +204,7 @@ func queryTransaction(qdb db.Database, blockHeight uint64) error {
 func getBP(qdb db.Database, blockHeight uint64) (*core.IISSBlockProduceInfo, error) {
 	bucket, err := qdb.GetBucket(db.PrefixIISSBPInfo)
 	if err != nil {
-		fmt.Printf("error while getting block produce info bucket")
+		fmt.Println("error while getting block produce info bucket")
 		return nil, err
 	}
 
@@ -262,7 +262,7 @@ func printTXInstance(tx *core.IISSTX) {
 func newBP(key []byte, value []byte) (bp *core.IISSBlockProduceInfo, err error) {
 	bp = new(core.IISSBlockProduceInfo)
 	if err = bp.SetBytes(value); err != nil {
-		fmt.Printf("Error while initialize IISSBlockProduceInfo")
+		fmt.Println("Error while initialize IISSBlockProduceInfo")
 		return nil, err
 	}
 	bp.BlockHeight = common.BytesToUint64(key[len(db.PrefixIISSBPInfo):])

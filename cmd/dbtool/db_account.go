@@ -38,7 +38,7 @@ func queryAccountDBWithPath(path string, address string) error {
 			if account != nil {
 				printIScoreAccount(account)
 			} else {
-				fmt.Printf("There is no %s in %s", address, path)
+				fmt.Printf("There is no %s in %s\n", address, path)
 			}
 		}
 	}
@@ -100,14 +100,14 @@ func getIScoreAccount(qdb db.Database, address string) (*core.IScoreAccount, err
 
 	bucket, err := qdb.GetBucket(db.PrefixIScore)
 	if err != nil {
-		fmt.Printf("Failed to get bucket")
+		fmt.Printf("Failed to get bucket\n")
 		return nil, err
 	}
 
 	key := addr.Bytes()
 	value, e := bucket.Get(addr.Bytes())
 	if e != nil {
-		fmt.Printf("Error while get account from DB")
+		fmt.Printf("Error while get account from DB\n")
 		return nil, e
 	}
 	if value == nil {
@@ -134,7 +134,7 @@ func printAccount(key []byte, value []byte) error {
 func newIScoreAccount(key []byte, value []byte) (account *core.IScoreAccount, err error) {
 	account, err = core.NewIScoreAccountFromBytes(value)
 	if err != nil {
-		fmt.Printf("Failed to make IScore account")
+		fmt.Printf("Failed to make IScore account\n")
 		return nil, err
 	}
 	account.Address = *common.NewAddress(key)
@@ -149,7 +149,7 @@ func getFirstAccount(dbPath string) (*core.IScoreAccount, error) {
 
 	iter, err := qdb.GetIterator()
 	if err != nil {
-		fmt.Printf("Failed to get iterator")
+		fmt.Printf("Failed to get iterator\n")
 		return nil, err
 	}
 
@@ -165,7 +165,7 @@ func getFirstAccount(dbPath string) (*core.IScoreAccount, error) {
 	iter.Release()
 	err = iter.Error()
 	if err != nil {
-		fmt.Printf("Error while iterate. %+v", err)
+		fmt.Printf("Error while iterate. %+v\n", err)
 		return nil, err
 	}
 	if key != nil {
