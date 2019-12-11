@@ -87,6 +87,12 @@ func NewClaimFromBytes(bs []byte) (*Claim, error) {
 	}
 }
 
+func ClaimBackupKeyString(key []byte) string {
+	blockHeight := common.BytesToUint64(key[:BlockHeightSize])
+	address := common.NewAddress(key[BlockHeightSize:])
+	return fmt.Sprintf("BlockHeight: %d, Address: %s", blockHeight, address.String())
+}
+
 type ClaimBackupInfo struct {
 	FirstBlockHeight uint64
 	LastBlockHeight uint64
@@ -108,7 +114,7 @@ func (cb *ClaimBackupInfo) Bytes() []byte {
 }
 
 func (cb *ClaimBackupInfo) String() string {
-	return fmt.Sprintf("BlockHeight: %d", cb.LastBlockHeight)
+	return fmt.Sprintf("BlockHeight: %d - %d", cb.FirstBlockHeight, cb.LastBlockHeight)
 }
 
 func (cb *ClaimBackupInfo) SetBytes(bs []byte) error {
