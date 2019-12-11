@@ -546,12 +546,14 @@ func _rollbackClaimDB(cbDB db.Database, cBucket db.Bucket, blockHeight uint64) e
 	}
 
 	prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight, nil, 0)
+	log.Printf("blockHeight: %d, iterate %v - %v", blockHeight, prefix.Start, prefix.Limit)
 	iter.New(prefix.Start, prefix.Limit)
 	var claim Claim
 	keys := make([][]byte, 0)
 	for iter.Next() {
 		claim.SetBytes(iter.Value())
 		key := iter.Key()[len(db.PrefixClaim)+BlockHeightSize:]
+		log.Printf("Rollback with %s %s", ClaimBackupKeyString(iter.Key()), claim.String())
 		if claim.Data.BlockHeight == 0 && claim.Data.IScore.Sign() == 0 {
 			cBucket.Delete(key)
 		} else {
