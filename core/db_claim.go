@@ -93,6 +93,16 @@ func ClaimBackupKeyString(key []byte) string {
 	return fmt.Sprintf("BlockHeight: %d, Address: %s", blockHeight, address.String())
 }
 
+func ClaimBackupKey(blockHeight uint64, address common.Address) []byte {
+	id := make([]byte, ClaimBackupIDSize)
+
+	bh := common.Uint64ToBytes(blockHeight)
+	copy(id[BlockHeightSize- len(bh):], bh)
+	copy(id[BlockHeightSize:], address.Bytes())
+
+	return id
+}
+
 type ClaimBackupInfo struct {
 	FirstBlockHeight uint64
 	LastBlockHeight uint64
@@ -263,7 +273,7 @@ func (pc *PreCommit) revert(pcDB db.Database) error {
 	return nil
 }
 
-func makeIteratorPrefix(prefix db.BucketID, blockHeight uint64, data []byte, dataSize int) *util.Range {
+func MakeIteratorPrefix(prefix db.BucketID, blockHeight uint64, data []byte, dataSize int) *util.Range {
 	bsSize := len(prefix) + BlockHeightSize
 	if data != nil {
 		bsSize += dataSize
@@ -284,14 +294,14 @@ func makeIteratorPrefix(prefix db.BucketID, blockHeight uint64, data []byte, dat
 // Delete PreCommit data with blockHeight and blockHash
 // To delete only with blockHeight, pass blockHash as nil
 func flushPreCommit(pcDB db.Database, blockHeight uint64, blockHash []byte) error {
-	prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight, blockHash, BlockHashSize)
+	prefix := MakeIteratorPrefix(db.PrefixClaim, blockHeight, blockHash, BlockHashSize)
 
 	return deletePreCommit(pcDB, prefix.Start, prefix.Limit)
 }
 
 // Delete PreCommit data with block height greater than blockHeight
 func initPreCommit(pcDB db.Database, blockHeight uint64) error {
-	prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight + 1, nil, BlockHashSize)
+	prefix := MakeIteratorPrefix(db.PrefixClaim, blockHeight + 1, nil, BlockHashSize)
 
 	return deletePreCommit(pcDB, prefix.Start, nil)
 }
@@ -346,7 +356,7 @@ func writePreCommitToClaimDB(preCommitDB db.Database, claimDB db.Database, claim
 	bucket, _ := claimDB.GetBucket(db.PrefixIScore)
 	cbBucket, _ := claimBackupDB.GetBucket(db.PrefixIScore)
 
-	prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight, blockHash, BlockHashSize)
+	prefix := MakeIteratorPrefix(db.PrefixClaim, blockHeight, blockHash, BlockHashSize)
 	iter.New(prefix.Start, prefix.Limit)
 	for iter.Next() {
 		err = pc.SetBytes(iter.Value())
@@ -458,7 +468,7 @@ func garbageCollectClaimBackupDB(cbDB db.Database, from uint64, to uint64) error
 
 	keys := make([][]byte, 0)
 	for blockHeight := from; blockHeight <= to; blockHeight++ {
-		prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight, nil, 0)
+		prefix := MakeIteratorPrefix(db.PrefixClaim, blockHeight, nil, 0)
 		iter.New(prefix.Start, prefix.Limit)
 		for iter.Next() {
 			key := make([]byte, ClaimBackupIDSize)
@@ -545,15 +555,13 @@ func _rollbackClaimDB(cbDB db.Database, cBucket db.Bucket, blockHeight uint64) e
 		return err
 	}
 
-	prefix := makeIteratorPrefix(db.PrefixClaim, blockHeight, nil, 0)
-	log.Printf("blockHeight: %d, iterate %v - %v", blockHeight, prefix.Start, prefix.Limit)
+	prefix := MakeIteratorPrefix(db.PrefixClaim, blockHeight, nil, 0)
 	iter.New(prefix.Start, prefix.Limit)
 	var claim Claim
 	keys := make([][]byte, 0)
 	for iter.Next() {
 		claim.SetBytes(iter.Value())
 		key := iter.Key()[len(db.PrefixClaim)+BlockHeightSize:]
-		log.Printf("Rollback with %s %s", ClaimBackupKeyString(iter.Key()), claim.String())
 		if claim.Data.BlockHeight == 0 && claim.Data.IScore.Sign() == 0 {
 			cBucket.Delete(key)
 		} else {

@@ -8,7 +8,6 @@ import (
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"path/filepath"
 )
 
 func queryClaimBackupDB(input Input) (err error) {
@@ -17,37 +16,13 @@ func queryClaimBackupDB(input Input) (err error) {
 		return errors.New("invalid db path")
 	}
 
-	if input.address == "" {
+	if input.height == 0 {
 		err = printDB(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printClaimBackup)
 	} else {
-		dir, name := filepath.Split(input.path)
-		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
-		defer qdb.Close()
-		//address := common.NewAddressFromString(input.address)
-		//if claim, err := getClaimBackup(qdb, address); err != nil {
-		//} else {
-		//	printClaimBackupValue(claim)
-		//}
+		prefix := core.MakeIteratorPrefix(db.PrefixClaim, input.height, nil, 0)
+		err = printDB(input.path, prefix, printClaimBackup)
 	}
 	return
-}
-
-func getClaimBackup(qdb db.Database, address *common.Address) (*core.Claim, error) {
-	bucket, err := qdb.GetBucket(db.PrefixClaim)
-	if err != nil {
-		fmt.Println("Failed to get claim Bucket")
-		return nil, err
-	}
-	key := address.Bytes()
-	value, e := bucket.Get(key)
-	if e != nil {
-		fmt.Println("Error while get claim value")
-		return nil, e
-	}
-	if value != nil {
-		return newClaim(key, value)
-	}
-	return nil, nil
 }
 
 func isManageKey(key []byte) bool {
@@ -66,8 +41,7 @@ func printClaimBackupInfo(value []byte) error {
 
 func printClaimBackup(key []byte, value []byte) (err error) {
 	if isManageKey(key) {
-		printClaimBackupInfo(value)
-		return nil
+		return printClaimBackupInfo(value)
 	}
 
 	if claim, e := newClaimFromBackup(key, value); e != nil {
@@ -83,7 +57,7 @@ func newClaimFromBackup(key []byte, value []byte) (*core.Claim, error) {
 		return nil, nil
 	}
 	if claim, err := core.NewClaimFromBytes(value); err != nil {
-		fmt.Println("Failed to make claim instance")
+		fmt.Printf("Failed to make claim instance %v\n", err)
 		return nil, err
 	} else {
 		claim.Address = *common.NewAddress(key[core.BlockHeightSize:])
