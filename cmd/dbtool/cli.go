@@ -11,6 +11,7 @@ const (
 	DBNameManagement = "manage"
 	DBNameAccount    = "account"
 	DBNameClaim      = "claim"
+	DBNameClaimBackup = "claimBackup"
 	DBNamePreCommit  = "preCommit"
 	DBNameCalcResult = "calcResult"
 	DBNameIISS       = "iiss"
@@ -29,10 +30,11 @@ const (
 
 func printUsage() {
 	fmt.Printf("Usage: %s [db_name] [[options]]\n", os.Args[0])
-	fmt.Printf("\t db_name     DB Name (%s, %s, %s, %s, %s, %s)\n",
+	fmt.Printf("\t db_name     DB Name (%s, %s, %s, %s, %s, %s, %s)\n",
 		DBNameManagement,
 		DBNameAccount,
 		DBNameClaim,
+		DBNameClaimBackup,
 		DBNamePreCommit,
 		DBNameCalcResult,
 		DBNameIISS,
@@ -65,16 +67,18 @@ func Run() (err error) {
 
 	dbName := os.Args[1]
 
-	manageFlagSet := flag.NewFlagSet("manage", flag.ExitOnError)
-	accountFlagSet := flag.NewFlagSet("account", flag.ExitOnError)
-	claimFlagSet := flag.NewFlagSet("claim", flag.ExitOnError)
-	preCommitFlagSet := flag.NewFlagSet("precommit", flag.ExitOnError)
-	calcResultFlagSet := flag.NewFlagSet("calcresult", flag.ExitOnError)
-	iissFlagSet := flag.NewFlagSet("iiss", flag.ExitOnError)
+	manageFlagSet := flag.NewFlagSet(DBNameManagement, flag.ExitOnError)
+	accountFlagSet := flag.NewFlagSet(DBNameAccount, flag.ExitOnError)
+	claimFlagSet := flag.NewFlagSet(DBNameClaim, flag.ExitOnError)
+	claimBackupFlagSet := flag.NewFlagSet(DBNameClaimBackup, flag.ExitOnError)
+	preCommitFlagSet := flag.NewFlagSet(DBNamePreCommit, flag.ExitOnError)
+	calcResultFlagSet := flag.NewFlagSet(DBNameCalcResult, flag.ExitOnError)
+	iissFlagSet := flag.NewFlagSet(DBNameIISS, flag.ExitOnError)
 
 	manageInput := initManageInput(manageFlagSet)
 	accountInput := initAccountInput(accountFlagSet)
 	claimInput := initClaimInput(claimFlagSet)
+	claimBackupInput := initClaimBackupInput(claimBackupFlagSet)
 	preCommitInput := initPreCommitInput(preCommitFlagSet)
 	calcResultInput := initCalcResultInput(calcResultFlagSet)
 	iissInput := initIISS(iissFlagSet)
@@ -92,6 +96,10 @@ func Run() (err error) {
 		err = claimFlagSet.Parse(os.Args[2:])
 		validateInput(claimFlagSet, err, claimInput.help)
 		err = queryClaimDB(*claimInput)
+	case DBNameClaimBackup:
+		err = claimBackupFlagSet.Parse(os.Args[2:])
+		validateInput(claimBackupFlagSet, err, claimBackupInput.help)
+		err = queryClaimBackupDB(*claimBackupInput)
 	case DBNamePreCommit:
 		err = preCommitFlagSet.Parse(os.Args[2:])
 		validateInput(preCommitFlagSet, err, preCommitInput.help)
