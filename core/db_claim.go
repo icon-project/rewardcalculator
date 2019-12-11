@@ -516,7 +516,7 @@ func rollbackClaimDB(ctx *Context, to uint64, blockHash []byte) error {
 		return err
 	}
 
-	for i := from; to < i; i-- {
+	for i := from; to <= i; i-- {
 		err = _rollbackClaimDB(cbDB, cBucket, i)
 		if err != nil {
 			return err
