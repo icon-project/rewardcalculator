@@ -18,7 +18,7 @@ const (
 	NumDelegate         = 10
 	AccountDBNameFormat = "calculate_%d_%d_%d"
 	BackupDBNamePrefix  = "backup_"
-	BackupDBNameFormat  = BackupDBNamePrefix + "%d_%d"	// CalcBH_accountDBIndex
+	BackupDBNameFormat  = BackupDBNamePrefix + "%d_%d"	// backup_CalcBH_accountDBIndex
 
 	Revision8 uint64    = 8
 	RevisionMin = Revision8
@@ -280,8 +280,11 @@ func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
 
 	// rollback account DB
 	idb.CloseAccountDB()
-	for i, f := range backups {
-		calcDBName := fmt.Sprintf(AccountDBNameFormat, i+1, idb.info.DBCount, calcDBPostFix)
+	for _, f := range backups {
+		var backupBH, index int
+		_, backupName := filepath.Split(f)
+		fmt.Sscanf(backupName, BackupDBNameFormat, &backupBH, &index)
+		calcDBName := fmt.Sprintf(AccountDBNameFormat, index, idb.info.DBCount, calcDBPostFix)
 
 		// remove calculate DB
 		err = os.RemoveAll(filepath.Join(idb.info.DBRoot, calcDBName))
