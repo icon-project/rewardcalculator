@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/icon-project/rewardcalculator/common"
@@ -66,6 +65,10 @@ func (idb *IScoreDB) _getCalcDBList() []db.Database {
 }
 
 func (idb *IScoreDB) toggleAccountDB(blockHeight uint64) {
+	if idb.info.ToggleBH == blockHeight {
+		return
+	}
+
 	idb.accountLock.Lock()
 	idb.info.QueryDBIsZero = !idb.info.QueryDBIsZero
 	idb.info.ToggleBH = blockHeight
@@ -269,24 +272,9 @@ func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
 		return err
 	}
 
-	if len(backups) != idb.info.DBCount {
-		return fmt.Errorf("there is no backup account DB. %d", len(backups))
-	} else {
-		_, name := filepath.Split(backups[0])
-		nameSlice := strings.Split(name, "_")
-		backupBH, err := strconv.ParseUint(nameSlice[1], 10, 64)
-		if err != nil {
-			return err
-		}
-		if blockHeight > backupBH {
-			// no need to Rollback account DB
-			log.Printf("no need to Rollback account DB to %d. backup: %d", blockHeight, backupBH)
-			return nil
-		}
-	}
-
 	// rollback account DB
 	idb.CloseAccountDB()
+	rollbackCount := 0
 	for _, f := range backups {
 		var backupBH, index int
 		_, backupName := filepath.Split(f)
@@ -295,7 +283,7 @@ func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
 
 		// remove calculate DB
 		err = os.RemoveAll(filepath.Join(idb.info.DBRoot, calcDBName))
-		if err != nil {
+		if err != nil && os.IsNotExist(err) {
 			log.Printf("Failed to remove old calculate DB")
 			return err
 		} else {
@@ -309,11 +297,13 @@ func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
 			return err
 		} else {
 			log.Printf("rename backup DB to query DB. %s -> %s", f, calcDBName)
+			rollbackCount++
 		}
 	}
+	log.Printf("Rollback %d account DB", rollbackCount)
 	idb.OpenAccountDB()
 
-	// toggle account DB switch
+	// set toggle block height with rollback block height
 	idb.toggleAccountDB(blockHeight)
 
 	// delete calculation result

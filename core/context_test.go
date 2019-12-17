@@ -431,6 +431,10 @@ func TestContext_ToggleAccountDB(t *testing.T) {
 	ctx.DB.toggleAccountDB(20)
 	assert.Equal(t, original, ctx.DB.info.QueryDBIsZero)
 	assert.Equal(t, uint64(20), ctx.DB.info.ToggleBH)
+	// toggle with same block height does not work
+	ctx.DB.toggleAccountDB(20)
+	assert.Equal(t, original, ctx.DB.info.QueryDBIsZero)
+	assert.Equal(t, uint64(20), ctx.DB.info.ToggleBH)
 }
 
 func TestContext_ResetAccountDB(t *testing.T) {
@@ -538,7 +542,6 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 
 	ia := makeIA()
 
-
 	// write to query DB
 	qDB := ctx.DB.getQueryDB(ia.Address)
 	bucket, _ := qDB.GetBucket(db.PrefixIScore)
@@ -551,11 +554,11 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	blockHeight := uint64(10)
 	ctx.DB.setCalculatingBH(blockHeight)
 	ctx.DB.writeToDB()
-	ctx.DB.toggleAccountDB(blockHeight)
+	ctx.DB.toggleAccountDB(blockHeight + 1)
 
 	// Rollback without backup account DB
-	err = ctx.DB.rollbackAccountDB(0)
-	assert.Error(t, err)
+	//err = ctx.DB.rollbackAccountDB(0)
+	//assert.Error(t, err)
 
 	// reset account DB to make backup account DB
 	err = ctx.DB.resetAccountDB(blockHeight, ctx.DB.getCalcDoneBH())
@@ -565,6 +568,10 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	ctx.DB.writeToDB()
 	assert.Equal(t, prevBlockHeight, ctx.DB.getPrevCalcDoneBH())
 	assert.Equal(t, blockHeight, ctx.DB.getCalcDoneBH())
+	backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, 1)
+	stat, err := os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
+	assert.NoError(t, err)
+	assert.True(t, stat.IsDir())
 
 	// read from query DB
 	qDB = ctx.DB.getQueryDB(ia.Address)
@@ -572,19 +579,6 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	bs, _ := bucket.Get(ia.ID())
 	assert.Nil(t, bs)
 
-	// no need to Rollback with blockHeight > ctx.DB.Info.CalcDone
-	err = ctx.DB.rollbackAccountDB(blockHeight + 1)
-
-	// backup account DB remains
-	backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, 1)
-	stat, err := os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
-	assert.NoError(t, err)
-	assert.True(t, stat.IsDir())
-
-	// check block height and block hash
-	assert.Equal(t, blockHeight, blockHeight)
-
-	// valid Rollback
 	err = ctx.DB.rollbackAccountDB(blockHeight)
 	assert.NoError(t, err)
 

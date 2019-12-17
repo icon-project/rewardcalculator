@@ -280,15 +280,6 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 	}
 }
 
-func toggleAccountDB(ctx *Context, blockHeight uint64) {
-	idb := ctx.DB
-
-	if blockHeight > idb.info.ToggleBH {
-		// change calculate DB to query DB
-		idb.toggleAccountDB(blockHeight)
-	}
-}
-
 func sendCalculateACK(c ipc.Connection, id uint32, status uint16, blockHeight uint64) error {
 	if c != nil {
 		response := CalculateResponse{Status: status, BlockHeight: blockHeight}
@@ -395,7 +386,8 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 		return err, blockHeight, nil, nil
 	}
 
-	toggleAccountDB(ctx, blockHeight)
+	// set toggle block height with Term start block height
+	ctx.DB.toggleAccountDB(blockHeight + 1)
 
 	// send response of CALCULATE after toggle DB
 	sendCalculateACK(c, id, CalcRespStatusOK, blockHeight)
