@@ -20,31 +20,27 @@ func TestMsgRollback_checkRollback(t *testing.T) {
 	tests := []struct {
 		name string
 		rollback uint64
-		ok bool
 		error bool
 	} {
 		{
 			name: "too low1",
 			rollback: calcBlockHeight1 - 1,
-			ok: false,
 			error: true,
 		},
 		{
 			name: "too low2",
 			rollback: calcBlockHeight1,
-			ok: false,
 			error: true,
 		},
 		{
 			name: "good",
 			rollback: calcBlockHeight1 + 1,
-			ok: true,
 			error: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if ok, err := checkRollback(ctx, tt.rollback); err != nil {
+			if err := checkRollback(ctx, tt.rollback); err != nil {
 				if !tt.error {
 					t.Error(err)
 				}
@@ -52,10 +48,6 @@ func TestMsgRollback_checkRollback(t *testing.T) {
 			} else {
 				if tt.error {
 					t.Errorf("It expects error but it doesn't. rollback:%d", tt.rollback)
-					return
-				}
-				if ok != tt.ok {
-					t.Errorf("It expects %s but it returns %s", strconv.FormatBool(tt.ok), strconv.FormatBool(ok))
 					return
 				}
 			}

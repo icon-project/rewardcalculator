@@ -190,7 +190,7 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(Statistics)
-	stop := false
+	checkInterrupt := false
 
 	batch.New()
 	iter.New(nil, nil)
@@ -198,11 +198,11 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 		// check quit message
 		select {
 		case <-quit:
-			stop = true
+			checkInterrupt = true
 		default:
 		}
 
-		if stop {
+		if checkInterrupt {
 			break
 		}
 
@@ -255,7 +255,7 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 		log.Printf("There is error while calculate iteration. %+v", err)
 	}
 
-	if stop != true {
+	if checkInterrupt != true {
 		// write batch to DB
 		if batchCount > 0 {
 			err := batch.Write()
@@ -281,87 +281,13 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 	}
 }
 
-func checkToggle(ctx *Context, blockHeight uint64) bool {
-	idb := ctx.DB
-
-	// compare block height of first account of Query/Calc DB
-	qDB := idb.getQueryDBList()
-	var addr common.Address
-	var qBH uint64
-	findQueryEntry := false
-
-	// pick first account from Query DB
-	for _, q := range qDB {
-		iter, _ := q.GetIterator()
-		iter.New(nil, nil)
-		for ; iter.Next(); {
-			key := iter.Key()[len(db.PrefixIScore):]
-			ia, err := NewIScoreAccountFromBytes(iter.Value())
-			if ia == nil || err != nil {
-				continue
-			}
-			qBH = ia.BlockHeight
-			addr.SetBytes(key)
-			findQueryEntry = true
-			break
-		}
-		iter.Release()
-		err := iter.Error()
-		if err != nil {
-			log.Printf("There is error while iterate query DB. %+v", err)
-		}
-
-		if findQueryEntry {
-			break
-		}
-	}
-
-	if findQueryEntry == false {
-		// There is no data. toggle!!
-		return true
-	}
-
-	// read account Info. from Calc DB
-	cDB := idb.getCalculateDB(addr)
-	bucket, _ := cDB.GetBucket(db.PrefixIScore)
-	data, _ := bucket.Get(addr.Bytes())
-	if data == nil {
-		// There is no account in Calc DB. No need to toggle.
-		return false
-	} else {
-		ia, _ := NewIScoreAccountFromBytes(data)
-		if ia != nil {
-			cBH := ia.BlockHeight
-			if qBH == cBH {
-				// is it possible?
-				return false
-			} else if qBH < cBH {
-				// Calc DB has updated data.
-				if cBH == blockHeight {
-					// Calculated for this blockHeight. keep going
-					return false
-				} else {
-					// old data. need toggle
-					return true
-				}
-			} else {
-				// is it possible?
-				return false
-			}
-		}
-		// calc DB was corrupted, overwrite with calculation
-		return false
-	}
-}
-
 func toggleAccountDB(ctx *Context, blockHeight uint64) {
-	if checkToggle(ctx, blockHeight) == false {
-		return
-	}
-
-	// change calculate DB to query DB
 	idb := ctx.DB
-	idb.toggleAccountDB()
+
+	if blockHeight > idb.info.ToggleBH {
+		// change calculate DB to query DB
+		idb.toggleAccountDB(blockHeight)
+	}
 }
 
 func sendCalculateACK(c ipc.Connection, id uint32, status uint16, blockHeight uint64) error {
@@ -395,7 +321,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	} else {
 		log.Printf("Failed to calculate. %v", err)
 		success = false
-		// if canceled by ROLLBACK, do not send CALCULATE_DONE
+		// if canceled by ROLLBACK, remove IISS data DB and do not send CALCULATE_DONE
 		if isCalcCancelByRollback(err) {
 			os.RemoveAll(req.Path)
 			return nil
@@ -419,26 +345,26 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	return c.Send(MsgCalculateDone, 0, &resp)
 }
 
-func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
-	c ipc.Connection, id uint32) (error, uint64, *Statistics, []byte) {
+func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ipc.Connection, id uint32) (error, uint64, *Statistics, []byte) {
 	h := sha3.NewShake256()
 	stateHash := make([]byte, 64)
 	stats := new(Statistics)
+	reload := isReloadRequest(req.BlockHeight, id)
 	var newAccount uint64
 
 	iScoreDB := ctx.DB
 	blockHeight := req.BlockHeight
 
 	log.Printf("Get calculate message: blockHeight: %d, IISS data path: %s", blockHeight, req.Path)
-	if ctx.DB.isCalculating() {
+	if !reload && ctx.DB.isCalculating() {
 		// send response of CALCULATE
 		sendCalculateACK(c, id, CalcRespStatusDoing, blockHeight)
 		err := fmt.Errorf("calculating now. drop calculate message. blockHeight: %d, IISS data path: %s",
 			blockHeight, req.Path)
 		return err, blockHeight, nil, nil
 	}
-
 	ctx.DB.setCalculatingBH(req.BlockHeight)
+
 	startTime := time.Now()
 
 	// open IISS Data
@@ -462,7 +388,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 
 	// check blockHeight and blockHash
 	calcDoneBH := iScoreDB.getCalcDoneBH()
-	if calcDoneBH == blockHeight {
+	if blockHeight == calcDoneBH {
 		sendCalculateACK(c, id, CalcRespStatusDuplicateBH, blockHeight)
 		err := fmt.Errorf("duplicated block(height: %d, hash: %s)\n",
 			blockHeight, hex.EncodeToString(req.BlockHash))
@@ -483,7 +409,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 	sendCalculateACK(c, id, CalcRespStatusOK, blockHeight)
 
 	// close and backup old query DB and open new calculate DB
-	ctx.DB.resetAccountDB(blockHeight)
+	ctx.DB.resetAccountDB(blockHeight, ctx.DB.getCalcDoneBH())
 
 	// Update header Info.
 	if header != nil {

@@ -53,6 +53,7 @@ type DBInfoDataV2 struct {
 	CalcDone      uint64    // Latest CALCULATE_DONE block height
 	PrevCalcDone  uint64    // Previous CALCULATE_DONE block height
 	Calculating   uint64    // Latest CALCULATE block height
+	ToggleBH      uint64	// Latest account DB toggle block height
 }
 
 type DBInfoData DBInfoDataV2

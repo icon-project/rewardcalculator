@@ -5,6 +5,7 @@ import (
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"log"
+	"math"
 	"path/filepath"
 )
 
@@ -150,17 +151,20 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 	return m, err
 }
 
+const reloadBlockHeight = math.MaxUint64
+const reloadMsgID = math.MaxUint32
+
 func reloadIISSData(ctx *Context, dir string) {
 	for _, iissData := range findIISSData(dir, "iiss_") {
 		var req CalculateRequest
 		req.Path = filepath.Join(dir, iissData.Name())
-		req.BlockHeight = 0
+		req.BlockHeight = reloadBlockHeight
 
 		log.Printf("Reload IISS Data. %s", req.Path)
-		err, _, _, _:= DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+		err, _, _, _:= DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, reloadMsgID)
 
 		if err != nil {
-			log.Printf("Failed to reload IISS Data. %s", req.Path)
+			log.Printf("Failed to reload IISS Data. %s. %v", req.Path, err)
 			break
 		} else {
 			log.Printf("Succeeded to reload IISS Data. %s", req.Path)
@@ -168,4 +172,8 @@ func reloadIISSData(ctx *Context, dir string) {
 			cleanupIISSData(req.Path)
 		}
 	}
+}
+
+func isReloadRequest(blockHeight uint64, id uint32) bool {
+	return blockHeight == reloadBlockHeight && id == reloadMsgID
 }

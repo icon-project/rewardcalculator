@@ -425,10 +425,12 @@ func TestContext_ToggleAccountDB(t *testing.T) {
 
 	original := ctx.DB.info.QueryDBIsZero
 
-	ctx.DB.toggleAccountDB()
+	ctx.DB.toggleAccountDB(10)
 	assert.Equal(t, !original, ctx.DB.info.QueryDBIsZero)
-	ctx.DB.toggleAccountDB()
+	assert.Equal(t, uint64(10), ctx.DB.info.ToggleBH)
+	ctx.DB.toggleAccountDB(20)
 	assert.Equal(t, original, ctx.DB.info.QueryDBIsZero)
+	assert.Equal(t, uint64(20), ctx.DB.info.ToggleBH)
 }
 
 func TestContext_ResetAccountDB(t *testing.T) {
@@ -447,7 +449,8 @@ func TestContext_ResetAccountDB(t *testing.T) {
 	assert.NoError(t, err)
 
 	blockHeight := uint64(1000)
-	err = ctx.DB.resetAccountDB(blockHeight)
+	oldBlockHeight := ctx.DB.getCalcDoneBH()
+	err = ctx.DB.resetAccountDB(blockHeight, oldBlockHeight)
 	assert.NoError(t, err)
 
 	// same query DB
@@ -457,14 +460,22 @@ func TestContext_ResetAccountDB(t *testing.T) {
 	assert.NotEqual(t, cDBList, ctx.DB.GetCalcDBList())
 	assert.Equal(t, dbCount, len(ctx.DB.GetCalcDBList()))
 
-	// new backup DB
+	// old and new backup DB
 	for i := 0; i < ctx.DB.info.DBCount; i++ {
-		backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, i+1)
+		// old backup DB were deleted
+		backupName := fmt.Sprintf(BackupDBNameFormat, oldBlockHeight, i+1)
 		stat, err := os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
+		assert.Error(t, err)
+		assert.True(t, os.IsNotExist(err))
+
+		// new backup DB wew created
+		backupName = fmt.Sprintf(BackupDBNameFormat, blockHeight, i+1)
+		stat, err = os.Stat(filepath.Join(ctx.DB.info.DBRoot, backupName))
 		assert.NoError(t, err)
 		assert.True(t, stat.IsDir())
 	}
-	// check ia value in backup DB
+
+	// check value in backup DB
 	backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, ctx.DB.getAccountDBIndex(ia.Address) + 1)
 	backupDB := db.Open(ctx.DB.info.DBRoot, ctx.DB.info.DBType, backupName)
 	bucket, _ = backupDB.GetBucket(db.PrefixIScore)
@@ -540,14 +551,14 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	blockHeight := uint64(10)
 	ctx.DB.setCalculatingBH(blockHeight)
 	ctx.DB.writeToDB()
-	ctx.DB.toggleAccountDB()
+	ctx.DB.toggleAccountDB(blockHeight)
 
 	// Rollback without backup account DB
 	err = ctx.DB.rollbackAccountDB(0)
 	assert.Error(t, err)
 
 	// reset account DB to make backup account DB
-	err = ctx.DB.resetAccountDB(blockHeight)
+	err = ctx.DB.resetAccountDB(blockHeight, ctx.DB.getCalcDoneBH())
 	assert.NoError(t, err)
 	WriteCalculationResult(crDB, blockHeight, nil, nil)
 	ctx.DB.setCalcDoneBH(blockHeight)

@@ -65,9 +65,10 @@ func (idb *IScoreDB) _getCalcDBList() []db.Database {
 	}
 }
 
-func (idb *IScoreDB) toggleAccountDB() {
+func (idb *IScoreDB) toggleAccountDB(blockHeight uint64) {
 	idb.accountLock.Lock()
 	idb.info.QueryDBIsZero = !idb.info.QueryDBIsZero
+	idb.info.ToggleBH = blockHeight
 	idb.accountLock.Unlock()
 
 	// write to DB
@@ -129,7 +130,7 @@ func (idb *IScoreDB) getCalculateResultDB() db.Database {
 	return idb.calcResult
 }
 
-func (idb *IScoreDB) resetAccountDB(blockHeight uint64) error {
+func (idb *IScoreDB) resetAccountDB(blockHeight uint64, oldCalcBH uint64) error {
 	idb.accountLock.Lock()
 	defer idb.accountLock.Unlock()
 
@@ -141,39 +142,45 @@ func (idb *IScoreDB) resetAccountDB(blockHeight uint64) error {
 	}
 
 	// delete old backup account DB
-	oldBackups, err := filepath.Glob(filepath.Join(idb.info.DBRoot, BackupDBNamePrefix + "*"))
+	oldBackup := filepath.Join(idb.info.DBRoot, BackupDBNamePrefix + strconv.FormatUint(oldCalcBH, 10) + "_*")
+	oldBackups, err := filepath.Glob(oldBackup)
 	if err != nil {
-		log.Printf("Failed to get old backup account DB")
+		log.Printf("Failed to get old backup account DB %s. %v", oldBackup, err)
 		return err
 	}
+	log.Printf("delete old backup %d account DBs. %s", len(oldBackups), oldBackup)
 	for _, f := range oldBackups {
 		err = os.RemoveAll(f)
 		if err != nil {
-			log.Printf("Failed to delete old backup account DB. %s", f)
+			log.Printf("Failed to delete old backup account DB %s. %v", f, err)
 			return err
-		} else {
-			log.Printf("delete old backup account DB. %s", f)
 		}
 	}
 
 	newCalcDBs := make([]db.Database, len(oldQueryDBs))
+	backupCount := 0
 	for i, oldQueryDB := range oldQueryDBs {
 		oldQueryDB.Close()
 		dbName := fmt.Sprintf(AccountDBNameFormat, i+1, idb.info.DBCount, oldQueryDBPostFix)
-		backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, i+1)
+		dbPath := filepath.Join(idb.info.DBRoot, dbName)
+		backupPath := filepath.Join(idb.info.DBRoot, fmt.Sprintf(BackupDBNameFormat, blockHeight, i+1))
 
-		// backup old query DB
-		err = os.Rename(filepath.Join(idb.info.DBRoot, dbName), filepath.Join(idb.info.DBRoot, backupName))
-		if err != nil {
-			log.Printf("Failed to backup old query DB. %s -> %s, %+v", dbName, backupName, err)
-			return err
-		} else {
-			log.Printf("backup old query DB. %s -> %s", dbName, backupName)
+		_ , err := os.Stat(backupPath)
+		if os.IsNotExist(err) {
+			// backup old query DB
+			err = os.Rename(dbPath, backupPath)
+			if err != nil {
+				log.Printf("Failed to backup old query DB. %s -> %s, %+v", dbPath, backupPath, err)
+				return err
+			}
+			backupCount++
 		}
 
 		// open new calculate DB
 		newCalcDBs[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbName)
 	}
+	backup := filepath.Join(idb.info.DBRoot, BackupDBNamePrefix + strconv.FormatUint(blockHeight, 10) + "_*")
+	log.Printf("backup %d account DBs. %s", backupCount, backup)
 
 	// set new calculate DB
 	if idb.info.QueryDBIsZero {
@@ -306,8 +313,8 @@ func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
 	}
 	idb.OpenAccountDB()
 
-	// toggle query DB switch
-	idb.toggleAccountDB()
+	// toggle account DB switch
+	idb.toggleAccountDB(blockHeight)
 
 	// delete calculation result
 	DeleteCalculationResult(idb.getCalculateResultDB(), idb.getCalcDoneBH())
