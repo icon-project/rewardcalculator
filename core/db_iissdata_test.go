@@ -417,9 +417,9 @@ func TestDBIISS_manageIISSData(t *testing.T) {
 	rootPath, _ := filepath.Abs("./iissdata_test")
 	os.MkdirAll(rootPath, os.ModePerm)
 
-	oldPath := filepath.Join(rootPath, fmt.Sprintf(IISSDataDBFormat, 50, 2))
+	oldPath := filepath.Join(rootPath, fmt.Sprintf(IISSDataDBFormat, 50))
 	os.MkdirAll(oldPath, os.ModePerm)
-	currentPath := filepath.Join(rootPath, fmt.Sprintf(IISSDataDBFormat, 100, 2))
+	currentPath := filepath.Join(rootPath, fmt.Sprintf(IISSDataDBFormat, 100))
 	os.MkdirAll(currentPath, os.ModePerm)
 
 	cleanupIISSData(currentPath)

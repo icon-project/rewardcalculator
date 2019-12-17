@@ -158,7 +158,7 @@ const reloadMsgID = math.MaxUint32
 func reloadIISSData(ctx *Context, dir string) {
 	if needIISSDataReload(ctx) {
 		var req CalculateRequest
-		req.Path = filepath.Join(dir, fmt.Sprintf(IISSDataDBFormat, ctx.DB.getCalculatingBH(), 2))
+		req.Path = filepath.Join(dir, fmt.Sprintf(IISSDataDBFormat, ctx.DB.getCalculatingBH()))
 		req.BlockHeight = reloadBlockHeight
 
 		log.Printf("Reload IISS Data. %s", req.Path)
