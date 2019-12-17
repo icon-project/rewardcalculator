@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -415,19 +416,18 @@ func TestDBIISS_LoadIISSData(t *testing.T) {
 func TestDBIISS_manageIISSData(t *testing.T) {
 	rootPath, _ := filepath.Abs("./iissdata_test")
 	os.MkdirAll(rootPath, os.ModePerm)
-	iissPath := filepath.Join(rootPath, "current")
-	os.MkdirAll(iissPath, os.ModePerm)
-	finishPath := filepath.Join(rootPath, "finish_iiss")
-	os.MkdirAll(finishPath, os.ModePerm)
 
-	cleanupIISSData(iissPath)
+	oldPath := filepath.Join(rootPath, fmt.Sprintf(IISSDataDBFormat, 50, 2))
+	os.MkdirAll(oldPath, os.ModePerm)
+	currentPath := filepath.Join(rootPath, fmt.Sprintf(IISSDataDBFormat, 100, 2))
+	os.MkdirAll(currentPath, os.ModePerm)
 
-	_, err := os.Stat(iissPath)
+	cleanupIISSData(currentPath)
+
+	_, err := os.Stat(oldPath)
 	assert.True(t, os.IsNotExist(err))
-	_, err = os.Stat(finishPath)
-	assert.True(t, os.IsNotExist(err))
-	backupPath := filepath.Join(rootPath, "finish_current")
-	f, err := os.Stat(backupPath)
+	f, err := os.Stat(currentPath)
+	assert.NoError(t, err)
 	assert.True(t, f.IsDir())
 
 	os.RemoveAll(rootPath)

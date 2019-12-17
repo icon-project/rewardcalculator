@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"os"
 	"sort"
 	"strconv"
 	"sync"
@@ -321,13 +320,6 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	} else {
 		log.Printf("Failed to calculate. %v", err)
 		success = false
-		// if canceled by ROLLBACK, remove IISS data DB and do not send CALCULATE_DONE
-		if isCalcCancelByRollback(err) {
-			os.RemoveAll(req.Path)
-			return nil
-		} else {
-			os.Rename(req.Path, req.Path+"_failed")
-		}
 	}
 
 	// send CALCULATE_DONE

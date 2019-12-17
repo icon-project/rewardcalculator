@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"log"
@@ -155,9 +156,9 @@ const reloadBlockHeight = math.MaxUint64
 const reloadMsgID = math.MaxUint32
 
 func reloadIISSData(ctx *Context, dir string) {
-	for _, iissData := range findIISSData(dir, "iiss_") {
+	if needIISSDataReload(ctx) {
 		var req CalculateRequest
-		req.Path = filepath.Join(dir, iissData.Name())
+		req.Path = filepath.Join(dir, fmt.Sprintf(IISSDataDBFormat, ctx.DB.getCalculatingBH(), 2))
 		req.BlockHeight = reloadBlockHeight
 
 		log.Printf("Reload IISS Data. %s", req.Path)
@@ -165,13 +166,16 @@ func reloadIISSData(ctx *Context, dir string) {
 
 		if err != nil {
 			log.Printf("Failed to reload IISS Data. %s. %v", req.Path, err)
-			break
 		} else {
 			log.Printf("Succeeded to reload IISS Data. %s", req.Path)
 			// cleanup IISS data DB
 			cleanupIISSData(req.Path)
 		}
 	}
+}
+
+func needIISSDataReload(ctx *Context) bool {
+	return ctx.DB.getCalcDoneBH() != ctx.DB.getCalculatingBH()
 }
 
 func isReloadRequest(blockHeight uint64, id uint32) bool {
