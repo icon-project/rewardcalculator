@@ -278,7 +278,7 @@ func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
 		if err != nil {
 			return err
 		}
-		if blockHeight >= backupBH {
+		if blockHeight > backupBH {
 			// no need to Rollback account DB
 			log.Printf("no need to Rollback account DB to %d. backup: %d", blockHeight, backupBH)
 			return nil

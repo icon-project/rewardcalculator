@@ -572,8 +572,8 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	bs, _ := bucket.Get(ia.ID())
 	assert.Nil(t, bs)
 
-	// no need to Rollback with blockHeight >= ctx.DB.Info.CalcBlockHeight
-	err = ctx.DB.rollbackAccountDB(blockHeight)
+	// no need to Rollback with blockHeight > ctx.DB.Info.CalcDone
+	err = ctx.DB.rollbackAccountDB(blockHeight + 1)
 
 	// backup account DB remains
 	backupName := fmt.Sprintf(BackupDBNameFormat, blockHeight, 1)
@@ -582,10 +582,10 @@ func TestContext_RollbackAccountDB(t *testing.T) {
 	assert.True(t, stat.IsDir())
 
 	// check block height and block hash
-	assert.Equal(t, blockHeight, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, blockHeight, blockHeight)
 
 	// valid Rollback
-	err = ctx.DB.rollbackAccountDB(0)
+	err = ctx.DB.rollbackAccountDB(blockHeight)
 	assert.NoError(t, err)
 
 	// backup account DB was deleted

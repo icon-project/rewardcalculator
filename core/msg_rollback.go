@@ -103,8 +103,8 @@ func checkRollback(ctx *Context, rollback uint64) error {
 
 func checkAccountDBRollback(ctx *Context, rollback uint64) bool {
 	idb := ctx.DB
-	if rollback >= idb.getCalcDoneBH() {
-		log.Printf("No need to Rollback account DB. %d >= %d", rollback, idb.getCalcDoneBH())
+	if rollback > idb.getCalcDoneBH() {
+		log.Printf("No need to Rollback account DB. %d > %d", rollback, idb.getCalcDoneBH())
 		return false
 	}
 
