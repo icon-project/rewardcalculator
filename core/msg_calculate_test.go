@@ -701,7 +701,7 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	ctx.DB.setCalculatingBH(uint64(50))
 	err, blockHeight, _, _ := DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
 	assert.Error(t, err)
-	assert.True(t, strings.HasPrefix(err.Error(), "calculating now. drop calculate message"))
+	assert.True(t, strings.HasPrefix(err.Error(), "calculating now. drop calculate message"), err)
 	assert.Equal(t, req.BlockHeight, blockHeight)
 	ctx.DB.resetCalculatingBH()
 

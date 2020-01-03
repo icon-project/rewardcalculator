@@ -2,9 +2,11 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 	"log"
+	"math"
 	"path/filepath"
 )
 
@@ -150,22 +152,32 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 	return m, err
 }
 
+const reloadBlockHeight = math.MaxUint64
+const reloadMsgID = math.MaxUint32
+
 func reloadIISSData(ctx *Context, dir string) {
-	for _, iissData := range findIISSData(dir, "iiss_") {
+	if needIISSDataReload(ctx) {
 		var req CalculateRequest
-		req.Path = filepath.Join(dir, iissData.Name())
-		req.BlockHeight = 0
+		req.Path = filepath.Join(dir, fmt.Sprintf(IISSDataDBFormat, ctx.DB.getCalculatingBH()))
+		req.BlockHeight = reloadBlockHeight
 
 		log.Printf("Reload IISS Data. %s", req.Path)
-		err, _, _, _:= DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+		err, _, _, _:= DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, reloadMsgID)
 
 		if err != nil {
-			log.Printf("Failed to reload IISS Data. %s", req.Path)
-			break
+			log.Printf("Failed to reload IISS Data. %s. %v", req.Path, err)
 		} else {
 			log.Printf("Succeeded to reload IISS Data. %s", req.Path)
 			// cleanup IISS data DB
 			cleanupIISSData(req.Path)
 		}
 	}
+}
+
+func needIISSDataReload(ctx *Context) bool {
+	return ctx.DB.getCalcDoneBH() != ctx.DB.getCalculatingBH()
+}
+
+func isReloadRequest(blockHeight uint64, id uint32) bool {
+	return blockHeight == reloadBlockHeight && id == reloadMsgID
 }

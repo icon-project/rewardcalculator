@@ -20,15 +20,16 @@ func (rb *RollBackRequest) String() string {
 }
 
 type RollBackResponse struct {
-	Status bool
+	Success bool
 	RollBackRequest
 }
 
 func (rb *RollBackResponse) String() string {
-	return fmt.Sprintf("Status: %s, %s", strconv.FormatBool(rb.Status), rb.RollBackRequest.String())
+	return fmt.Sprintf("Success: %s, %s", strconv.FormatBool(rb.Success), rb.RollBackRequest.String())
 }
 
 func (mh *msgHandler) rollback(c ipc.Connection, id uint32, data []byte) error {
+	success := true
 	var req RollBackRequest
 	var err error
 	if _, err = codec.MP.UnmarshalFromBytes(data, &req); err != nil {
@@ -36,16 +37,18 @@ func (mh *msgHandler) rollback(c ipc.Connection, id uint32, data []byte) error {
 	}
 	log.Printf("\t ROLLBACK request: %s", req.String())
 
-	err = DoRollBack(mh.mgr.ctx, &req)
+	ctx := mh.mgr.ctx
+
+	err = DoRollBack(ctx, &req)
+
+	if err != nil {
+		log.Printf("Failed to rollback %d. %v", req.BlockHeight, err)
+		success = false
+	}
 
 	// send ROLLBACK response
 	var resp RollBackResponse
-	if err == nil {
-		resp.Status = true
-	} else {
-		log.Printf("Failed to rollback. %v", err)
-		resp.Status = false
-	}
+	resp.Success = success
 	resp.BlockHeight = req.BlockHeight
 	resp.BlockHash = make([]byte, BlockHashSize)
 	copy(resp.BlockHash, req.BlockHash)
@@ -62,7 +65,7 @@ func DoRollBack(ctx *Context, req *RollBackRequest) error {
 	log.Printf("Start Rollback to %d", blockHeight)
 
 	// check Rollback block height
-	if ok, err := checkRollback(ctx, blockHeight); ok != true {
+	if err := checkRollback(ctx, blockHeight); err != nil {
 		return err
 	}
 
@@ -90,18 +93,18 @@ func DoRollBack(ctx *Context, req *RollBackRequest) error {
 	return nil
 }
 
-func checkRollback(ctx *Context, rollback uint64) (bool, error) {
+func checkRollback(ctx *Context, rollback uint64) error {
 	idb := ctx.DB
 	if idb.getPrevCalcDoneBH() >= rollback {
-		return false, &RollbackLowBlockHeightError{idb.getPrevCalcDoneBH(), rollback}
+		return &RollbackLowBlockHeightError{idb.getPrevCalcDoneBH(), rollback}
 	}
-	return true, nil
+	return nil
 }
 
 func checkAccountDBRollback(ctx *Context, rollback uint64) bool {
 	idb := ctx.DB
-	if rollback >= idb.getCalcDoneBH() {
-		log.Printf("No need to Rollback account DB. %d >= %d", rollback, idb.getCalcDoneBH())
+	if rollback > idb.getCalcDoneBH() {
+		log.Printf("No need to Rollback account DB. %d > %d", rollback, idb.getCalcDoneBH())
 		return false
 	}
 
