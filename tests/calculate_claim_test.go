@@ -6,7 +6,7 @@ import (
 
 func Test_sample(t *testing.T) {
 	var scenario TestScenario
-	scenarioFile := "./json/sample_scenario.json"
+	scenarioFile := "./json/calculate_claim_scenario.json"
 
 	opts := initTest()
 	defer finalizeTest(opts)
