@@ -444,4 +444,3 @@ func WriteIISSTX(iiss db.Database, index uint64, address string, blockHeight uin
 	value, _ := tx.Bytes()
 	return bucket.Set(key, value)
 }
->>>>>>> IS-933: add integration test
