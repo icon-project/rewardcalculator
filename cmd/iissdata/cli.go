@@ -15,7 +15,7 @@ const (
 	DBType = "goleveldb"
 )
 
-type CLI struct{
+type CLI struct {
 	DB db.Database
 }
 
@@ -67,21 +67,21 @@ func (cli *CLI) Run() {
 
 	bpBlockHeight := bpCmd.Uint64("blockheight", 0, "Block height of Block produce Info.")
 	bpGenerator := bpCmd.String("generator", "", "Address of block generator")
-	bpValidator := bpCmd.String("validator", "", "Addresses of block validator")
+	bpValidator := bpCmd.String("validator", "", "Address of block validator")
 	bpDelete := bpCmd.Bool("delete", false, "Delete P-Rep Statistics")
 
 	prepBlockHeight := prepCmd.Uint64("blockheight", 0, "Block height of P-Rep list")
-	prepList := prepCmd.String("preplist", "", "Addresses of Main/Sub P-Rep")
+	prepList := prepCmd.String("preplist", "", "Address of Main/Sub P-Rep")
 	prepDelegationList := prepCmd.String("delegationlist", "", "Delegation amount of Main/Sub P-Rep")
 	prepDelete := prepCmd.Bool("delete", false, "Delete P-Rep list")
 
 	txIndex := txCmd.Uint64("index", 0, "TX index")
 	txAddress := txCmd.String("address", "", "TX owner address")
 	txBlockHeight := txCmd.Uint64("blockheight", 0, "Block height of TX")
-	txType := txCmd.Uint64("type", 0, "Type of TX. " +
+	txType := txCmd.Uint64("type", 0, "Type of TX. "+
 		"(0:delegation, 1:P-Rep register, 2:P-Rep unregister")
 	txDelegateAddress := txCmd.String("dg-address", "", "Delegation address")
-	txDelegateAmount:= txCmd.Uint64("dg-amount", 10, "Delegation amount")
+	txDelegateAmount := txCmd.Uint64("dg-amount", 10, "Delegation amount")
 
 	// Parse the CLI
 	switch cmd {
@@ -134,7 +134,7 @@ func (cli *CLI) Run() {
 	}
 
 	if strings.HasSuffix(dbName, "/") {
-		dbName = dbName[:len(dbName) - len("/")]
+		dbName = dbName[:len(dbName)-len("/")]
 	}
 	dbDir, dbName := filepath.Split(dbName)
 

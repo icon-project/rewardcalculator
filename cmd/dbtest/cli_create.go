@@ -166,7 +166,7 @@ func (cli *CLI) create(dbName string, dbCount int, entryCount int) {
 
 	lvlDB.Close()
 
-	ctx, _ := core.NewContext(DBDir, DBType, dbName, dbCount)
+	ctx, _ := core.NewContext(DBDir, DBType, dbName, dbCount, "")
 
 	// create account DB
 	createAccountDB(dbDir, dbCount, entryCount, ctx)

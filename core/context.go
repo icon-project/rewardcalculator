@@ -18,11 +18,11 @@ const (
 	NumDelegate         = 10
 	AccountDBNameFormat = "calculate_%d_%d_%d"
 	BackupDBNamePrefix  = "backup_"
-	BackupDBNameFormat  = BackupDBNamePrefix + "%d_%d"	// CalcBH_accountDBIndex
+	BackupDBNameFormat  = BackupDBNamePrefix + "%d_%d" // CalcBH_accountDBIndex
 
-	Revision8 uint64    = 8
-	RevisionMin = Revision8
-	RevisionMax = Revision8
+	Revision8   uint64 = 8
+	RevisionMin        = Revision8
+	RevisionMax        = Revision8
 )
 
 type IScoreDB struct {
@@ -30,15 +30,15 @@ type IScoreDB struct {
 	info *DBInfo
 
 	// DB instance
-	management    db.Database
-	calcResult    db.Database
-	preCommit     db.Database
-	claim         db.Database
-	claimBackup   db.Database
+	management  db.Database
+	calcResult  db.Database
+	preCommit   db.Database
+	claim       db.Database
+	claimBackup db.Database
 
-	accountLock   sync.RWMutex
-	Account0      []db.Database
-	Account1      []db.Database
+	accountLock sync.RWMutex
+	Account0    []db.Database
+	Account1    []db.Database
 }
 
 func (idb *IScoreDB) getQueryDBList() []db.Database {
@@ -141,7 +141,7 @@ func (idb *IScoreDB) resetAccountDB(blockHeight uint64) error {
 	}
 
 	// delete old backup account DB
-	oldBackups, err := filepath.Glob(filepath.Join(idb.info.DBRoot, BackupDBNamePrefix + "*"))
+	oldBackups, err := filepath.Glob(filepath.Join(idb.info.DBRoot, BackupDBNamePrefix+"*"))
 	if err != nil {
 		log.Printf("Failed to get old backup account DB")
 		return err
@@ -256,7 +256,7 @@ func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
 		calcDBPostFix = 1
 	}
 
-	backups, err := filepath.Glob(filepath.Join(idb.info.DBRoot, BackupDBNamePrefix + "*"))
+	backups, err := filepath.Glob(filepath.Join(idb.info.DBRoot, BackupDBNamePrefix+"*"))
 	if err != nil {
 		log.Printf("Failed to get backup account DB")
 		return err
@@ -317,15 +317,20 @@ func (idb *IScoreDB) rollbackAccountDB(blockHeight uint64) error {
 }
 
 type Context struct {
-	DB              *IScoreDB
+	DB *IScoreDB
 
-	Revision        uint64
-	PRep            []*PRep
-	PRepCandidates  map[common.Address]*PRepCandidate
-	GV              []*GovernanceVariable
+	Revision       uint64
+	PRep           []*PRep
+	PRepCandidates map[common.Address]*PRepCandidate
+	GV             []*GovernanceVariable
 
 	stats    *Statistics
 	Rollback *Rollback
+
+	calculationDebugFlag      bool
+	debugCalculationAddresses []*common.Address
+	debuggingOutputPath       string
+	debugResult               *DebugResult
 }
 
 func (ctx *Context) getGVByBlockHeight(blockHeight uint64) *GovernanceVariable {
@@ -345,8 +350,8 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 	// Update GV
 	for _, gvIISS := range gvList {
 		// there is new GV
-		if  len(ctx.GV) == 0 || ctx.GV[len(ctx.GV)-1].BlockHeight < gvIISS.BlockHeight {
-			gv :=  NewGVFromIISS(gvIISS)
+		if len(ctx.GV) == 0 || ctx.GV[len(ctx.GV)-1].BlockHeight < gvIISS.BlockHeight {
+			gv := NewGVFromIISS(gvIISS)
 
 			// write to memory
 			ctx.GV = append(ctx.GV, gv)
@@ -361,7 +366,7 @@ func (ctx *Context) UpdateGovernanceVariable(gvList []*IISSGovernanceVariable) {
 	gvLen := len(ctx.GV)
 	deleteOld := false
 	deleteIndex := -1
-	for i := gvLen - 1; i >= 0 ; i-- {
+	for i := gvLen - 1; i >= 0; i-- {
 		if ctx.GV[i].BlockHeight <= ctx.DB.getPrevCalcDoneBH() {
 			if deleteOld {
 				// delete from management DB
@@ -396,7 +401,7 @@ func (ctx *Context) UpdatePRep(prepList []*PRep) {
 	prepLen := len(ctx.PRep)
 	deleteOld := false
 	deleteIndex := -1
-	for i := prepLen - 1; i >= 0 ; i-- {
+	for i := prepLen - 1; i >= 0; i-- {
 		if ctx.PRep[i].BlockHeight <= ctx.DB.getPrevCalcDoneBH() {
 			if deleteOld {
 				// delete from management DB
@@ -483,7 +488,7 @@ func (ctx *Context) RollbackManagementDB(blockHeight uint64) {
 	// Rollback Governance Variable
 	bucket, _ := ctx.DB.management.GetBucket(db.PrefixGovernanceVariable)
 	gvLen := len(ctx.GV)
-	for i := gvLen - 1; i >= 0 ; i-- {
+	for i := gvLen - 1; i >= 0; i-- {
 		if ctx.GV[i].BlockHeight > blockHeight {
 			// delete from management DB
 			bucket.Delete(ctx.GV[i].ID())
@@ -495,7 +500,7 @@ func (ctx *Context) RollbackManagementDB(blockHeight uint64) {
 	// Rollback Main/Sub P-Rep list
 	bucket, _ = ctx.DB.management.GetBucket(db.PrefixPRep)
 	prepLen := len(ctx.PRep)
-	for i := prepLen - 1; i >= 0 ; i-- {
+	for i := prepLen - 1; i >= 0; i-- {
 		if ctx.PRep[i].BlockHeight > blockHeight {
 			// delete from management DB
 			bucket.Delete(ctx.PRep[i].ID())
@@ -522,7 +527,7 @@ func (ctx *Context) Print() {
 	log.Printf("============================================================================")
 }
 
-func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Context, error) {
+func NewContext(dbPath string, dbType string, dbName string, dbCount int, debugConfigPath string) (*Context, error) {
 	ctx := new(Context)
 	isDB := new(IScoreDB)
 	ctx.DB = isDB
@@ -560,8 +565,10 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 		return nil, err
 	}
 
+	setCalcDebugConfig(ctx, debugConfigPath)
+
 	// Open calculation result DB
-	isDB.calcResult= db.Open(isDB.info.DBRoot, isDB.info.DBType, "calculation_result")
+	isDB.calcResult = db.Open(isDB.info.DBRoot, isDB.info.DBType, "calculation_result")
 
 	// Open preCommit DB
 	isDB.preCommit = db.Open(isDB.info.DBRoot, isDB.info.DBType, "preCommit")
@@ -582,7 +589,7 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 }
 
 func CloseIScoreDB(isDB *IScoreDB) {
-	log.Printf("Close 1 global DB and %d account DBs\n", len(isDB.Account0) + len(isDB.Account1))
+	log.Printf("Close 1 global DB and %d account DBs\n", len(isDB.Account0)+len(isDB.Account1))
 
 	// close management DB
 	isDB.management.Close()

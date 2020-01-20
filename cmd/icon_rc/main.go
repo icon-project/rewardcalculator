@@ -34,6 +34,8 @@ func main() {
 	flag.IntVar(&cfg.LogMaxBackups, "log-max-backups", 10, "MAX number of old log files")
 	flag.BoolVar(&generate, "gen", false, "Generate configuration file")
 	flag.BoolVar(&optVersion, "version", false, "Print version information")
+	flag.StringVar(&cfg.CalcDebugConf, "calculate-debug-conf", "./calculation_debug.json",
+		"calculation debug config file path")
 	flag.Parse()
 
 	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
@@ -43,7 +45,6 @@ func main() {
 		MaxBackups: cfg.LogMaxBackups,
 		LocalTime:  true,
 	})
-
 
 	if optVersion {
 		fmt.Printf("icon_rc %s, %s\n", version, build)

@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	DebugAddress        = "/tmp/.icon-rc-monitor.sock"
+	DebugAddress = "/tmp/.icon-rc-monitor.sock"
 )
 
 type RcConfig struct {
@@ -23,6 +23,7 @@ type RcConfig struct {
 	LogFile       string `json:"LogFile"`
 	LogMaxSize    int    `json:"LogMaxSize"`
 	LogMaxBackups int    `json:"LogMaxBackups"`
+	CalcDebugConf string `json:"CalcDebugConf"`
 	FileName      string
 }
 
@@ -32,7 +33,6 @@ func (cfg *RcConfig) Print() {
 		log.Printf("Can't covert configuration to json")
 		return
 	}
-
 
 	log.Printf("Running config %s\n", string(b))
 }
@@ -48,7 +48,7 @@ type manager struct {
 	server      ipc.Server
 	conn        ipc.Connection
 
-	ctx        *Context
+	ctx *Context
 }
 
 func (m *manager) Loop() error {
@@ -100,15 +100,15 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 	m.clientMode = cfg.ClientMode
 
 	// Initialize DB and load context values
-	m.ctx, err = NewContext(cfg.DBDir, string(db.GoLevelDBBackend), "IScore", cfg.DBCount)
+	m.ctx, err = NewContext(cfg.DBDir, string(db.GoLevelDBBackend), "IScore", cfg.DBCount, cfg.CalcDebugConf)
 	if err != nil {
 		return nil, err
 	}
 
 	m.ctx.Print()
 
-    // find IISS data and reload
-    go reloadIISSData(m.ctx, cfg.IISSDataDir)
+	// find IISS data and reload
+	go reloadIISSData(m.ctx, cfg.IISSDataDir)
 
 	// Initialize ipc channel
 	if m.clientMode {
@@ -157,7 +157,7 @@ func reloadIISSData(ctx *Context, dir string) {
 		req.BlockHeight = 0
 
 		log.Printf("Reload IISS Data. %s", req.Path)
-		err, _, _, _:= DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+		err, _, _, _ := DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
 
 		if err != nil {
 			log.Printf("Failed to reload IISS Data. %s", req.Path)

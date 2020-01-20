@@ -22,7 +22,8 @@ func initTest(dbCount int) *Context{
 		panic(err)
 	}
 
-	ctx, _ := NewContext(testDir, string(db.GoLevelDBBackend), "test", dbCount)
+	ctx, _ := NewContext(testDir, string(db.GoLevelDBBackend), "test", dbCount,
+		"debugConfigPath")
 
 	return ctx
 }
