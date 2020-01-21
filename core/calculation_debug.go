@@ -13,6 +13,7 @@ import (
 type DebugConfig struct {
 	Flag      bool     `json:"enable"`
 	Addresses []string `json:"addresses"`
+	Output    string   `json:"output"`
 }
 
 type DebugResult struct {
@@ -205,6 +206,7 @@ func setCalcDebugConfig(ctx *Context, debugConfigPath string) {
 		addresses = append(addresses, common.NewAddressFromString(address))
 	}
 	ctx.debugCalculationAddresses = addresses
+	ctx.debuggingOutputPath = cfg.Output
 }
 
 func setCalcDebugInfo(ctx *Context) {
@@ -361,7 +363,7 @@ func setDebuggingAccountInfo(ctx *Context, ia IScoreAccount, blockHeight uint64)
 }
 
 func writeResultToFile(ctx *Context, blockHeight uint64) {
-	filePath := fmt.Sprintf("%s_%d", ctx.debuggingOutputPath, blockHeight)
+	filePath := fmt.Sprintf("%s_%d.json", ctx.debuggingOutputPath, blockHeight)
 	data, err := json.Marshal(ctx.debugResult)
 	if err != nil {
 		log.Printf("Error while marshaling debugResult")

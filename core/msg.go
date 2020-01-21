@@ -15,27 +15,31 @@ import (
 )
 
 const (
-	IPCVersion   uint64 = 2
+	IPCVersion uint64 = 2
 
-	MsgVersion     uint = 0
-	MsgClaim            = 1
-	MsgQuery            = 2
-	MsgCalculate        = 3
-	MsgCommitBlock      = 4
-	MsgCommitClaim      = 5
-	MsgQueryCalculateStatus = 6
-	MsgQueryCalculateResult = 7
-	MsgRollBack         = 8
-	MsgINIT             = 9
+	MsgVersion              uint = 0
+	MsgClaim                     = 1
+	MsgQuery                     = 2
+	MsgCalculate                 = 3
+	MsgCommitBlock               = 4
+	MsgCommitClaim               = 5
+	MsgQueryCalculateStatus      = 6
+	MsgQueryCalculateResult      = 7
+	MsgRollBack                  = 8
+	MsgINIT                      = 9
+	MsgCalcDebugFlag             = 10
+	MsgCalcDebugAddress          = 11
+	MsgCalcDebugAddresses        = 12
+	MsgCalcDebugOutput           = 13
 
-	MsgNotify           = 100
-	MsgReady            = MsgNotify + 0
-	MsgCalculateDone    = MsgNotify + 1
+	MsgNotify        = 100
+	MsgReady         = MsgNotify + 0
+	MsgCalculateDone = MsgNotify + 1
 
-	MsgDebug            = 1000
+	MsgDebug = 1000
 )
 
-func MsgToString(msg uint) string{
+func MsgToString(msg uint) string {
 	switch msg {
 	case MsgVersion:
 		return "VERSION"
@@ -83,7 +87,7 @@ type msgHandler struct {
 
 func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 	handler := &msgHandler{
-		mgr: m,
+		mgr:  m,
 		conn: c,
 	}
 
@@ -93,6 +97,10 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 	c.SetHandler(MsgQueryCalculateResult, handler)
 	if m.monitorMode == true {
 		c.SetHandler(MsgDebug, handler)
+		c.SetHandler(MsgCalcDebugOutput, handler)
+		c.SetHandler(MsgCalcDebugFlag, handler)
+		c.SetHandler(MsgCalcDebugAddress, handler)
+		c.SetHandler(MsgCalcDebugAddresses, handler)
 	} else {
 		c.SetHandler(MsgClaim, handler)
 		c.SetHandler(MsgCalculate, handler)
@@ -133,6 +141,14 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 		go mh.queryCalculateStatus(c, id, data)
 	case MsgQueryCalculateResult:
 		go mh.queryCalculateResult(c, id, data)
+	case MsgCalcDebugFlag:
+		go mh.handleCalcDebugFlag(c, id, data)
+	case MsgCalcDebugAddress:
+		go mh.handleCalcDebugAddress(c, id, data)
+	case MsgCalcDebugAddresses:
+		go mh.handleCalcDebugAddresses(c, id)
+	case MsgCalcDebugOutput:
+		go mh.handleCalcResultOutput(c, id, data)
 	case MsgRollBack:
 		// do not process other messages while process Rollback message
 		return mh.rollback(c, id, data)
@@ -145,9 +161,9 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 }
 
 type ResponseVersion struct {
-	Version uint64
+	Version     uint64
 	BlockHeight uint64
-	BlockHash [BlockHashSize]byte
+	BlockHash   [BlockHashSize]byte
 }
 
 func (rv *ResponseVersion) String() string {
@@ -162,9 +178,9 @@ func (mh *msgHandler) version(c ipc.Connection, id uint32) error {
 
 func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64, blockHash [BlockHashSize]byte) error {
 	resp := ResponseVersion{
-		Version: IPCVersion,
+		Version:     IPCVersion,
 		BlockHeight: blockHeight,
-		BlockHash: blockHash,
+		BlockHash:   blockHash,
 	}
 
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(msg), id, resp.String())
@@ -172,8 +188,8 @@ func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64, bloc
 }
 
 type ResponseQuery struct {
-	Address common.Address
-	IScore  common.HexInt
+	Address     common.Address
+	IScore      common.HexInt
 	BlockHeight uint64
 }
 
@@ -238,7 +254,7 @@ func DoQuery(ctx *Context, addr common.Address) *ResponseQuery {
 }
 
 type ResponseInit struct {
-	Success bool
+	Success     bool
 	BlockHeight uint64
 }
 
@@ -266,7 +282,7 @@ func (mh *msgHandler) init(c ipc.Connection, id uint32, data []byte) error {
 
 func DoInit(ctx *Context, blockHeight uint64) error {
 	currentBlockHeight := ctx.DB.getCurrentBlockInfo().BlockHeight
-	if blockHeight > currentBlockHeight + 1 {
+	if blockHeight > currentBlockHeight+1 {
 		return fmt.Errorf("too high block height %d > %d", blockHeight, currentBlockHeight+1)
 	}
 	return initPreCommit(ctx.DB.getPreCommitDB(), blockHeight)
