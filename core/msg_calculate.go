@@ -910,7 +910,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep, blockHeig
 			//log.Printf("[P-Rep reward] delegation: %s, reward: %s,%d\n",
 			//	dgInfo.String(), rewards[i].IScore.String(), rewards[i].blockHeight)
 			if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-				WriteBeta2Info(ctx, dgInfo, *prep, e, rewards[i].iScore, gv.PRepReward)
+				WriteBeta2Info(ctx, dgInfo, *prep, s, e, rewards[i].iScore, gv.PRepReward)
 			}
 		}
 	}
