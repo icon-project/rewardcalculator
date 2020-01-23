@@ -567,7 +567,7 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int, debugC
 		return nil, err
 	}
 
-	setCalcDebugConfig(ctx, debugConfigPath)
+	initCalcDebugConfig(ctx, debugConfigPath)
 
 	// Open calculation result DB
 	isDB.calcResult = db.Open(isDB.info.DBRoot, isDB.info.DBType, "calculation_result")

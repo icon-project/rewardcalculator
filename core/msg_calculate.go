@@ -131,7 +131,7 @@ func calculateDelegationReward(ctx *Context, delegationInfo *DelegateData, start
 		// update total
 		total.Add(&total.Int, &reward.Int)
 		if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-			WriteBeta3Info(ctx, rewardAddress, gv.RewardRep, delegationInfo, *period, e, reward)
+			WriteBeta3Info(ctx, rewardAddress, gv.RewardRep.Uint64(), delegationInfo, period.Uint64(), e)
 		}
 	}
 
@@ -511,7 +511,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 
 	ctx.Print()
 
-	setCalcDebugInfo(ctx)
+	initCalcDebugInfo(ctx, blockHeight)
 
 	//
 	// Calculate I-Score @ Account DB
@@ -595,7 +595,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 
 	if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
 		log.Printf("CalculationResult : %s", ctx.debugResult.String())
-		writeResultToFile(ctx, blockHeight)
+		writeResultToFile(ctx)
 	}
 
 	// set blockHeight
@@ -753,7 +753,7 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 			bpMap[v] = validator
 		}
 		if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-			WriteBeta1Info(ctx, gv.BlockProduceReward, bp, bpMap)
+			WriteBeta1Info(ctx, gv.BlockProduceReward.Uint64(), bp)
 		}
 	}
 	iter.Release()
@@ -910,7 +910,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep, blockHeig
 			//log.Printf("[P-Rep reward] delegation: %s, reward: %s,%d\n",
 			//	dgInfo.String(), rewards[i].IScore.String(), rewards[i].blockHeight)
 			if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-				WriteBeta2Info(ctx, dgInfo, *prep, s, e, rewards[i].iScore, gv.PRepReward)
+				WriteBeta2Info(ctx, dgInfo, *prep, s, e, gv.PRepReward.Uint64())
 			}
 		}
 	}

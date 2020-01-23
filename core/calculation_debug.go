@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"strconv"
 )
 
 type DebugConfig struct {
@@ -17,9 +16,10 @@ type DebugConfig struct {
 }
 
 type DebugResult struct {
-	Preps   []*PRepCandidate      `json:"PReps"`
-	GV      []*GovernanceVariable `json:"GV"`
-	Results []*CalcResult         `json:"calculation"`
+	BlockHeight uint64                `json:"CalculationBlock"`
+	Preps       []*PRepCandidate      `json:"PReps"`
+	GV          []*GovernanceVariable `json:"GV"`
+	Results     []*CalcResult         `json:"calculation"`
 }
 
 func (dr DebugResult) String() string {
@@ -48,15 +48,16 @@ func (cr CalcResult) String() string {
 }
 
 type Reward struct {
-	BlockHeight uint64        `json:"blockHeight"`
-	IScore      common.HexInt `json:"IScore"`
-	Beta1       *Beta1        `json:"beta1"`
-	Beta2       *Beta2        `json:"beta2"`
-	Beta3       *Beta3        `json:"beta3"`
+	BlockHeight   uint64        `json:"blockHeight"`
+	InitialIScore common.HexInt `json:"InitialIScore"`
+	TotalIScore   common.HexInt `json:"TotalIScore"`
+	Beta1         *Beta1        `json:"beta1"`
+	Beta2         *Beta2        `json:"beta2"`
+	Beta3         *Beta3        `json:"beta3"`
 }
 
 func NewReward(blockHeight uint64) *Reward {
-	return &Reward{blockHeight, *common.NewHexInt(0), NewBeta1(), NewBeta2(), NewBeta3()}
+	return &Reward{blockHeight, *common.NewHexInt(0), *common.NewHexInt(0), NewBeta1(), NewBeta2(), NewBeta3()}
 }
 
 func (r Reward) String() string {
@@ -68,13 +69,13 @@ func (r Reward) String() string {
 }
 
 type Beta1 struct {
-	IScore    common.HexInt `json:"IScore"`
-	*Generate `json:"generate"`
-	Validate  map[string]*ValidateInfo `json:"validate"`
+	Beta1IScore common.HexInt `json:"Beta1IScore"`
+	*Generate   `json:"generate"`
+	Validate    []*ValidateInfo `json:"validate"`
 }
 
 func NewBeta1() *Beta1 {
-	return &Beta1{*common.NewHexInt(0), NewGenerate(), make(map[string]*ValidateInfo)}
+	return &Beta1{*common.NewHexInt(0), NewGenerate(), make([]*ValidateInfo, 0)}
 }
 
 func (b1 *Beta1) String() string {
@@ -86,13 +87,13 @@ func (b1 *Beta1) String() string {
 }
 
 type Generate struct {
-	BlockCount uint64        `json:"blockCount"`
-	Formula    string        `json:"formula"`
-	IScore     common.HexInt `json:"IScore"`
+	BlockCount uint64 `json:"blockCount"`
+	Formula    string `json:"formula"`
+	IScore     uint64 `json:"IScore"`
 }
 
 func NewGenerate() *Generate {
-	return &Generate{0, "", *common.NewHexInt(0)}
+	return &Generate{0, "", 0}
 }
 
 func (g Generate) String() string {
@@ -104,9 +105,10 @@ func (g Generate) String() string {
 }
 
 type ValidateInfo struct {
-	BlockCount uint64        `json:"blockCount"`
-	Formula    string        `json:"formula"`
-	IScore     common.HexInt `json:"IScore"`
+	ValidatorCount uint64 `json:"validatorCount"`
+	BlockCount     uint64 `json:"blockCount"`
+	Formula        string `json:"formula"`
+	IScore         uint64 `json:"IScore"`
 }
 
 func (v ValidateInfo) String() string {
@@ -118,7 +120,7 @@ func (v ValidateInfo) String() string {
 }
 
 type Beta2 struct {
-	IScore        common.HexInt    `json:"IScore"`
+	Beta2IScore   common.HexInt    `json:"Beta2IScore"`
 	DelegatedInfo []*DelegatedInfo `json:"delegated"`
 }
 
@@ -135,11 +137,11 @@ func (b2 Beta2) String() string {
 }
 
 type DelegatedInfo struct {
-	BlockHeight    uint64        `json:"blockHeight"`
-	Delegated      common.HexInt `json:"amount"`
-	TotalDelegated common.HexInt `json:"totalDelegated"`
-	Formula        string        `json:"formula"`
-	IScore         common.HexInt `json:"IScore"`
+	BlockHeight    uint64 `json:"blockHeight"`
+	Delegated      uint64 `json:"amount"`
+	TotalDelegated uint64 `json:"totalDelegated"`
+	Formula        string `json:"formula"`
+	IScore         uint64 `json:"IScore"`
 }
 
 func (d DelegatedInfo) String() string {
@@ -151,7 +153,7 @@ func (d DelegatedInfo) String() string {
 }
 
 type Beta3 struct {
-	IScore         common.HexInt     `json:"IScore"`
+	Beta3IScore    common.HexInt     `json:"Beta3IScore"`
 	DelegationInfo []*DelegationInfo `json:"delegate"`
 }
 
@@ -172,7 +174,7 @@ type DelegationInfo struct {
 	Address     common.Address `json:"address"`
 	Amount      uint64         `json:"amount"`
 	Formula     string         `json:"formula"`
-	IScore      common.HexInt  `json:"IScore"`
+	IScore      uint64         `json:"IScore"`
 }
 
 func (d DelegationInfo) String() string {
@@ -183,7 +185,7 @@ func (d DelegationInfo) String() string {
 	return string(b)
 }
 
-func setCalcDebugConfig(ctx *Context, debugConfigPath string) {
+func initCalcDebugConfig(ctx *Context, debugConfigPath string) {
 	debugConfig, err := os.Open(debugConfigPath)
 	if err != nil {
 		log.Printf("Error while opening calculation debug config file: %s", debugConfigPath)
@@ -209,8 +211,9 @@ func setCalcDebugConfig(ctx *Context, debugConfigPath string) {
 	ctx.debuggingOutputPath = cfg.Output
 }
 
-func setCalcDebugInfo(ctx *Context) {
+func initCalcDebugInfo(ctx *Context, blockHeight uint64) {
 	ctx.debugResult = new(DebugResult)
+	ctx.debugResult.BlockHeight = blockHeight
 
 	for _, gv := range ctx.GV {
 		ctx.debugResult.GV = append(ctx.debugResult.GV, gv)
@@ -221,101 +224,117 @@ func setCalcDebugInfo(ctx *Context) {
 	}
 
 	for i := 0; i < len(ctx.debugCalculationAddresses); i++ {
-		addCalcResult(ctx, *ctx.debugCalculationAddresses[i])
+		initCalcResult(ctx, *ctx.debugCalculationAddresses[i])
 	}
 }
 
-func WriteBeta1Info(ctx *Context, produceReward common.HexInt, bp IISSBlockProduceInfo,
-	bpMap map[common.Address]common.HexInt) {
+func setDebuggingAccountInfo(ctx *Context, ia IScoreAccount, blockHeight uint64) {
 	for _, address := range ctx.debugCalculationAddresses {
-		writeBeta1Info(ctx, address, produceReward, bp, bpMap)
+		if ia.Address.Equal(address) {
+			reward := getReward(ctx, ia.Address, blockHeight)
+			if reward == nil {
+				initCalcResult(ctx, ia.Address)
+				reward = getReward(ctx, ia.Address, blockHeight)
+			}
+			reward.InitialIScore = ia.IScore
+		}
 	}
 }
 
-func writeBeta1Info(ctx *Context, address *common.Address, produceReward common.HexInt,
-	bp IISSBlockProduceInfo, bpMap map[common.Address]common.HexInt) {
+func WriteBeta1Info(ctx *Context, produceReward uint64, bp IISSBlockProduceInfo) {
+	for _, address := range ctx.debugCalculationAddresses {
+		writeBeta1Info(ctx, address, produceReward, bp)
+	}
+}
+
+func writeBeta1Info(ctx *Context, address *common.Address, produceReward uint64, bp IISSBlockProduceInfo) {
 	if bp.Generator.Equal(address) {
 		reward := getReward(ctx, *address, bp.BlockHeight)
-		if reward == nil {
-			addCalcResult(ctx, *address)
-			reward = getReward(ctx, *address, bp.BlockHeight)
-		}
-		if reward == nil {
-			return
-		}
 		reward.Beta1.Generate.BlockCount += 1
-		reward.Beta1.Generate.IScore = bpMap[*address]
-		reward.Beta1.Generate.Formula = fmt.Sprintf("%d * %s", reward.Beta1.BlockCount, produceReward.String())
+		reward.Beta1.Generate.IScore += produceReward
+		reward.Beta1.Generate.Formula = fmt.Sprintf("%d * %s",
+			reward.Beta1.BlockCount, common.NewHexIntFromUint64(produceReward).String())
+		iScoreInHex := *common.NewHexIntFromUint64(produceReward)
+		reward.Beta1.Beta1IScore.Add(&reward.Beta1.Beta1IScore.Int, &iScoreInHex.Int)
+		reward.TotalIScore.Add(&reward.TotalIScore.Int, &iScoreInHex.Int)
+		return
 	}
 
 	for _, addr := range bp.Validator {
 		if addr.Equal(address) {
-			rewards := getReward(ctx, *address, bp.BlockHeight)
-
-			validatorCount := strconv.FormatUint(uint64(len(bp.Validator)), 64)
-			validateInfo := rewards.Beta1.Validate[validatorCount]
+			reward := getReward(ctx, *address, bp.BlockHeight)
+			validatorCount := len(bp.Validator)
+			validateInfo := func(validate []*ValidateInfo, validatorCount uint64) *ValidateInfo {
+				for _, validate := range validate {
+					if validate.ValidatorCount == validatorCount {
+						return validate
+					}
+				}
+				validateInfo := &ValidateInfo{ValidatorCount: validatorCount}
+				reward.Beta1.Validate = append(validate, validateInfo)
+				return validateInfo
+			}(reward.Beta1.Validate, uint64(validatorCount))
 			validateInfo.BlockCount += 1
-			validateInfo.IScore = bpMap[*address]
-			validateInfo.Formula = fmt.Sprintf("%d * %d / %s",
-				validateInfo.BlockCount, produceReward.Uint64(), validatorCount)
-
-			rewards.Beta1.Validate[validatorCount] = validateInfo
+			iScore := produceReward / uint64(len(bp.Validator))
+			validateInfo.IScore += iScore
+			validateInfo.Formula = fmt.Sprintf("%d * %s / %d",
+				validateInfo.BlockCount, common.NewHexIntFromUint64(produceReward).String(), validatorCount)
+			iScoreInHex := *common.NewHexIntFromUint64(iScore)
+			reward.Beta1.Beta1IScore.Add(&reward.Beta1.Beta1IScore.Int, &iScoreInHex.Int)
+			reward.TotalIScore.Add(&reward.TotalIScore.Int, &iScoreInHex.Int)
+			return
 		}
 	}
 }
 
 func WriteBeta2Info(ctx *Context, delegationInfo PRepDelegationInfo, prep PRep,
-	startBlock uint64, endBlock uint64, iScore common.HexInt, prepReward common.HexInt) {
+	startBlock uint64, endBlock uint64, prepReward uint64) {
 	for _, address := range ctx.debugCalculationAddresses {
-		writeBeta2Info(ctx, address, delegationInfo, prep, startBlock, endBlock, iScore, prepReward)
+		writeBeta2Info(ctx, address, delegationInfo, prep, startBlock, endBlock, prepReward)
 	}
 }
 
 func writeBeta2Info(ctx *Context, address *common.Address, delegationInfo PRepDelegationInfo, prep PRep,
-	startBlock uint64, endBlock uint64, iScore common.HexInt, prepReward common.HexInt) {
+	startBlock uint64, endBlock uint64, prepReward uint64) {
 	if delegationInfo.Address.Equal(address) {
 		reward := getReward(ctx, *address, endBlock)
-		if reward == nil {
-			addCalcResult(ctx, *address)
-			reward = getReward(ctx, *address, endBlock)
-		}
-		if reward == nil {
-			return
-		}
-		delegatedInfo := &DelegatedInfo{BlockHeight: endBlock, TotalDelegated: prep.TotalDelegation,
-			Delegated: delegationInfo.DelegatedAmount, IScore: iScore}
 		period := endBlock - startBlock
-		delegatedInfo.Formula = fmt.Sprintf("%d * %d * %d / %d", prepReward.Uint64(),
-			delegationInfo.DelegatedAmount.Uint64(), period, prep.TotalDelegation.Uint64())
+		totalDelegation := prep.TotalDelegation.Uint64()
+		delegatedAmount := delegationInfo.DelegatedAmount.Uint64()
+		iScore := prepReward * delegatedAmount * period / totalDelegation
+		delegatedInfo := &DelegatedInfo{BlockHeight: endBlock, TotalDelegated: totalDelegation,
+			Delegated: delegatedAmount, IScore: iScore}
+		delegatedInfo.Formula = fmt.Sprintf("%s * %d * %d / %d", common.NewHexIntFromUint64(prepReward).String(),
+			delegationInfo.DelegatedAmount.Uint64(), period, totalDelegation)
 
 		reward.Beta2.DelegatedInfo = append(reward.Beta2.DelegatedInfo, delegatedInfo)
+		iScoreInHex := *common.NewHexIntFromUint64(iScore)
+		reward.Beta2.Beta2IScore.Add(&reward.Beta2.Beta2IScore.Int, &iScoreInHex.Int)
+		reward.TotalIScore.Add(&reward.TotalIScore.Int, &iScoreInHex.Int)
 	}
 }
 
-func WriteBeta3Info(ctx *Context, rewardAddress common.Address, rewardRep common.HexInt,
-	delegationInfo *DelegateData, period common.HexInt, endBlock uint64, iScore common.HexInt) {
+func WriteBeta3Info(ctx *Context, rewardAddress common.Address, rewardRep uint64,
+	delegationInfo *DelegateData, period uint64, endBlock uint64) {
 
 	for _, address := range ctx.debugCalculationAddresses {
-		writeBeta3Info(ctx, address, rewardAddress, rewardRep, delegationInfo, period, endBlock, iScore)
+		writeBeta3Info(ctx, address, rewardAddress, rewardRep, delegationInfo, period, endBlock)
 	}
 }
 
-func writeBeta3Info(ctx *Context, debugAddress *common.Address, rewardAddress common.Address, rewardRep common.HexInt,
-	delegationInfo *DelegateData, period common.HexInt, endBlock uint64, iScore common.HexInt) {
-
+func writeBeta3Info(ctx *Context, debugAddress *common.Address, rewardAddress common.Address, rewardRep uint64,
+	delegationInfo *DelegateData, period uint64, endBlock uint64) {
 	if rewardAddress.Equal(debugAddress) {
 		reward := getReward(ctx, *debugAddress, endBlock)
-		if reward == nil {
-			addCalcResult(ctx, *debugAddress)
-			reward = getReward(ctx, *debugAddress, endBlock)
-		}
-		if reward == nil {
-			return
-		}
-		dgInfo := &DelegationInfo{BlockHeight: endBlock, Address: delegationInfo.Address, Amount: delegationInfo.Delegate.Uint64(), IScore: iScore}
-		dgInfo.Formula = fmt.Sprintf("%d * %d * %d / %d", rewardRep.Uint64(), period.Uint64(),
+		iScore := rewardRep * period * delegationInfo.Delegate.Uint64() / rewardDivider
+		dgInfo := &DelegationInfo{BlockHeight: endBlock, Address: delegationInfo.Address,
+			Amount: delegationInfo.Delegate.Uint64(), IScore: iScore}
+		dgInfo.Formula = fmt.Sprintf("%s * %d * %d / %d", common.NewHexIntFromUint64(rewardRep).String(), period,
 			dgInfo.Amount, rewardDivider)
 		reward.Beta3.DelegationInfo = append(reward.Beta3.DelegationInfo, dgInfo)
+		iScoreInHex := *common.NewHexIntFromUint64(iScore)
+		reward.Beta3.Beta3IScore.Add(&reward.Beta3.Beta3IScore.Int, &common.NewHexIntFromUint64(iScore).Int)
+		reward.TotalIScore.Add(&reward.TotalIScore.Int, &iScoreInHex.Int)
 	}
 }
 
@@ -329,19 +348,23 @@ func getCalcResult(ctx *Context, address common.Address) *CalcResult {
 }
 
 func getReward(ctx *Context, rewardAddress common.Address, blockHeight uint64) *Reward {
-	if calcResult := getCalcResult(ctx, rewardAddress); calcResult != nil {
-		rewardLength := len(calcResult.Rewards)
-		for i := rewardLength - 1; i >= 0; i-- {
-			reward := calcResult.Rewards[i]
-			if reward.BlockHeight < blockHeight {
-				return reward
-			}
+	var r *Reward
+	calcResult := getCalcResult(ctx, rewardAddress)
+	if calcResult == nil {
+		initCalcResult(ctx, rewardAddress)
+		calcResult = getCalcResult(ctx, rewardAddress)
+	}
+	rewardLength := len(calcResult.Rewards)
+	for i := rewardLength - 1; i >= 0; i-- {
+		reward := calcResult.Rewards[i]
+		if reward.BlockHeight < blockHeight {
+			r = reward
 		}
 	}
-	return nil
+	return r
 }
 
-func addCalcResult(ctx *Context, address common.Address) {
+func initCalcResult(ctx *Context, address common.Address) {
 	result := NewCalcResult(&address)
 	rewards := make([]*Reward, 0)
 	for _, gv := range ctx.GV {
@@ -352,19 +375,9 @@ func addCalcResult(ctx *Context, address common.Address) {
 	ctx.debugResult.Results = append(ctx.debugResult.Results, result)
 }
 
-func setDebuggingAccountInfo(ctx *Context, ia IScoreAccount, blockHeight uint64) {
-	for _, address := range ctx.debugCalculationAddresses {
-		if ia.Address.Equal(address) {
-			if reward := getReward(ctx, ia.Address, blockHeight); reward != nil {
-				reward.IScore = ia.IScore
-			}
-		}
-	}
-}
-
-func writeResultToFile(ctx *Context, blockHeight uint64) {
-	filePath := fmt.Sprintf("%s_%d.json", ctx.debuggingOutputPath, blockHeight)
-	data, err := json.Marshal(ctx.debugResult)
+func writeResultToFile(ctx *Context) {
+	filePath := fmt.Sprintf("%s", ctx.debuggingOutputPath)
+	data, err := json.MarshalIndent(ctx.debugResult, "", "\t")
 	if err != nil {
 		log.Printf("Error while marshaling debugResult")
 		return
@@ -385,7 +398,6 @@ func addDebuggingAddress(ctx *Context, address common.Address) {
 	if !found {
 		ctx.debugCalculationAddresses = append(ctx.debugCalculationAddresses, &address)
 	}
-	addCalcResult(ctx, address)
 }
 
 func deleteDebuggingAddress(ctx *Context, address common.Address) {
