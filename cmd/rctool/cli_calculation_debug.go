@@ -33,6 +33,8 @@ func (cli *CLI) calculateDebug(input []string) error {
 			goto INVALID
 		}
 		err = cli.changeCalcDebugResultPath(input[1])
+	case "list":
+		err = cli.printCalcDebuggingAddresses()
 	default:
 		goto INVALID
 	}
@@ -55,24 +57,23 @@ func printUsage() {
 func (cli *CLI) enableCalcDebug() error {
 	var req core.RequestCalcDebugFlag
 	req.Cmd = core.CalcDebugOn
-	var resp core.ResponseCalcDebugFlag
 
-	err := cli.conn.SendAndReceive(core.MsgCalcDebugFlag, cli.id, req, &resp)
-	if err == nil {
-		fmt.Printf("calculate_dbug enable command got response: \n%s\n", Display(resp))
-	}
-
-	return err
+	return cli.conn.Send(core.MsgCalcDebugFlag, cli.id, req)
 }
 
 func (cli *CLI) disableCalcDebug() error {
 	var req core.RequestCalcDebugFlag
 	req.Cmd = core.CalcDebugOff
-	var resp core.ResponseCalcDebugFlag
 
-	err := cli.conn.SendAndReceive(core.MsgCalcDebugFlag, cli.id, req, &resp)
+	return cli.conn.Send(core.MsgCalcDebugFlag, cli.id, req)
+}
+
+func (cli *CLI) printCalcDebuggingAddresses() error {
+	var resp core.ResponseCalcDebugAddressList
+
+	err := cli.conn.SendAndReceive(core.MsgCalcDebugAddresses, cli.id, nil, &resp)
 	if err == nil {
-		fmt.Printf("calculate_dbug disable command got response: \n%s\n", Display(resp))
+		fmt.Printf("Calculation debugging Addresses : \n%s\n", Display(resp))
 	}
 
 	return err
@@ -82,39 +83,21 @@ func (cli *CLI) addCalcDebuggingAddress(address string) error {
 	var req core.RequestCalcDebugAddress
 	req.Cmd = core.AddDebuggingAddress
 	req.Address = *common.NewAddressFromString(address)
-	var resp core.ResponseCalcDebugAddress
 
-	err := cli.conn.SendAndReceive(core.MsgCalcDebugAddress, cli.id, req, &resp)
-	if err == nil {
-		fmt.Printf("calculate_dbug add command got response: \n%s\n", Display(resp))
-	}
-
-	return err
+	return cli.conn.Send(core.MsgCalcDebugAddress, cli.id, req)
 }
 
 func (cli *CLI) deleteCalcDebuggingAddress(address string) error {
 	var req core.RequestCalcDebugAddress
 	req.Cmd = core.DeleteDebuggingAddress
 	req.Address = *common.NewAddressFromString(address)
-	var resp core.ResponseCalcDebugAddress
 
-	err := cli.conn.SendAndReceive(core.MsgCalcDebugAddress, cli.id, req, &resp)
-	if err == nil {
-		fmt.Printf("calculate_dbug Delete command got response: \n%s\n", Display(resp))
-	}
-
-	return err
+	return cli.conn.Send(core.MsgCalcDebugAddress, cli.id, req)
 }
 
 func (cli *CLI) changeCalcDebugResultPath(path string) error {
 	var req core.RequestCalcResultOutput
 	req.Path = path
-	var resp core.ResponseCalcResultOutput
 
-	err := cli.conn.SendAndReceive(core.MsgCalcDebugOutput, cli.id, req, &resp)
-	if err == nil {
-		fmt.Printf("calculate_dbug disable command got response: \n%s\n", Display(resp))
-	}
-
-	return err
+	return cli.conn.Send(core.MsgCalcDebugOutput, cli.id, req)
 }

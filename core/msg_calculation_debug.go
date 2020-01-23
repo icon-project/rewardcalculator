@@ -16,11 +16,6 @@ const (
 	CalcDebugOff uint64 = 1
 )
 
-type ResponseCalcDebugFlag struct {
-	cmd  uint64
-	flag bool
-}
-
 func (mh *msgHandler) handleCalcDebugFlag(c ipc.Connection, id uint32, data []byte) error {
 	var req RequestCalcDebugFlag
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
@@ -36,11 +31,8 @@ func (mh *msgHandler) handleCalcDebugFlag(c ipc.Connection, id uint32, data []by
 	default:
 		return fmt.Errorf("invalid command")
 	}
-	var resp ResponseCalcDebugFlag
-	resp.cmd = req.Cmd
-	resp.flag = ctx.calculationDebugFlag
 
-	return c.Send(MsgCalcDebugFlag, id, &resp)
+	return c.Send(MsgCalcDebugFlag, id, req)
 }
 
 type RequestCalcDebugAddress struct {
@@ -53,11 +45,6 @@ const (
 	DeleteDebuggingAddress uint64 = 1
 )
 
-type ResponseCalcDebugAddress struct {
-	cmd       uint64
-	addresses []*common.Address
-}
-
 func (mh *msgHandler) handleCalcDebugAddress(c ipc.Connection, id uint32, data []byte) error {
 	var req RequestCalcDebugAddress
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
@@ -68,21 +55,20 @@ func (mh *msgHandler) handleCalcDebugAddress(c ipc.Connection, id uint32, data [
 		addDebuggingAddress(ctx, req.Address)
 	} else if req.Cmd == DeleteDebuggingAddress {
 		deleteDebuggingAddress(ctx, req.Address)
+	} else {
+		return fmt.Errorf("invalid command")
 	}
-	var resp ResponseCalcDebugAddress
-	resp.cmd = req.Cmd
-	resp.addresses = ctx.debugCalculationAddresses
-	return c.Send(MsgCalcDebugAddress, id, &resp)
+	return c.Send(MsgCalcDebugAddress, id, req)
 }
 
 type ResponseCalcDebugAddressList struct {
-	addresses []*common.Address
+	Addresses []*common.Address
 }
 
 func (mh *msgHandler) handleCalcDebugAddresses(c ipc.Connection, id uint32) error {
 	var resp ResponseCalcDebugAddressList
 	ctx := mh.mgr.ctx
-	resp.addresses = ctx.debugCalculationAddresses
+	resp.Addresses = ctx.debugCalculationAddresses
 	return c.Send(MsgCalcDebugAddresses, id, &resp)
 }
 
@@ -90,18 +76,12 @@ type RequestCalcResultOutput struct {
 	Path string
 }
 
-type ResponseCalcResultOutput struct {
-	path string
-}
-
 func (mh *msgHandler) handleCalcResultOutput(c ipc.Connection, id uint32, data []byte) error {
 	var req RequestCalcResultOutput
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
-	var resp ResponseCalcResultOutput
 	ctx := mh.mgr.ctx
 	ctx.debuggingOutputPath = req.Path
-	resp.path = ctx.debuggingOutputPath
-	return c.Send(MsgCalcDebugOutput, id, &resp)
+	return c.Send(MsgCalcDebugOutput, id, req)
 }

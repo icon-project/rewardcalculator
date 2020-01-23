@@ -407,6 +407,9 @@ func deleteDebuggingAddress(ctx *Context, address common.Address) {
 				ctx.debugCalculationAddresses[i+1:]...)
 		}
 	}
+	if ctx.debugResult == nil || ctx.debugResult.Results == nil {
+		return
+	}
 
 	for i, calcResult := range ctx.debugResult.Results {
 		if calcResult.Address.Equal(&address) {
