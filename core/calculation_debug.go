@@ -237,6 +237,7 @@ func setDebuggingAccountInfo(ctx *Context, ia IScoreAccount, blockHeight uint64)
 				reward = getReward(ctx, ia.Address, blockHeight)
 			}
 			reward.InitialIScore = ia.IScore
+			reward.TotalIScore = ia.IScore
 		}
 	}
 }
@@ -377,12 +378,15 @@ func initCalcResult(ctx *Context, address common.Address) {
 
 func writeResultToFile(ctx *Context) {
 	filePath := fmt.Sprintf("%s", ctx.debuggingOutputPath)
-	data, err := json.MarshalIndent(ctx.debugResult, "", "\t")
+	data, err := json.MarshalIndent(ctx.debugResult, "", "  ")
+	data = append(data, "\n"...)
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("Error while marshaling debugResult")
 		return
 	}
-	if e := ioutil.WriteFile(filePath, data, os.ModePerm); e != nil {
+	defer f.Close()
+	if _, e := f.Write(data); e != nil {
 		log.Printf("Error while write calculation debug result")
 		return
 	}
@@ -416,4 +420,8 @@ func deleteDebuggingAddress(ctx *Context, address common.Address) {
 			ctx.debugResult.Results = append(ctx.debugResult.Results[:i], ctx.debugResult.Results[i+1:]...)
 		}
 	}
+}
+
+func resetCalcResults(ctx *Context) {
+	ctx.debugResult.Results = ctx.debugResult.Results[:0]
 }

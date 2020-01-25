@@ -217,14 +217,6 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 		}
 		ia.Address = *common.NewAddress(key)
 
-		if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-			//여기서 확인
-			//length == len 인지도 확인
-			if len(ctx.debugCalculationAddresses) != len(ctx.debugResult.Results) {
-				setDebuggingAccountInfo(ctx, *ia, blockHeight)
-			}
-		}
-
 		// update Statistics account
 		stats.Increase("Accounts", uint64(1))
 
@@ -232,6 +224,12 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 		ok, reward := calculateIScore(ctx, ia, blockHeight)
 		if ok == false {
 			continue
+		}
+
+		if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
+			if len(ctx.debugCalculationAddresses) > len(ctx.debugResult.Results) {
+				setDebuggingAccountInfo(ctx, *ia, blockHeight)
+			}
 		}
 
 		if batchCount > 0 {
@@ -596,6 +594,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest,
 	if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
 		log.Printf("CalculationResult : %s", ctx.debugResult.String())
 		writeResultToFile(ctx)
+		resetCalcResults(ctx)
 	}
 
 	// set blockHeight
