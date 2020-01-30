@@ -36,6 +36,7 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("\t calculate                 Send a CALCULATE message to update I-Score DB\n")
 	fmt.Printf("\t query_calculate_status    Send a QUERY_CALCULATE_STATUS message\n")
 	fmt.Printf("\t query_calculate_result    Send a QUERY_CALCULATE_RESULT message\n")
+	fmt.Printf("\t rollback                  Send a ROLLBACK message\n")
 	fmt.Printf("\t monitor                   Monitor account in configuration file\n")
 }
 

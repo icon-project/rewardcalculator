@@ -19,6 +19,9 @@ const (
 	IISSDataVersion         uint64 = 2
 
 	IISSDataRevisionDefault uint64 = 0
+
+	IISSDataDBPrefix =  "iiss_rc_db_"
+	IISSDataDBFormat = IISSDataDBPrefix + "%d"	// $BH
 )
 
 type IISSHeader struct {
@@ -316,18 +319,18 @@ func findIISSData(dir string, prefix string) []os.FileInfo {
 }
 
 func cleanupIISSData(path string) {
-	const prefix = "finish_"
+	var blockHeight, backupBH int
 	dir, name := filepath.Split(path)
 
-	// delete old backup data
-	for _, backup := range findIISSData(dir, prefix) {
-		newPath := filepath.Join(dir, backup.Name())
-		log.Printf("remove backup %s", newPath)
-		os.RemoveAll(newPath)
-	}
+	fmt.Sscanf(name, IISSDataDBFormat, &blockHeight)
 
-	// backup data
-	newPath := filepath.Join(dir, prefix + name)
-	log.Printf("backup %s -> %s", path, newPath)
-	os.Rename(path, newPath)
+	// delete old backup data
+	for _, backup := range findIISSData(dir, IISSDataDBPrefix) {
+		fmt.Sscanf(backup.Name(), IISSDataDBFormat, &backupBH)
+		if backupBH < blockHeight {
+			newPath := filepath.Join(dir, backup.Name())
+			log.Printf("remove backup %s", newPath)
+			os.RemoveAll(newPath)
+		}
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/natefinch/lumberjack"
 )
@@ -45,6 +46,7 @@ func main() {
 		MaxBackups: cfg.LogMaxBackups,
 		LocalTime:  true,
 	})
+	common.SetLog(cfg.LogFile, cfg.LogMaxSize, cfg.LogMaxBackups, true)
 
 	if optVersion {
 		fmt.Printf("icon_rc %s, %s\n", version, build)
