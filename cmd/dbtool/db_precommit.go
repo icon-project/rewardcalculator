@@ -103,7 +103,7 @@ func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) ([][]
 		key := make([]byte, len(iter.Key()))
 		copy(key, iter.Key())
 		if address.Equal(tmpAddress) == false && blockHeight != 0 {
-			if bytes.Equal(key[:core.BlockHeightSize], blockHeightBytesValue) &&
+			if bytes.Equal(key[core.BlockHeightSize-len(blockHeightBytesValue):core.BlockHeightSize], blockHeightBytesValue) &&
 				bytes.Equal(key[core.BlockHeightSize+core.BlockHashSize:], address.Bytes()) {
 				keyExist = true
 				preCommitKeys = append(preCommitKeys, key)

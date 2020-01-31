@@ -78,6 +78,7 @@ func (m *manager) Close() error {
 	}
 
 	CloseIScoreDB(m.ctx.DB)
+	m.ctx.calcDebugDB.Close()
 	return nil
 }
 
@@ -162,7 +163,7 @@ func reloadIISSData(ctx *Context, dir string) {
 		req.BlockHeight = reloadBlockHeight
 
 		log.Printf("Reload IISS Data. %s", req.Path)
-		err, _, _, _:= DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, reloadMsgID)
+		err, _, _, _ := DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, reloadMsgID)
 
 		if err != nil {
 			log.Printf("Failed to reload IISS Data. %s. %v", req.Path, err)

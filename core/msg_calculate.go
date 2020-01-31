@@ -226,7 +226,7 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 		}
 
 		if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-			if len(ctx.debugCalculationAddresses) > len(ctx.debugResult.Results) {
+			if len(ctx.debugCalculationAddresses) > len(ctx.debugResult.ResultData.Results) {
 				setDebuggingAccountInfo(ctx, *ia, blockHeight)
 			}
 		}
@@ -419,7 +419,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 
 	ctx.Print()
 
-	initCalcDebugInfo(ctx, blockHeight)
+	initDebugResult(ctx, blockHeight, req.BlockHash)
 
 	//
 	// Calculate I-Score @ Account DB
@@ -504,6 +504,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 	if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
 		log.Printf("CalculationResult : %s", ctx.debugResult.String())
 		writeResultToFile(ctx)
+		writeCalcDebugOutput(ctx)
 		resetCalcResults(ctx)
 	}
 

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
+	"github.com/icon-project/rewardcalculator/common/codec"
+	"github.com/icon-project/rewardcalculator/common/db"
 	"io/ioutil"
 	"log"
 	"os"
@@ -15,17 +17,20 @@ type DebugConfig struct {
 	Output    string   `json:"output"`
 }
 
-type DebugResult struct {
-	BlockHeight uint64                `json:"CalculationBlock"`
+type DebugOutput struct {
+	BlockHeight uint64                `json:"CalculationBlockHeight"`
+	BlockHash   string                `json:"CalculationBlockHash"`
 	Preps       []*PRepCandidate      `json:"PReps"`
 	GV          []*GovernanceVariable `json:"GV"`
-	Results     []*CalcResult         `json:"calculation"`
+	ResultData  struct {
+		Results []*CalcResult `json:"calculation"`
+	}
 }
 
-func (dr DebugResult) String() string {
-	b, err := json.Marshal(dr)
+func (do DebugOutput) String() string {
+	b, err := json.Marshal(do)
 	if err != nil {
-		return "Failed to marshal DebugResult"
+		return "Failed to marshal DebugOutput"
 	}
 	return string(b)
 }
@@ -45,6 +50,34 @@ func (cr CalcResult) String() string {
 		return "Failed to marshal CalcResult"
 	}
 	return string(b)
+}
+
+func (do *DebugOutput) ID() []byte {
+	id := make([]byte, BlockHeightSize+BlockHashSize)
+	bh := common.Uint64ToBytes(do.BlockHeight)
+
+	copy(id[BlockHeightSize-len(bh):], bh)
+	copy(id[BlockHeightSize:], do.BlockHash)
+
+	return id
+}
+
+func (do *DebugOutput) Bytes() ([]byte, error) {
+	var bytes []byte
+	if bs, err := codec.MarshalToBytes(&do.ResultData.Results); err != nil {
+		return nil, err
+	} else {
+		bytes = bs
+	}
+	return bytes, nil
+}
+
+func (do *DebugOutput) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, &do.ResultData.Results)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type Reward struct {
@@ -185,7 +218,7 @@ func (d DelegationInfo) String() string {
 	return string(b)
 }
 
-func initCalcDebugConfig(ctx *Context, debugConfigPath string) {
+func initCalculationDebug(ctx *Context, debugConfigPath string) {
 	debugConfig, err := os.Open(debugConfigPath)
 	if err != nil {
 		log.Printf("Error while opening calculation debug config file: %s", debugConfigPath)
@@ -209,11 +242,13 @@ func initCalcDebugConfig(ctx *Context, debugConfigPath string) {
 	}
 	ctx.debugCalculationAddresses = addresses
 	ctx.debuggingOutputPath = cfg.Output
+	ctx.calcDebugDB = db.Open(ctx.DB.info.DBRoot, string(db.GoLevelDBBackend), "calculation_debug")
 }
 
-func initCalcDebugInfo(ctx *Context, blockHeight uint64) {
-	ctx.debugResult = new(DebugResult)
+func initDebugResult(ctx *Context, blockHeight uint64, blockHash []byte) {
+	ctx.debugResult = new(DebugOutput)
 	ctx.debugResult.BlockHeight = blockHeight
+	ctx.debugResult.BlockHash = string(blockHash)
 
 	for _, gv := range ctx.GV {
 		ctx.debugResult.GV = append(ctx.debugResult.GV, gv)
@@ -340,7 +375,7 @@ func writeBeta3Info(ctx *Context, debugAddress *common.Address, rewardAddress co
 }
 
 func getCalcResult(ctx *Context, address common.Address) *CalcResult {
-	for _, calcResult := range ctx.debugResult.Results {
+	for _, calcResult := range ctx.debugResult.ResultData.Results {
 		if calcResult.Address.Equal(&address) {
 			return calcResult
 		}
@@ -373,7 +408,7 @@ func initCalcResult(ctx *Context, address common.Address) {
 		rewards = append(rewards, reward)
 	}
 	result.Rewards = rewards
-	ctx.debugResult.Results = append(ctx.debugResult.Results, result)
+	ctx.debugResult.ResultData.Results = append(ctx.debugResult.ResultData.Results, result)
 }
 
 func writeResultToFile(ctx *Context) {
@@ -390,6 +425,16 @@ func writeResultToFile(ctx *Context) {
 		log.Printf("Error while write calculation debug result")
 		return
 	}
+}
+
+func writeCalcDebugOutput(ctx *Context) {
+	bucket, _ := ctx.calcDebugDB.GetBucket("")
+	b, err := ctx.debugResult.Bytes()
+	if err != nil {
+		log.Print("Error while marshaling debugOutput")
+		return
+	}
+	bucket.Set(ctx.debugResult.ID(), b)
 }
 
 func addDebuggingAddress(ctx *Context, address common.Address) {
@@ -411,17 +456,18 @@ func deleteDebuggingAddress(ctx *Context, address common.Address) {
 				ctx.debugCalculationAddresses[i+1:]...)
 		}
 	}
-	if ctx.debugResult == nil || ctx.debugResult.Results == nil {
+	if ctx.debugResult == nil || ctx.debugResult.ResultData.Results == nil {
 		return
 	}
 
-	for i, calcResult := range ctx.debugResult.Results {
+	for i, calcResult := range ctx.debugResult.ResultData.Results {
 		if calcResult.Address.Equal(&address) {
-			ctx.debugResult.Results = append(ctx.debugResult.Results[:i], ctx.debugResult.Results[i+1:]...)
+			ctx.debugResult.ResultData.Results =
+				append(ctx.debugResult.ResultData.Results[:i], ctx.debugResult.ResultData.Results[i+1:]...)
 		}
 	}
 }
 
 func resetCalcResults(ctx *Context) {
-	ctx.debugResult.Results = ctx.debugResult.Results[:0]
+	ctx.debugResult.ResultData.Results = ctx.debugResult.ResultData.Results[:0]
 }

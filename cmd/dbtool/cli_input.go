@@ -113,6 +113,19 @@ func initIISS(flagSet *flag.FlagSet) *Input {
 	return input
 }
 
+func initCalcDebugResult(flagSet *flag.FlagSet) *Input {
+	input := new(Input)
+	flagSet.StringVar(&input.path, "path", "", pathUsage)
+	flagSet.StringVar(&input.path, "p", "", pathUsage)
+	flagSet.StringVar(&input.address, "address", "", AddressUsage)
+	flagSet.StringVar(&input.address, "a", "", AddressUsage)
+	flagSet.Uint64Var(&input.height, "blockheight", 0, BlockHeightUsage)
+	flagSet.Uint64Var(&input.height, "b", 0, BlockHeightUsage)
+	flagSet.BoolVar(&input.help, "help", false, HelpMsgUsage)
+	flagSet.BoolVar(&input.help, "h", false, HelpMsgUsage)
+	return input
+}
+
 func validateInput(flagSet *flag.FlagSet, err error, flag bool) {
 	if err != nil {
 		flagSet.PrintDefaults()

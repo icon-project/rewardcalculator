@@ -8,13 +8,14 @@ import (
 )
 
 const (
-	DBNameManagement = "manage"
-	DBNameAccount    = "account"
-	DBNameClaim      = "claim"
-	DBNameClaimBackup = "claimBackup"
-	DBNamePreCommit  = "preCommit"
-	DBNameCalcResult = "calcResult"
-	DBNameIISS       = "iiss"
+	DBNameManagement      = "manage"
+	DBNameAccount         = "account"
+	DBNameClaim           = "claim"
+	DBNameClaimBackup     = "claimBackup"
+	DBNamePreCommit       = "preCommit"
+	DBNameCalcResult      = "calcResult"
+	DBNameIISS            = "iiss"
+	DBNameCalcDebugResult = "calcDebugOutput"
 
 	DataTypeGV     = "gv"
 	DataTypePRep   = "prep"
@@ -30,7 +31,7 @@ const (
 
 func printUsage() {
 	fmt.Printf("Usage: %s [db_name] [[options]]\n", os.Args[0])
-	fmt.Printf("\t db_name     DB Name (%s, %s, %s, %s, %s, %s, %s)\n",
+	fmt.Printf("\t db_name     DB Name (%s, %s, %s, %s, %s, %s, %s, %s)\n",
 		DBNameManagement,
 		DBNameAccount,
 		DBNameClaim,
@@ -38,6 +39,7 @@ func printUsage() {
 		DBNamePreCommit,
 		DBNameCalcResult,
 		DBNameIISS,
+		DBNameCalcDebugResult,
 	)
 }
 
@@ -74,6 +76,7 @@ func Run() (err error) {
 	preCommitFlagSet := flag.NewFlagSet(DBNamePreCommit, flag.ExitOnError)
 	calcResultFlagSet := flag.NewFlagSet(DBNameCalcResult, flag.ExitOnError)
 	iissFlagSet := flag.NewFlagSet(DBNameIISS, flag.ExitOnError)
+	calcDebugFlagSet := flag.NewFlagSet(DBNameCalcDebugResult, flag.ExitOnError)
 
 	manageInput := initManageInput(manageFlagSet)
 	accountInput := initAccountInput(accountFlagSet)
@@ -82,6 +85,7 @@ func Run() (err error) {
 	preCommitInput := initPreCommitInput(preCommitFlagSet)
 	calcResultInput := initCalcResultInput(calcResultFlagSet)
 	iissInput := initIISS(iissFlagSet)
+	calcDebugInput := initCalcDebugResult(calcDebugFlagSet)
 
 	switch dbName {
 	case DBNameManagement:
@@ -112,6 +116,10 @@ func Run() (err error) {
 		err = iissFlagSet.Parse(os.Args[2:])
 		validateInput(iissFlagSet, err, iissInput.help)
 		err = queryIISSDB(*iissInput)
+	case DBNameCalcDebugResult:
+		err = calcDebugFlagSet.Parse(os.Args[2:])
+		validateInput(calcDebugFlagSet, err, calcDebugInput.help)
+		err = queryCalcDebugDB(*calcDebugInput)
 	default:
 		printUsage()
 		err = errors.New("invalid dbName")

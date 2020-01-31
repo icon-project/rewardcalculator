@@ -17,7 +17,7 @@ const (
 	NumDelegate         = 10
 	AccountDBNameFormat = "calculate_%d_%d_%d"
 	BackupDBNamePrefix  = "backup_"
-	BackupDBNameFormat  = BackupDBNamePrefix + "%d_%d"	// backup_CalcBH_accountDBIndex
+	BackupDBNameFormat  = BackupDBNamePrefix + "%d_%d" // backup_CalcBH_accountDBIndex
 
 	Revision8   uint64 = 8
 	RevisionMin        = Revision8
@@ -145,7 +145,7 @@ func (idb *IScoreDB) resetAccountDB(blockHeight uint64, oldCalcBH uint64) error 
 	}
 
 	// delete old backup account DB
-	oldBackup := filepath.Join(idb.info.DBRoot, BackupDBNamePrefix + strconv.FormatUint(oldCalcBH, 10) + "_*")
+	oldBackup := filepath.Join(idb.info.DBRoot, BackupDBNamePrefix+strconv.FormatUint(oldCalcBH, 10)+"_*")
 	oldBackups, err := filepath.Glob(oldBackup)
 	if err != nil {
 		log.Printf("Failed to get old backup account DB %s. %v", oldBackup, err)
@@ -168,7 +168,7 @@ func (idb *IScoreDB) resetAccountDB(blockHeight uint64, oldCalcBH uint64) error 
 		dbPath := filepath.Join(idb.info.DBRoot, dbName)
 		backupPath := filepath.Join(idb.info.DBRoot, fmt.Sprintf(BackupDBNameFormat, blockHeight, i+1))
 
-		_ , err := os.Stat(backupPath)
+		_, err := os.Stat(backupPath)
 		if os.IsNotExist(err) {
 			// backup old query DB
 			err = os.Rename(dbPath, backupPath)
@@ -182,7 +182,7 @@ func (idb *IScoreDB) resetAccountDB(blockHeight uint64, oldCalcBH uint64) error 
 		// open new calculate DB
 		newCalcDBs[i] = db.Open(idb.info.DBRoot, idb.info.DBType, dbName)
 	}
-	backup := filepath.Join(idb.info.DBRoot, BackupDBNamePrefix + strconv.FormatUint(blockHeight, 10) + "_*")
+	backup := filepath.Join(idb.info.DBRoot, BackupDBNamePrefix+strconv.FormatUint(blockHeight, 10)+"_*")
 	log.Printf("backup %d account DBs. %s", backupCount, backup)
 
 	// set new calculate DB
@@ -330,7 +330,8 @@ type Context struct {
 	calculationDebugFlag      bool
 	debugCalculationAddresses []*common.Address
 	debuggingOutputPath       string
-	debugResult               *DebugResult
+	debugResult               *DebugOutput
+	calcDebugDB               db.Database
 }
 
 func (ctx *Context) getGVByBlockHeight(blockHeight uint64) *GovernanceVariable {
@@ -567,7 +568,7 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int, debugC
 		return nil, err
 	}
 
-	initCalcDebugConfig(ctx, debugConfigPath)
+	initCalculationDebug(ctx, debugConfigPath)
 
 	// Open calculation result DB
 	isDB.calcResult = db.Open(isDB.info.DBRoot, isDB.info.DBType, "calculation_result")
