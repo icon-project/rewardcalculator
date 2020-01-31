@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
@@ -57,7 +58,7 @@ func (do *DebugOutput) ID() []byte {
 	bh := common.Uint64ToBytes(do.BlockHeight)
 
 	copy(id[BlockHeightSize-len(bh):], bh)
-	copy(id[BlockHeightSize:], do.BlockHash)
+	copy(id[BlockHeightSize:], do.BlockHash[2:])
 
 	return id
 }
@@ -248,7 +249,7 @@ func initCalculationDebug(ctx *Context, debugConfigPath string) {
 func initDebugResult(ctx *Context, blockHeight uint64, blockHash []byte) {
 	ctx.debugResult = new(DebugOutput)
 	ctx.debugResult.BlockHeight = blockHeight
-	ctx.debugResult.BlockHash = string(blockHash)
+	ctx.debugResult.BlockHash = "0x" + hex.EncodeToString(blockHash)
 
 	for _, gv := range ctx.GV {
 		ctx.debugResult.GV = append(ctx.debugResult.GV, gv)

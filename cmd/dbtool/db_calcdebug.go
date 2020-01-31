@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -78,6 +79,7 @@ func printDebugOutput(key []byte, value []byte) error {
 
 func printDebugOutputInstance(dr *core.DebugOutput) {
 	data, _ := json.MarshalIndent(dr.ResultData, "", "  ")
+	fmt.Printf("blockHeight : %d\nblockHash : %s\n", dr.BlockHeight, dr.BlockHash)
 	fmt.Printf("%s\n", string(data))
 }
 
@@ -93,7 +95,7 @@ func newDebugOutput(key []byte, value []byte) (*core.DebugOutput, error) {
 	dr.BlockHeight = common.BytesToUint64(key[:core.BlockHeightSize])
 	blockHash := make([]byte, core.BlockHashSize)
 	copy(blockHash, key[core.BlockHeightSize:core.BlockHeightSize+core.BlockHashSize])
-	dr.BlockHash = string(blockHash)
+	dr.BlockHash = "0x" + hex.EncodeToString(blockHash)
 	return dr, nil
 }
 
