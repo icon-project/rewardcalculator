@@ -11,6 +11,8 @@ install: true
 
 # run test
 script:
+  - make
+  - sudo make install
   - make test
 
 branches:

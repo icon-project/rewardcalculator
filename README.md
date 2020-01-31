@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/icon-project/rewardcalculator.svg?branch=master)](https://travis-ci.org/icon-project/rewardcalculator)
 # Reward Calculator
 
 Reward calculator is a daemon which calculates I-Score of ICONists to support IISS.
