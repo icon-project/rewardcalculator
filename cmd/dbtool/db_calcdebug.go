@@ -56,7 +56,7 @@ func queryCalcDebugOutput(qdb db.Database, address *common.Address, blockHeight 
 		if err != nil {
 			return err
 		} else {
-			for _, calcResult := range dr.ResultData.Results {
+			for _, calcResult := range dr.Results {
 				if address.Equal(nilAddress) {
 					printDebugOutputInstance(dr)
 				} else if calcResult.Address.Equal(address) {
@@ -77,14 +77,14 @@ func printDebugOutput(key []byte, value []byte) error {
 	}
 }
 
-func printDebugOutputInstance(dr *core.DebugOutput) {
-	data, _ := json.MarshalIndent(dr.ResultData, "", "  ")
+func printDebugOutputInstance(dr *core.CalcDebugResult) {
+	data, _ := json.MarshalIndent(dr.Results, "", "  ")
 	fmt.Printf("blockHeight : %d\nblockHash : %s\n", dr.BlockHeight, dr.BlockHash)
 	fmt.Printf("%s\n", string(data))
 }
 
-func newDebugOutput(key []byte, value []byte) (*core.DebugOutput, error) {
-	dr := new(core.DebugOutput)
+func newDebugOutput(key []byte, value []byte) (*core.CalcDebugResult, error) {
+	dr := new(core.CalcDebugResult)
 
 	err := dr.SetBytes(value)
 	if err != nil {

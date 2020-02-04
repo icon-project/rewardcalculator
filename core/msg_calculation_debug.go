@@ -25,9 +25,9 @@ func (mh *msgHandler) handleCalcDebugFlag(c ipc.Connection, id uint32, data []by
 
 	switch req.Cmd {
 	case CalcDebugOn:
-		ctx.calculationDebugFlag = true
+		ctx.calcDebugConf.Flag = true
 	case CalcDebugOff:
-		ctx.calculationDebugFlag = false
+		ctx.calcDebugConf.Flag = false
 	default:
 		return fmt.Errorf("invalid command")
 	}
@@ -68,7 +68,7 @@ type ResponseCalcDebugAddressList struct {
 func (mh *msgHandler) handleCalcDebugAddresses(c ipc.Connection, id uint32) error {
 	var resp ResponseCalcDebugAddressList
 	ctx := mh.mgr.ctx
-	resp.Addresses = ctx.debugCalculationAddresses
+	resp.Addresses = ctx.calcDebugConf.Addresses
 	return c.Send(MsgCalcDebugAddresses, id, &resp)
 }
 
@@ -82,6 +82,6 @@ func (mh *msgHandler) handleCalcResultOutput(c ipc.Connection, id uint32, data [
 		return err
 	}
 	ctx := mh.mgr.ctx
-	ctx.debuggingOutputPath = req.Path
+	ctx.calcDebugConf.Output = req.Path
 	return c.Send(MsgCalcDebugOutput, id, req)
 }

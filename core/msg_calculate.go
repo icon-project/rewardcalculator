@@ -129,9 +129,7 @@ func calculateDelegationReward(ctx *Context, delegationInfo *DelegateData, start
 
 		// update total
 		total.Add(&total.Int, &reward.Int)
-		if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-			WriteBeta3Info(ctx, rewardAddress, gv.RewardRep.Uint64(), delegationInfo, period.Uint64(), e)
-		}
+		WriteBeta3Info(ctx, rewardAddress, gv.RewardRep.Uint64(), delegationInfo, period.Uint64(), e)
 	}
 
 	return total
@@ -219,16 +217,16 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 		// update Statistics account
 		stats.Increase("Accounts", uint64(1))
 
+		if needToUpdateCalcDebugResult(ctx) {
+			if len(ctx.calcDebugConf.Addresses) > len(ctx.calcDebugResult.Results) {
+				initCalcDebugIScores(ctx, *ia, blockHeight)
+			}
+		}
+
 		// calculate
 		ok, reward := calculateIScore(ctx, ia, blockHeight)
 		if ok == false {
 			continue
-		}
-
-		if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-			if len(ctx.debugCalculationAddresses) > len(ctx.debugResult.ResultData.Results) {
-				setDebuggingAccountInfo(ctx, *ia, blockHeight)
-			}
 		}
 
 		if batchCount > 0 {
@@ -501,8 +499,8 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 	log.Printf("%s", stats.String())
 	log.Printf("stateHash : %s", hex.EncodeToString(stateHash))
 
-	if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-		log.Printf("CalculationResult : %s", ctx.debugResult.String())
+	if needToUpdateCalcDebugResult(ctx) {
+		log.Printf("CalculationResult : %s", ctx.calcDebugResult.String())
 		writeResultToFile(ctx)
 		writeCalcDebugOutput(ctx)
 		resetCalcResults(ctx)
@@ -662,9 +660,7 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 			validator.Add(&validator.Int, &valReward.Int)
 			bpMap[v] = validator
 		}
-		if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-			WriteBeta1Info(ctx, gv.BlockProduceReward.Uint64(), bp)
-		}
+		WriteBeta1Info(ctx, gv.BlockProduceReward.Uint64(), bp)
 	}
 	iter.Release()
 	err := iter.Error()
@@ -819,9 +815,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep, blockHeig
 			rewards[i].blockHeight = e
 			//log.Printf("[P-Rep reward] delegation: %s, reward: %s,%d\n",
 			//	dgInfo.String(), rewards[i].IScore.String(), rewards[i].blockHeight)
-			if ctx.calculationDebugFlag && len(ctx.debugCalculationAddresses) > 0 {
-				WriteBeta2Info(ctx, dgInfo, *prep, s, e, gv.PRepReward.Uint64())
-			}
+			WriteBeta2Info(ctx, dgInfo, *prep, s, e, gv.PRepReward.Uint64())
 		}
 	}
 

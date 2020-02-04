@@ -6,43 +6,68 @@ import (
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
-	"github.com/icon-project/rewardcalculator/common/db"
 	"io/ioutil"
 	"log"
 	"os"
 )
 
-type DebugConfig struct {
-	Flag      bool     `json:"enable"`
-	Addresses []string `json:"addresses"`
-	Output    string   `json:"output"`
+type CalcDebugConfig struct {
+	Flag      bool              `json:"enable"`
+	Addresses []*common.Address `json:"addresses"`
+	Output    string            `json:"output"`
 }
 
-type DebugOutput struct {
+func NewCalcDebugConfig() *CalcDebugConfig {
+	return &CalcDebugConfig{Output: "CalculateResult"}
+}
+
+type CalcDebugResult struct {
 	BlockHeight uint64                `json:"CalculationBlockHeight"`
 	BlockHash   string                `json:"CalculationBlockHash"`
 	Preps       []*PRepCandidate      `json:"PReps"`
 	GV          []*GovernanceVariable `json:"GV"`
-	ResultData  struct {
-		Results []*CalcResult `json:"calculation"`
-	}
+	Results     []*CalcResult         `json:"calculation"`
 }
 
-func (do DebugOutput) String() string {
-	b, err := json.Marshal(do)
+func (cb CalcDebugResult) String() string {
+	b, err := json.Marshal(cb)
 	if err != nil {
-		return "Failed to marshal DebugOutput"
+		return "Failed to marshal CalcDebugResult"
 	}
 	return string(b)
+}
+
+func (cb *CalcDebugResult) ID() []byte {
+	id := make([]byte, BlockHeightSize+BlockHashSize)
+	bh := common.Uint64ToBytes(cb.BlockHeight)
+
+	copy(id[BlockHeightSize-len(bh):], bh)
+	copy(id[BlockHeightSize:], cb.BlockHash[2:])
+
+	return id
+}
+
+func (cb *CalcDebugResult) Bytes() ([]byte, error) {
+	var bytes []byte
+	if bs, err := codec.MarshalToBytes(&cb.Results); err != nil {
+		return nil, err
+	} else {
+		bytes = bs
+	}
+	return bytes, nil
+}
+
+func (cb *CalcDebugResult) SetBytes(bs []byte) error {
+	_, err := codec.UnmarshalFromBytes(bs, &cb.Results)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type CalcResult struct {
 	Address *common.Address `json:"address"`
 	Rewards []*Reward       `json:"rewards"`
-}
-
-func NewCalcResult(address *common.Address) *CalcResult {
-	return &CalcResult{Address: address, Rewards: make([]*Reward, 0)}
 }
 
 func (cr CalcResult) String() string {
@@ -53,32 +78,8 @@ func (cr CalcResult) String() string {
 	return string(b)
 }
 
-func (do *DebugOutput) ID() []byte {
-	id := make([]byte, BlockHeightSize+BlockHashSize)
-	bh := common.Uint64ToBytes(do.BlockHeight)
-
-	copy(id[BlockHeightSize-len(bh):], bh)
-	copy(id[BlockHeightSize:], do.BlockHash[2:])
-
-	return id
-}
-
-func (do *DebugOutput) Bytes() ([]byte, error) {
-	var bytes []byte
-	if bs, err := codec.MarshalToBytes(&do.ResultData.Results); err != nil {
-		return nil, err
-	} else {
-		bytes = bs
-	}
-	return bytes, nil
-}
-
-func (do *DebugOutput) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, &do.ResultData.Results)
-	if err != nil {
-		return err
-	}
-	return nil
+func NewCalcResult(address *common.Address) *CalcResult {
+	return &CalcResult{Address: address, Rewards: make([]*Reward, 0)}
 }
 
 type Reward struct {
@@ -90,10 +91,6 @@ type Reward struct {
 	Beta3         *Beta3        `json:"beta3"`
 }
 
-func NewReward(blockHeight uint64) *Reward {
-	return &Reward{blockHeight, *common.NewHexInt(0), *common.NewHexInt(0), NewBeta1(), NewBeta2(), NewBeta3()}
-}
-
 func (r Reward) String() string {
 	b, err := json.Marshal(r)
 	if err != nil {
@@ -102,14 +99,14 @@ func (r Reward) String() string {
 	return string(b)
 }
 
+func NewReward(blockHeight uint64) *Reward {
+	return &Reward{blockHeight, *common.NewHexInt(0), *common.NewHexInt(0), NewBeta1(), NewBeta2(), NewBeta3()}
+}
+
 type Beta1 struct {
 	Beta1IScore common.HexInt `json:"Beta1IScore"`
 	*Generate   `json:"generate"`
 	Validate    []*ValidateInfo `json:"validate"`
-}
-
-func NewBeta1() *Beta1 {
-	return &Beta1{*common.NewHexInt(0), NewGenerate(), make([]*ValidateInfo, 0)}
 }
 
 func (b1 *Beta1) String() string {
@@ -120,14 +117,14 @@ func (b1 *Beta1) String() string {
 	return string(b)
 }
 
+func NewBeta1() *Beta1 {
+	return &Beta1{*common.NewHexInt(0), NewGenerate(), make([]*ValidateInfo, 0)}
+}
+
 type Generate struct {
 	BlockCount uint64 `json:"blockCount"`
 	Formula    string `json:"formula"`
 	IScore     uint64 `json:"IScore"`
-}
-
-func NewGenerate() *Generate {
-	return &Generate{0, "", 0}
 }
 
 func (g Generate) String() string {
@@ -136,6 +133,10 @@ func (g Generate) String() string {
 		return "Failed to marshal Generate"
 	}
 	return string(b)
+}
+
+func NewGenerate() *Generate {
+	return &Generate{0, "", 0}
 }
 
 type ValidateInfo struct {
@@ -158,16 +159,16 @@ type Beta2 struct {
 	DelegatedInfo []*DelegatedInfo `json:"delegated"`
 }
 
-func NewBeta2() *Beta2 {
-	return &Beta2{*common.NewHexInt(0), make([]*DelegatedInfo, 0)}
-}
-
 func (b2 Beta2) String() string {
 	b, err := json.Marshal(b2)
 	if err != nil {
 		return "Failed to marshal Beta2"
 	}
 	return string(b)
+}
+
+func NewBeta2() *Beta2 {
+	return &Beta2{*common.NewHexInt(0), make([]*DelegatedInfo, 0)}
 }
 
 type DelegatedInfo struct {
@@ -191,16 +192,16 @@ type Beta3 struct {
 	DelegationInfo []*DelegationInfo `json:"delegate"`
 }
 
-func NewBeta3() *Beta3 {
-	return &Beta3{*common.NewHexInt(0), make([]*DelegationInfo, 0)}
-}
-
 func (b3 Beta3) String() string {
 	b, err := json.Marshal(b3)
 	if err != nil {
 		return "Failed to marshal Beta3"
 	}
 	return string(b)
+}
+
+func NewBeta3() *Beta3 {
+	return &Beta3{*common.NewHexInt(0), make([]*DelegationInfo, 0)}
 }
 
 type DelegationInfo struct {
@@ -219,59 +220,58 @@ func (d DelegationInfo) String() string {
 	return string(b)
 }
 
-func initCalculationDebug(ctx *Context, debugConfigPath string) {
+func initCalcDebugConfig(ctx *Context, debugConfigPath string) {
+	ctx.calcDebugConf = NewCalcDebugConfig()
 	debugConfig, err := os.Open(debugConfigPath)
 	if err != nil {
-		log.Printf("Error while opening calculation debug config file: %s", debugConfigPath)
+		log.Printf("Error while opening calculation debug config file: %s. error : %v"+
+			"\nResult file will be store in defaultPath : CalculateResult", debugConfigPath, err)
 		return
 	}
 	defer debugConfig.Close()
 
-	cfg := new(DebugConfig)
 	cfgByte, _ := ioutil.ReadAll(debugConfig)
-
-	err = json.Unmarshal(cfgByte, cfg)
+	err = json.Unmarshal(cfgByte, ctx.calcDebugConf)
 	if err != nil {
 		log.Printf("Error while Unmarshaling config json")
 		return
 	}
-	ctx.calculationDebugFlag = cfg.Flag
+}
 
-	addresses := make([]*common.Address, 0)
-	for _, address := range cfg.Addresses {
-		addresses = append(addresses, common.NewAddressFromString(address))
-	}
-	ctx.debugCalculationAddresses = addresses
-	ctx.debuggingOutputPath = cfg.Output
-	ctx.calcDebugDB = db.Open(ctx.DB.info.DBRoot, string(db.GoLevelDBBackend), "calculation_debug")
+func needToUpdateCalcDebugResult(ctx *Context) bool {
+	return ctx.calcDebugConf.Flag && len(ctx.calcDebugConf.Addresses) > 0
 }
 
 func initDebugResult(ctx *Context, blockHeight uint64, blockHash []byte) {
-	ctx.debugResult = new(DebugOutput)
-	ctx.debugResult.BlockHeight = blockHeight
-	ctx.debugResult.BlockHash = "0x" + hex.EncodeToString(blockHash)
+	if !needToUpdateCalcDebugResult(ctx) {
+		return
+	}
+	ctx.calcDebugResult = new(CalcDebugResult)
+	ctx.calcDebugResult.BlockHeight = blockHeight
+	if len(blockHash) == 0 {
+		for i := 0; i < BlockHashSize; i++ {
+			blockHash = append(blockHash, 0)
+		}
+	}
+	ctx.calcDebugResult.BlockHash = "0x" + hex.EncodeToString(blockHash)
 
 	for _, gv := range ctx.GV {
-		ctx.debugResult.GV = append(ctx.debugResult.GV, gv)
+		ctx.calcDebugResult.GV = append(ctx.calcDebugResult.GV, gv)
 	}
 
 	for _, prep := range ctx.PRepCandidates {
-		ctx.debugResult.Preps = append(ctx.debugResult.Preps, prep)
+		ctx.calcDebugResult.Preps = append(ctx.calcDebugResult.Preps, prep)
 	}
 
-	for i := 0; i < len(ctx.debugCalculationAddresses); i++ {
-		initCalcResult(ctx, *ctx.debugCalculationAddresses[i])
+	for _, address := range ctx.calcDebugConf.Addresses {
+		initCalcResult(ctx, *address)
 	}
 }
 
-func setDebuggingAccountInfo(ctx *Context, ia IScoreAccount, blockHeight uint64) {
-	for _, address := range ctx.debugCalculationAddresses {
+func initCalcDebugIScores(ctx *Context, ia IScoreAccount, blockHeight uint64) {
+	for _, address := range ctx.calcDebugConf.Addresses {
 		if ia.Address.Equal(address) {
 			reward := getReward(ctx, ia.Address, blockHeight)
-			if reward == nil {
-				initCalcResult(ctx, ia.Address)
-				reward = getReward(ctx, ia.Address, blockHeight)
-			}
 			reward.InitialIScore = ia.IScore
 			reward.TotalIScore = ia.IScore
 		}
@@ -279,7 +279,10 @@ func setDebuggingAccountInfo(ctx *Context, ia IScoreAccount, blockHeight uint64)
 }
 
 func WriteBeta1Info(ctx *Context, produceReward uint64, bp IISSBlockProduceInfo) {
-	for _, address := range ctx.debugCalculationAddresses {
+	if !needToUpdateCalcDebugResult(ctx) {
+		return
+	}
+	for _, address := range ctx.calcDebugConf.Addresses {
 		writeBeta1Info(ctx, address, produceReward, bp)
 	}
 }
@@ -326,7 +329,10 @@ func writeBeta1Info(ctx *Context, address *common.Address, produceReward uint64,
 
 func WriteBeta2Info(ctx *Context, delegationInfo PRepDelegationInfo, prep PRep,
 	startBlock uint64, endBlock uint64, prepReward uint64) {
-	for _, address := range ctx.debugCalculationAddresses {
+	if !needToUpdateCalcDebugResult(ctx) {
+		return
+	}
+	for _, address := range ctx.calcDebugConf.Addresses {
 		writeBeta2Info(ctx, address, delegationInfo, prep, startBlock, endBlock, prepReward)
 	}
 }
@@ -353,8 +359,10 @@ func writeBeta2Info(ctx *Context, address *common.Address, delegationInfo PRepDe
 
 func WriteBeta3Info(ctx *Context, rewardAddress common.Address, rewardRep uint64,
 	delegationInfo *DelegateData, period uint64, endBlock uint64) {
-
-	for _, address := range ctx.debugCalculationAddresses {
+	if !needToUpdateCalcDebugResult(ctx) {
+		return
+	}
+	for _, address := range ctx.calcDebugConf.Addresses {
 		writeBeta3Info(ctx, address, rewardAddress, rewardRep, delegationInfo, period, endBlock)
 	}
 }
@@ -376,7 +384,7 @@ func writeBeta3Info(ctx *Context, debugAddress *common.Address, rewardAddress co
 }
 
 func getCalcResult(ctx *Context, address common.Address) *CalcResult {
-	for _, calcResult := range ctx.debugResult.ResultData.Results {
+	for _, calcResult := range ctx.calcDebugResult.Results {
 		if calcResult.Address.Equal(&address) {
 			return calcResult
 		}
@@ -409,16 +417,16 @@ func initCalcResult(ctx *Context, address common.Address) {
 		rewards = append(rewards, reward)
 	}
 	result.Rewards = rewards
-	ctx.debugResult.ResultData.Results = append(ctx.debugResult.ResultData.Results, result)
+	ctx.calcDebugResult.Results = append(ctx.calcDebugResult.Results, result)
 }
 
 func writeResultToFile(ctx *Context) {
-	filePath := fmt.Sprintf("%s", ctx.debuggingOutputPath)
-	data, err := json.MarshalIndent(ctx.debugResult, "", "  ")
+	filePath := ctx.calcDebugConf.Output
+	data, err := json.MarshalIndent(ctx.calcDebugResult, "", "  ")
 	data = append(data, "\n"...)
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Printf("Error while marshaling debugResult")
+		log.Printf("Error while marshaling calcDebugResult")
 		return
 	}
 	defer f.Close()
@@ -430,45 +438,45 @@ func writeResultToFile(ctx *Context) {
 
 func writeCalcDebugOutput(ctx *Context) {
 	bucket, _ := ctx.calcDebugDB.GetBucket("")
-	b, err := ctx.debugResult.Bytes()
+	b, err := ctx.calcDebugResult.Bytes()
 	if err != nil {
 		log.Print("Error while marshaling debugOutput")
 		return
 	}
-	bucket.Set(ctx.debugResult.ID(), b)
+	bucket.Set(ctx.calcDebugResult.ID(), b)
 }
 
 func addDebuggingAddress(ctx *Context, address common.Address) {
 	found := false
-	for i := len(ctx.debugCalculationAddresses) - 1; i >= 0; i-- {
-		if address.Equal(ctx.debugCalculationAddresses[i]) {
+	for i := len(ctx.calcDebugConf.Addresses) - 1; i >= 0; i-- {
+		if address.Equal(ctx.calcDebugConf.Addresses[i]) {
 			found = true
 		}
 	}
 	if !found {
-		ctx.debugCalculationAddresses = append(ctx.debugCalculationAddresses, &address)
+		ctx.calcDebugConf.Addresses = append(ctx.calcDebugConf.Addresses, &address)
 	}
 }
 
 func deleteDebuggingAddress(ctx *Context, address common.Address) {
-	for i := len(ctx.debugCalculationAddresses) - 1; i >= 0; i-- {
-		if address.Equal(ctx.debugCalculationAddresses[i]) {
-			ctx.debugCalculationAddresses = append(ctx.debugCalculationAddresses[:i],
-				ctx.debugCalculationAddresses[i+1:]...)
+	for i := len(ctx.calcDebugConf.Addresses) - 1; i >= 0; i-- {
+		if address.Equal(ctx.calcDebugConf.Addresses[i]) {
+			ctx.calcDebugConf.Addresses = append(ctx.calcDebugConf.Addresses[:i],
+				ctx.calcDebugConf.Addresses[i+1:]...)
 		}
 	}
-	if ctx.debugResult == nil || ctx.debugResult.ResultData.Results == nil {
+	if ctx.calcDebugResult == nil || ctx.calcDebugResult.Results == nil {
 		return
 	}
 
-	for i, calcResult := range ctx.debugResult.ResultData.Results {
+	for i, calcResult := range ctx.calcDebugResult.Results {
 		if calcResult.Address.Equal(&address) {
-			ctx.debugResult.ResultData.Results =
-				append(ctx.debugResult.ResultData.Results[:i], ctx.debugResult.ResultData.Results[i+1:]...)
+			ctx.calcDebugResult.Results =
+				append(ctx.calcDebugResult.Results[:i], ctx.calcDebugResult.Results[i+1:]...)
 		}
 	}
 }
 
 func resetCalcResults(ctx *Context) {
-	ctx.debugResult.ResultData.Results = ctx.debugResult.ResultData.Results[:0]
+	ctx.calcDebugResult.Results = ctx.calcDebugResult.Results[:0]
 }

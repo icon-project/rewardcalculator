@@ -7,10 +7,16 @@ import (
 )
 
 func (cli *CLI) calculateDebug(input []string) error {
-	errMsg := fmt.Errorf("invalid input")
+	calcDebugUsage := fmt.Errorf("Commands\n" +
+		"\t enable \t enable calculation debug\n" +
+		"\t disable \t disable calculation debug\n" +
+		"\t add <Address> \t add calculation debugging address\n" +
+		"\t delete <Address> \t delete calculation debugging address\n" +
+		"\t output <outputPath> \t change calculation debugging output path\n" +
+		"\t list \t print calculation debugging addresses\n")
+
 	if len(input) == 0 {
-		printUsage()
-		return errMsg
+		return calcDebugUsage
 	}
 	var err error
 	switch input[0] {
@@ -41,17 +47,8 @@ func (cli *CLI) calculateDebug(input []string) error {
 	return err
 
 INVALID:
-	printUsage()
-	return errMsg
-}
-
-func printUsage() {
-	fmt.Printf("Commands\n")
-	fmt.Printf("enable\n")
-	fmt.Printf("disable\n")
-	fmt.Printf("add <Address>\n")
-	fmt.Printf("delete <address>\n")
-	fmt.Printf("output <new outputPath>\n")
+	err = calcDebugUsage
+	return err
 }
 
 func (cli *CLI) enableCalcDebug() error {
