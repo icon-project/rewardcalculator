@@ -41,9 +41,9 @@ func (cb CalcDebugResult) String() string {
 func (cb *CalcDebugResult) ID() []byte {
 	id := make([]byte, BlockHeightSize+BlockHashSize)
 	bh := common.Uint64ToBytes(cb.BlockHeight)
-
+	blockHash, _ := hex.DecodeString(cb.BlockHash[2:])
 	copy(id[BlockHeightSize-len(bh):], bh)
-	copy(id[BlockHeightSize:], cb.BlockHash[2:])
+	copy(id[BlockHeightSize:], blockHash)
 
 	return id
 }
@@ -451,7 +451,7 @@ func writeCalcDebugOutput(ctx *Context) {
 	bucket, _ := ctx.calcDebugDB.GetBucket("")
 	b, err := ctx.calcDebugResult.Bytes()
 	if err != nil {
-		log.Print("Error while marshaling debugOutput")
+		log.Print("Error while marshaling calculation debug result")
 		return
 	}
 	bucket.Set(ctx.calcDebugResult.ID(), b)

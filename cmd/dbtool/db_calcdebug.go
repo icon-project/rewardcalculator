@@ -26,12 +26,12 @@ func queryCalcDebugDB(input Input) (err error) {
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 		defer qdb.Close()
 		address := common.NewAddressFromString(input.address)
-		err = queryCalcDebugOutput(qdb, address, input.height)
+		err = queryCalcDebugResult(qdb, address, input.height)
 	}
 	return
 }
 
-func queryCalcDebugOutput(qdb db.Database, address *common.Address, blockHeight uint64) error {
+func queryCalcDebugResult(qdb db.Database, address *common.Address, blockHeight uint64) error {
 	qCalcDebugKeys, err := getCalcDebugResultKeys(qdb, blockHeight)
 	if err != nil {
 		return err
@@ -69,10 +69,10 @@ func queryCalcDebugOutput(qdb db.Database, address *common.Address, blockHeight 
 }
 
 func printDebugOutput(key []byte, value []byte) error {
-	if pc, e := newCalcDebugResult(key, value); e != nil {
+	if cb, e := newCalcDebugResult(key, value); e != nil {
 		return e
 	} else {
-		printCalcDebugResult(pc)
+		printCalcDebugResult(cb)
 		return nil
 	}
 }
