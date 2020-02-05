@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/icon-project/rewardcalculator/common"
 	"log"
 
 	"github.com/icon-project/rewardcalculator/common/codec"
@@ -15,11 +16,25 @@ const (
 	DebugPRepCandidate uint64 = 3
 	DebugGV            uint64 = 4
 
-	DebugLogCTX        uint64 = 100
+	DebugLogCTX uint64 = 100
+
+	DebugCalc              uint64 = 200
+	DebugCalcFlagOn               = DebugCalc
+	DebugCalcFlagOff              = DebugCalc + 1
+	DebugCalcAddAddress           = DebugCalc + 2
+	DebugCalcDelAddress           = DebugCalc + 3
+	DebugCalcListAddresses        = DebugCalc + 4
+	DebugCalcOutputPath           = DebugCalc + 5
 )
 
 type DebugMessage struct {
 	Cmd uint64
+	MessageData
+}
+
+type MessageData struct {
+	Address    common.Address
+	OutputPath string
 }
 
 func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
@@ -45,6 +60,18 @@ func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
 		return handleGV(c, id, ctx)
 	case DebugLogCTX:
 		ctx.Print()
+	case DebugCalcFlagOn:
+		return handleCalcDebugFlagOn(c, id, ctx)
+	case DebugCalcFlagOff:
+		return handleCalcDebugFlagOff(c, id, ctx)
+	case DebugCalcAddAddress:
+		return handleCalcDebugAddAddress(c, id, ctx, req.Address)
+	case DebugCalcDelAddress:
+		return handleCalcDebugDeleteAddress(c, id, ctx, req.Address)
+	case DebugCalcListAddresses:
+		return handleCalcDebugAddresses(c, id, ctx)
+	case DebugCalcOutputPath:
+		return handleCalcResultOutput(c, id, ctx, req.OutputPath)
 	}
 
 	return fmt.Errorf("unknown debug message %d", req.Cmd)
@@ -53,7 +80,7 @@ func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
 type ResponseDebugStats struct {
 	DebugMessage
 	BlockHeight uint64
-	Stats Statistics
+	Stats       Statistics
 }
 
 func handleStats(c ipc.Connection, id uint32, ctx *Context) error {
@@ -133,5 +160,54 @@ func handleGV(c ipc.Connection, id uint32, ctx *Context) error {
 		resp.GV = nil
 	}
 
+	return c.Send(MsgDebug, id, &resp)
+}
+
+func handleCalcDebugFlagOn(c ipc.Connection, id uint32, ctx *Context) error {
+	var resp DebugMessage
+	resp.Cmd = DebugCalcFlagOn
+	ctx.calcDebugConf.Flag = true
+	return c.Send(MsgDebug, id, &resp)
+}
+
+func handleCalcDebugFlagOff(c ipc.Connection, id uint32, ctx *Context) error {
+	var resp DebugMessage
+	resp.Cmd = DebugCalcFlagOff
+	ctx.calcDebugConf.Flag = false
+	return c.Send(MsgDebug, id, &resp)
+}
+
+func handleCalcDebugAddAddress(c ipc.Connection, id uint32, ctx *Context, address common.Address) error {
+	var resp DebugMessage
+	resp.Cmd = DebugCalcAddAddress
+	resp.Address = address
+	addDebuggingAddress(ctx, address)
+	return c.Send(MsgDebug, id, &resp)
+}
+
+func handleCalcDebugDeleteAddress(c ipc.Connection, id uint32, ctx *Context, address common.Address) error {
+	var resp DebugMessage
+	resp.Cmd = DebugCalcDelAddress
+	resp.Address = address
+	deleteDebuggingAddress(ctx, address)
+	return c.Send(MsgDebug, id, &resp)
+}
+
+type ResponseCalcDebugAddressList struct {
+	DebugMessage
+	Addresses []*common.Address
+}
+
+func handleCalcDebugAddresses(c ipc.Connection, id uint32, ctx *Context) error {
+	var resp ResponseCalcDebugAddressList
+	resp.Cmd = DebugCalcListAddresses
+	resp.Addresses = ctx.calcDebugConf.Addresses
+	return c.Send(MsgDebug, id, &resp)
+}
+
+func handleCalcResultOutput(c ipc.Connection, id uint32, ctx *Context, output string) error {
+	var resp DebugMessage
+	ctx.calcDebugConf.Output = output
+	resp.OutputPath = output
 	return c.Send(MsgDebug, id, &resp)
 }

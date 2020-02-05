@@ -52,49 +52,50 @@ INVALID:
 }
 
 func (cli *CLI) enableCalcDebug() error {
-	var req core.RequestCalcDebugFlag
-	req.Cmd = core.CalcDebugOn
+	var req core.DebugMessage
+	req.Cmd = core.DebugCalcFlagOn
 
-	return cli.conn.Send(core.MsgCalcDebugFlag, cli.id, req)
+	return cli.conn.Send(core.MsgDebug, cli.id, req)
 }
 
 func (cli *CLI) disableCalcDebug() error {
-	var req core.RequestCalcDebugFlag
-	req.Cmd = core.CalcDebugOff
+	var req core.DebugMessage
+	req.Cmd = core.DebugCalcFlagOff
 
-	return cli.conn.Send(core.MsgCalcDebugFlag, cli.id, req)
+	return cli.conn.Send(core.MsgDebug, cli.id, req)
 }
 
 func (cli *CLI) printCalcDebuggingAddresses() error {
+	var req core.DebugMessage
 	var resp core.ResponseCalcDebugAddressList
-
-	err := cli.conn.SendAndReceive(core.MsgCalcDebugAddresses, cli.id, nil, &resp)
+	req.Cmd = core.DebugCalcListAddresses
+	err := cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
 	if err == nil {
-		fmt.Printf("Calculation debugging Addresses : \n%s\n", Display(resp))
+		fmt.Printf("Calculation debugging Addresses : \n%s\n", Display(resp.Addresses))
 	}
 
 	return err
 }
 
 func (cli *CLI) addCalcDebuggingAddress(address string) error {
-	var req core.RequestCalcDebugAddress
-	req.Cmd = core.AddDebuggingAddress
+	var req core.DebugMessage
+	req.Cmd = core.DebugCalcAddAddress
 	req.Address = *common.NewAddressFromString(address)
 
-	return cli.conn.Send(core.MsgCalcDebugAddress, cli.id, req)
+	return cli.conn.Send(core.MsgDebug, cli.id, req)
 }
 
 func (cli *CLI) deleteCalcDebuggingAddress(address string) error {
-	var req core.RequestCalcDebugAddress
-	req.Cmd = core.DeleteDebuggingAddress
+	var req core.DebugMessage
+	req.Cmd = core.DebugCalcDelAddress
 	req.Address = *common.NewAddressFromString(address)
 
-	return cli.conn.Send(core.MsgCalcDebugAddress, cli.id, req)
+	return cli.conn.Send(core.MsgDebug, cli.id, req)
 }
 
 func (cli *CLI) changeCalcDebugResultPath(path string) error {
-	var req core.RequestCalcResultOutput
-	req.Path = path
+	var req core.DebugMessage
+	req.OutputPath = path
 
-	return cli.conn.Send(core.MsgCalcDebugOutput, cli.id, req)
+	return cli.conn.Send(core.MsgDebug, cli.id, req)
 }

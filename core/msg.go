@@ -27,10 +27,6 @@ const (
 	MsgQueryCalculateResult      = 7
 	MsgRollBack                  = 8
 	MsgINIT                      = 9
-	MsgCalcDebugFlag             = 10
-	MsgCalcDebugAddress          = 11
-	MsgCalcDebugAddresses        = 12
-	MsgCalcDebugOutput           = 13
 
 	MsgNotify        = 100
 	MsgReady         = MsgNotify + 0
@@ -97,10 +93,6 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 	c.SetHandler(MsgQueryCalculateResult, handler)
 	if m.monitorMode == true {
 		c.SetHandler(MsgDebug, handler)
-		c.SetHandler(MsgCalcDebugOutput, handler)
-		c.SetHandler(MsgCalcDebugFlag, handler)
-		c.SetHandler(MsgCalcDebugAddress, handler)
-		c.SetHandler(MsgCalcDebugAddresses, handler)
 	} else {
 		c.SetHandler(MsgClaim, handler)
 		c.SetHandler(MsgCalculate, handler)
@@ -141,14 +133,6 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 		go mh.queryCalculateStatus(c, id, data)
 	case MsgQueryCalculateResult:
 		go mh.queryCalculateResult(c, id, data)
-	case MsgCalcDebugFlag:
-		go mh.handleCalcDebugFlag(c, id, data)
-	case MsgCalcDebugAddress:
-		go mh.handleCalcDebugAddress(c, id, data)
-	case MsgCalcDebugAddresses:
-		go mh.handleCalcDebugAddresses(c, id)
-	case MsgCalcDebugOutput:
-		go mh.handleCalcResultOutput(c, id, data)
 	case MsgRollBack:
 		// do not process other messages while process Rollback message
 		return mh.rollback(c, id, data)
