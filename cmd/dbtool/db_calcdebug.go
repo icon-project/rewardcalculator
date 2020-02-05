@@ -32,7 +32,7 @@ func queryCalcDebugDB(input Input) (err error) {
 }
 
 func queryCalcDebugOutput(qdb db.Database, address *common.Address, blockHeight uint64) error {
-	qCalcDebugKeys, err := getDebugOutputKeys(qdb, blockHeight)
+	qCalcDebugKeys, err := getCalcDebugResultKeys(qdb, blockHeight)
 	if err != nil {
 		return err
 	}
@@ -52,15 +52,15 @@ func queryCalcDebugOutput(qdb db.Database, address *common.Address, blockHeight 
 		if value == nil {
 			continue
 		}
-		dr, err := newDebugOutput(key, value)
+		dr, err := newCalcDebugResult(key, value)
 		if err != nil {
 			return err
 		} else {
 			for _, calcResult := range dr.Results {
 				if address.Equal(nilAddress) {
-					printDebugOutputInstance(dr)
+					printCalcDebugResult(dr)
 				} else if calcResult.Address.Equal(address) {
-					printDebugOutputInstance(dr)
+					printCalcDebugResult(dr)
 				}
 			}
 		}
@@ -69,21 +69,21 @@ func queryCalcDebugOutput(qdb db.Database, address *common.Address, blockHeight 
 }
 
 func printDebugOutput(key []byte, value []byte) error {
-	if pc, e := newDebugOutput(key, value); e != nil {
+	if pc, e := newCalcDebugResult(key, value); e != nil {
 		return e
 	} else {
-		printDebugOutputInstance(pc)
+		printCalcDebugResult(pc)
 		return nil
 	}
 }
 
-func printDebugOutputInstance(dr *core.CalcDebugResult) {
+func printCalcDebugResult(dr *core.CalcDebugResult) {
 	data, _ := json.MarshalIndent(dr.Results, "", "  ")
 	fmt.Printf("blockHeight : %d\nblockHash : %s\n", dr.BlockHeight, dr.BlockHash)
 	fmt.Printf("%s\n", string(data))
 }
 
-func newDebugOutput(key []byte, value []byte) (*core.CalcDebugResult, error) {
+func newCalcDebugResult(key []byte, value []byte) (*core.CalcDebugResult, error) {
 	dr := new(core.CalcDebugResult)
 
 	err := dr.SetBytes(value)
@@ -99,7 +99,7 @@ func newDebugOutput(key []byte, value []byte) (*core.CalcDebugResult, error) {
 	return dr, nil
 }
 
-func getDebugOutputKeys(qdb db.Database, blockHeight uint64) ([][]byte, error) {
+func getCalcDebugResultKeys(qdb db.Database, blockHeight uint64) ([][]byte, error) {
 	iter, err := qdb.GetIterator()
 	if err != nil {
 		fmt.Println("Failed to get calcDebugResult db iterator")

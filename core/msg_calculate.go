@@ -217,12 +217,6 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 		// update Statistics account
 		stats.Increase("Accounts", uint64(1))
 
-		if needToUpdateCalcDebugResult(ctx) {
-			if len(ctx.calcDebugConf.Addresses) > len(ctx.calcDebugResult.Results) {
-				initCalcDebugIScores(ctx, *ia, blockHeight)
-			}
-		}
-
 		// calculate
 		ok, reward := calculateIScore(ctx, ia, blockHeight)
 		if ok == false {

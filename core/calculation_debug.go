@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/codec"
+	"github.com/icon-project/rewardcalculator/common/db"
 	"io/ioutil"
 	"log"
 	"os"
@@ -66,8 +67,10 @@ func (cb *CalcDebugResult) SetBytes(bs []byte) error {
 }
 
 type CalcResult struct {
-	Address *common.Address `json:"address"`
-	Rewards []*Reward       `json:"rewards"`
+	Address       *common.Address `json:"address"`
+	InitialIScore common.HexInt   `json:"InitialIScore"`
+	TotalIScore   common.HexInt   `json:"TotalIScore"`
+	Rewards       []*Reward       `json:"rewards"`
 }
 
 func (cr CalcResult) String() string {
@@ -79,16 +82,14 @@ func (cr CalcResult) String() string {
 }
 
 func NewCalcResult(address *common.Address) *CalcResult {
-	return &CalcResult{Address: address, Rewards: make([]*Reward, 0)}
+	return &CalcResult{Address: address}
 }
 
 type Reward struct {
-	BlockHeight   uint64        `json:"blockHeight"`
-	InitialIScore common.HexInt `json:"InitialIScore"`
-	TotalIScore   common.HexInt `json:"TotalIScore"`
-	Beta1         *Beta1        `json:"beta1"`
-	Beta2         *Beta2        `json:"beta2"`
-	Beta3         *Beta3        `json:"beta3"`
+	BlockHeight uint64 `json:"blockHeight"`
+	Beta1       *Beta1 `json:"beta1"`
+	Beta2       *Beta2 `json:"beta2"`
+	Beta3       *Beta3 `json:"beta3"`
 }
 
 func (r Reward) String() string {
@@ -100,7 +101,7 @@ func (r Reward) String() string {
 }
 
 func NewReward(blockHeight uint64) *Reward {
-	return &Reward{blockHeight, *common.NewHexInt(0), *common.NewHexInt(0), NewBeta1(), NewBeta2(), NewBeta3()}
+	return &Reward{blockHeight, NewBeta1(), NewBeta2(), NewBeta3()}
 }
 
 type Beta1 struct {
@@ -268,16 +269,6 @@ func initDebugResult(ctx *Context, blockHeight uint64, blockHash []byte) {
 	}
 }
 
-func initCalcDebugIScores(ctx *Context, ia IScoreAccount, blockHeight uint64) {
-	for _, address := range ctx.calcDebugConf.Addresses {
-		if ia.Address.Equal(address) {
-			reward := getReward(ctx, ia.Address, blockHeight)
-			reward.InitialIScore = ia.IScore
-			reward.TotalIScore = ia.IScore
-		}
-	}
-}
-
 func WriteBeta1Info(ctx *Context, produceReward uint64, bp IISSBlockProduceInfo) {
 	if !needToUpdateCalcDebugResult(ctx) {
 		return
@@ -289,20 +280,22 @@ func WriteBeta1Info(ctx *Context, produceReward uint64, bp IISSBlockProduceInfo)
 
 func writeBeta1Info(ctx *Context, address *common.Address, produceReward uint64, bp IISSBlockProduceInfo) {
 	if bp.Generator.Equal(address) {
-		reward := getReward(ctx, *address, bp.BlockHeight)
+		calcResult := GetCalcResult(ctx, *address)
+		reward := getReward(calcResult, bp.BlockHeight)
 		reward.Beta1.Generate.BlockCount += 1
 		reward.Beta1.Generate.IScore += produceReward
 		reward.Beta1.Generate.Formula = fmt.Sprintf("%d * %s",
 			reward.Beta1.BlockCount, common.NewHexIntFromUint64(produceReward).String())
 		iScoreInHex := *common.NewHexIntFromUint64(produceReward)
 		reward.Beta1.Beta1IScore.Add(&reward.Beta1.Beta1IScore.Int, &iScoreInHex.Int)
-		reward.TotalIScore.Add(&reward.TotalIScore.Int, &iScoreInHex.Int)
+		calcResult.TotalIScore.Add(&calcResult.TotalIScore.Int, &iScoreInHex.Int)
 		return
 	}
 
 	for _, addr := range bp.Validator {
 		if addr.Equal(address) {
-			reward := getReward(ctx, *address, bp.BlockHeight)
+			calcResult := GetCalcResult(ctx, *address)
+			reward := getReward(calcResult, bp.BlockHeight)
 			validatorCount := len(bp.Validator)
 			validateInfo := func(validate []*ValidateInfo, validatorCount uint64) *ValidateInfo {
 				for _, validate := range validate {
@@ -321,7 +314,7 @@ func writeBeta1Info(ctx *Context, address *common.Address, produceReward uint64,
 				validateInfo.BlockCount, common.NewHexIntFromUint64(produceReward).String(), validatorCount)
 			iScoreInHex := *common.NewHexIntFromUint64(iScore)
 			reward.Beta1.Beta1IScore.Add(&reward.Beta1.Beta1IScore.Int, &iScoreInHex.Int)
-			reward.TotalIScore.Add(&reward.TotalIScore.Int, &iScoreInHex.Int)
+			calcResult.TotalIScore.Add(&calcResult.TotalIScore.Int, &iScoreInHex.Int)
 			return
 		}
 	}
@@ -340,7 +333,8 @@ func WriteBeta2Info(ctx *Context, delegationInfo PRepDelegationInfo, prep PRep,
 func writeBeta2Info(ctx *Context, address *common.Address, delegationInfo PRepDelegationInfo, prep PRep,
 	startBlock uint64, endBlock uint64, prepReward uint64) {
 	if delegationInfo.Address.Equal(address) {
-		reward := getReward(ctx, *address, endBlock)
+		calcResult := GetCalcResult(ctx, *address)
+		reward := getReward(calcResult, endBlock)
 		period := endBlock - startBlock
 		totalDelegation := prep.TotalDelegation.Uint64()
 		delegatedAmount := delegationInfo.DelegatedAmount.Uint64()
@@ -353,7 +347,7 @@ func writeBeta2Info(ctx *Context, address *common.Address, delegationInfo PRepDe
 		reward.Beta2.DelegatedInfo = append(reward.Beta2.DelegatedInfo, delegatedInfo)
 		iScoreInHex := *common.NewHexIntFromUint64(iScore)
 		reward.Beta2.Beta2IScore.Add(&reward.Beta2.Beta2IScore.Int, &iScoreInHex.Int)
-		reward.TotalIScore.Add(&reward.TotalIScore.Int, &iScoreInHex.Int)
+		calcResult.TotalIScore.Add(&calcResult.TotalIScore.Int, &iScoreInHex.Int)
 	}
 }
 
@@ -370,7 +364,8 @@ func WriteBeta3Info(ctx *Context, rewardAddress common.Address, rewardRep uint64
 func writeBeta3Info(ctx *Context, debugAddress *common.Address, rewardAddress common.Address, rewardRep uint64,
 	delegationInfo *DelegateData, period uint64, endBlock uint64) {
 	if rewardAddress.Equal(debugAddress) {
-		reward := getReward(ctx, *debugAddress, endBlock)
+		calcResult := GetCalcResult(ctx, *debugAddress)
+		reward := getReward(calcResult, endBlock)
 		iScore := rewardRep * period * delegationInfo.Delegate.Uint64() / rewardDivider
 		dgInfo := &DelegationInfo{BlockHeight: endBlock, Address: delegationInfo.Address,
 			Amount: delegationInfo.Delegate.Uint64(), IScore: iScore}
@@ -379,8 +374,18 @@ func writeBeta3Info(ctx *Context, debugAddress *common.Address, rewardAddress co
 		reward.Beta3.DelegationInfo = append(reward.Beta3.DelegationInfo, dgInfo)
 		iScoreInHex := *common.NewHexIntFromUint64(iScore)
 		reward.Beta3.Beta3IScore.Add(&reward.Beta3.Beta3IScore.Int, &common.NewHexIntFromUint64(iScore).Int)
-		reward.TotalIScore.Add(&reward.TotalIScore.Int, &iScoreInHex.Int)
+		calcResult.TotalIScore.Add(&calcResult.TotalIScore.Int, &iScoreInHex.Int)
 	}
+}
+
+func GetCalcResult(ctx *Context, address common.Address) *CalcResult {
+	calcResult := getCalcResult(ctx, address)
+	if calcResult != nil {
+		return calcResult
+	}
+	initCalcResult(ctx, address)
+	calcResult = getCalcResult(ctx, address)
+	return calcResult
 }
 
 func getCalcResult(ctx *Context, address common.Address) *CalcResult {
@@ -392,13 +397,8 @@ func getCalcResult(ctx *Context, address common.Address) *CalcResult {
 	return nil
 }
 
-func getReward(ctx *Context, rewardAddress common.Address, blockHeight uint64) *Reward {
+func getReward(calcResult *CalcResult, blockHeight uint64) *Reward {
 	var r *Reward
-	calcResult := getCalcResult(ctx, rewardAddress)
-	if calcResult == nil {
-		initCalcResult(ctx, rewardAddress)
-		calcResult = getCalcResult(ctx, rewardAddress)
-	}
 	rewardLength := len(calcResult.Rewards)
 	for i := rewardLength - 1; i >= 0; i-- {
 		reward := calcResult.Rewards[i]
@@ -411,6 +411,17 @@ func getReward(ctx *Context, rewardAddress common.Address, blockHeight uint64) *
 
 func initCalcResult(ctx *Context, address common.Address) {
 	result := NewCalcResult(&address)
+	initialIScore := *common.NewHexInt(0)
+	qDB := ctx.DB.getQueryDB(address)
+	bucket, _ := qDB.GetBucket(db.PrefixIScore)
+	bs, _ := bucket.Get(address.Bytes())
+	if bs != nil {
+		ia, _ := NewIScoreAccountFromBytes(bs)
+		initialIScore = ia.IScore
+	}
+	result.InitialIScore = initialIScore
+	result.TotalIScore = initialIScore
+
 	rewards := make([]*Reward, 0)
 	for _, gv := range ctx.GV {
 		reward := NewReward(gv.BlockHeight)
