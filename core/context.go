@@ -327,9 +327,7 @@ type Context struct {
 	stats    *Statistics
 	Rollback *Rollback
 
-	calcDebugConf   *CalcDebugConfig
-	calcDebugResult *CalcDebugResult
-	calcDebugDB     db.Database
+	calcDebug *CalcDebug
 }
 
 func (ctx *Context) getGVByBlockHeight(blockHeight uint64) *GovernanceVariable {
@@ -523,8 +521,8 @@ func (ctx *Context) Print() {
 		log.Printf("\t%d: %s\n", i, v.String())
 	}
 	log.Printf("P-Rep candidate count : %d\n", len(ctx.PRepCandidates))
-	log.Print("Calculation Debug flag : ", ctx.calcDebugConf.Flag)
-	log.Print("Calculation Debugging Addresses : ", ctx.calcDebugConf.Addresses)
+	log.Print("Calculation Debug flag : ", ctx.calcDebug.calcDebugConf.Flag)
+	log.Print("Calculation Debugging Addresses : ", ctx.calcDebug.calcDebugConf.Addresses)
 	log.Printf("============================================================================")
 }
 
@@ -566,10 +564,7 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int, debugC
 		return nil, err
 	}
 
-	initCalcDebugConfig(ctx, debugConfigPath)
-
-	// Open calculation debug result DB
-	ctx.calcDebugDB = db.Open(ctx.DB.info.DBRoot, string(db.GoLevelDBBackend), "calculation_debug")
+	InitCalcDebugConfig(ctx, debugConfigPath)
 
 	// Open calculation result DB
 	isDB.calcResult = db.Open(isDB.info.DBRoot, isDB.info.DBType, "calculation_result")

@@ -411,7 +411,12 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 
 	ctx.Print()
 
-	initDebugResult(ctx, blockHeight, req.BlockHash)
+	if ctx.calcDebug.calcDebugConf.Flag {
+		// Open calculation debug result DB if calculation debug flag is on
+		ctx.calcDebug.calcDebugDB = db.Open(ctx.DB.info.DBRoot, string(db.GoLevelDBBackend), "calculation_debug")
+	}
+
+	InitCalcDebugResult(ctx, blockHeight, req.BlockHash)
 
 	//
 	// Calculate I-Score @ Account DB
@@ -493,11 +498,11 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 	log.Printf("%s", stats.String())
 	log.Printf("stateHash : %s", hex.EncodeToString(stateHash))
 
-	if needToUpdateCalcDebugResult(ctx) {
-		log.Printf("CalculationResult : %s", ctx.calcDebugResult.String())
-		writeResultToFile(ctx)
-		writeCalcDebugOutput(ctx)
-		resetCalcResults(ctx)
+	if NeedToUpdateCalcDebugResult(ctx) {
+		log.Printf("CalculationResult : %s", ctx.calcDebug.calcDebugResult.String())
+		WriteCalcDebugResult(ctx)
+		ResetCalcDebugResults(ctx)
+		ctx.calcDebug.calcDebugDB.Close()
 	}
 
 	// set blockHeight

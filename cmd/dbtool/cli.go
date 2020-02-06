@@ -15,7 +15,7 @@ const (
 	DBNamePreCommit       = "preCommit"
 	DBNameCalcResult      = "calcResult"
 	DBNameIISS            = "iiss"
-	DBNameCalcDebugOutput = "debugoutput"
+	DBNameCalcDebugResult = "calcDebug"
 
 	DataTypeGV     = "gv"
 	DataTypePRep   = "prep"
@@ -39,7 +39,7 @@ func printUsage() {
 		DBNamePreCommit,
 		DBNameCalcResult,
 		DBNameIISS,
-		DBNameCalcDebugOutput,
+		DBNameCalcDebugResult,
 	)
 }
 
@@ -76,7 +76,7 @@ func Run() (err error) {
 	preCommitFlagSet := flag.NewFlagSet(DBNamePreCommit, flag.ExitOnError)
 	calcResultFlagSet := flag.NewFlagSet(DBNameCalcResult, flag.ExitOnError)
 	iissFlagSet := flag.NewFlagSet(DBNameIISS, flag.ExitOnError)
-	calcDebugFlagSet := flag.NewFlagSet(DBNameCalcDebugOutput, flag.ExitOnError)
+	calcDebugFlagSet := flag.NewFlagSet(DBNameCalcDebugResult, flag.ExitOnError)
 
 	manageInput := initManageInput(manageFlagSet)
 	accountInput := initAccountInput(accountFlagSet)
@@ -116,7 +116,7 @@ func Run() (err error) {
 		err = iissFlagSet.Parse(os.Args[2:])
 		validateInput(iissFlagSet, err, iissInput.help)
 		err = queryIISSDB(*iissInput)
-	case DBNameCalcDebugOutput:
+	case DBNameCalcDebugResult:
 		err = calcDebugFlagSet.Parse(os.Args[2:])
 		validateInput(calcDebugFlagSet, err, calcDebugInput.help)
 		err = queryCalcDebugDB(*calcDebugInput)

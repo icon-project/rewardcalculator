@@ -78,7 +78,6 @@ func (m *manager) Close() error {
 	}
 
 	CloseIScoreDB(m.ctx.DB)
-	m.ctx.calcDebugDB.Close()
 	return nil
 }
 

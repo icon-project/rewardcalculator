@@ -20,7 +20,7 @@ func queryCalcDebugDB(input Input) (err error) {
 	}
 
 	if input.address == "" && input.height == 0 {
-		err = printDB(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printDebugOutput)
+		err = printDB(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printCalcDebugResult)
 	} else {
 		dir, name := filepath.Split(input.path)
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
@@ -58,9 +58,9 @@ func queryCalcDebugResult(qdb db.Database, address *common.Address, blockHeight 
 		} else {
 			for _, calcResult := range dr.Results {
 				if address.Equal(nilAddress) {
-					printCalcDebugResult(dr)
+					printCalcDebugResultInstance(dr)
 				} else if calcResult.Address.Equal(address) {
-					printCalcDebugResult(dr)
+					printCalcDebugResultInstance(dr)
 				}
 			}
 		}
@@ -68,16 +68,16 @@ func queryCalcDebugResult(qdb db.Database, address *common.Address, blockHeight 
 	return nil
 }
 
-func printDebugOutput(key []byte, value []byte) error {
+func printCalcDebugResult(key []byte, value []byte) error {
 	if cb, e := newCalcDebugResult(key, value); e != nil {
 		return e
 	} else {
-		printCalcDebugResult(cb)
+		printCalcDebugResultInstance(cb)
 		return nil
 	}
 }
 
-func printCalcDebugResult(dr *core.CalcDebugResult) {
+func printCalcDebugResultInstance(dr *core.CalcDebugResult) {
 	data, _ := json.MarshalIndent(dr.Results, "", "  ")
 	fmt.Printf("blockHeight : %d\nblockHash : %s\n", dr.BlockHeight, dr.BlockHash)
 	fmt.Printf("%s\n", string(data))
