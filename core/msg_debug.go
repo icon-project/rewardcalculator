@@ -166,14 +166,14 @@ func handleGV(c ipc.Connection, id uint32, ctx *Context) error {
 func handleCalcDebugFlagOn(c ipc.Connection, id uint32, ctx *Context) error {
 	var resp DebugMessage
 	resp.Cmd = DebugCalcFlagOn
-	ctx.calcDebug.calcDebugConf.Flag = true
+	ctx.calcDebug.conf.Flag = true
 	return c.Send(MsgDebug, id, &resp)
 }
 
 func handleCalcDebugFlagOff(c ipc.Connection, id uint32, ctx *Context) error {
 	var resp DebugMessage
 	resp.Cmd = DebugCalcFlagOff
-	ctx.calcDebug.calcDebugConf.Flag = false
+	ctx.calcDebug.conf.Flag = false
 	return c.Send(MsgDebug, id, &resp)
 }
 
@@ -201,13 +201,13 @@ type ResponseCalcDebugAddressList struct {
 func handleCalcDebugAddresses(c ipc.Connection, id uint32, ctx *Context) error {
 	var resp ResponseCalcDebugAddressList
 	resp.Cmd = DebugCalcListAddresses
-	resp.Addresses = ctx.calcDebug.calcDebugConf.Addresses
+	resp.Addresses = ctx.calcDebug.conf.Addresses
 	return c.Send(MsgDebug, id, &resp)
 }
 
 func handleCalcResultOutput(c ipc.Connection, id uint32, ctx *Context, output string) error {
 	var resp DebugMessage
-	ctx.calcDebug.calcDebugConf.Output = output
+	ctx.calcDebug.conf.Output = output
 	resp.OutputPath = output
 	return c.Send(MsgDebug, id, &resp)
 }

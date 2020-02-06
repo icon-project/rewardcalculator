@@ -411,9 +411,9 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 
 	ctx.Print()
 
-	if ctx.calcDebug.calcDebugConf.Flag {
+	if ctx.calcDebug.conf.Flag {
 		// Open calculation debug result DB if calculation debug flag is on
-		ctx.calcDebug.calcDebugDB = db.Open(ctx.DB.info.DBRoot, string(db.GoLevelDBBackend), "calculation_debug")
+		ctx.calcDebug.DB = db.Open(ctx.DB.info.DBRoot, string(db.GoLevelDBBackend), "calculation_debug")
 	}
 
 	InitCalcDebugResult(ctx, blockHeight, req.BlockHash)
@@ -499,10 +499,10 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 	log.Printf("stateHash : %s", hex.EncodeToString(stateHash))
 
 	if NeedToUpdateCalcDebugResult(ctx) {
-		log.Printf("CalculationResult : %s", ctx.calcDebug.calcDebugResult.String())
+		log.Printf("CalculationResult : %s", ctx.calcDebug.result.String())
 		WriteCalcDebugResult(ctx)
 		ResetCalcDebugResults(ctx)
-		ctx.calcDebug.calcDebugDB.Close()
+		ctx.calcDebug.DB.Close()
 	}
 
 	// set blockHeight

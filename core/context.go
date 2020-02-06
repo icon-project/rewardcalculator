@@ -521,8 +521,8 @@ func (ctx *Context) Print() {
 		log.Printf("\t%d: %s\n", i, v.String())
 	}
 	log.Printf("P-Rep candidate count : %d\n", len(ctx.PRepCandidates))
-	log.Print("Calculation Debug flag : ", ctx.calcDebug.calcDebugConf.Flag)
-	log.Print("Calculation Debugging Addresses : ", ctx.calcDebug.calcDebugConf.Addresses)
+	log.Print("Calculation Debug flag : ", ctx.calcDebug.conf.Flag)
+	log.Print("Calculation Debugging Addresses : ", ctx.calcDebug.conf.Addresses)
 	log.Printf("============================================================================")
 }
 
