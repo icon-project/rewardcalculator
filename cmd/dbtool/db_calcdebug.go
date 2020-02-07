@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,7 +30,7 @@ func queryCalcDebugDB(input Input) (err error) {
 }
 
 func queryCalcDebugResult(qdb db.Database, address *common.Address, blockHeight uint64) error {
-	qCalcDebugKeys, err := getCalcDebugResultKeys(qdb, blockHeight)
+	qCalcDebugKeys, err := core.GetCalcDebugResultKeys(qdb, blockHeight)
 	if err != nil {
 		return err
 	}
@@ -52,7 +50,7 @@ func queryCalcDebugResult(qdb db.Database, address *common.Address, blockHeight 
 		if value == nil {
 			continue
 		}
-		dr, err := newCalcDebugResult(key, value)
+		dr, err := core.NewCalcDebugResult(key, value)
 		if err != nil {
 			return err
 		} else {
@@ -69,7 +67,7 @@ func queryCalcDebugResult(qdb db.Database, address *common.Address, blockHeight 
 }
 
 func printCalcDebugResult(key []byte, value []byte) error {
-	if cb, e := newCalcDebugResult(key, value); e != nil {
+	if cb, e := core.NewCalcDebugResult(key, value); e != nil {
 		return e
 	} else {
 		printCalcDebugResultInstance(cb)
@@ -78,57 +76,6 @@ func printCalcDebugResult(key []byte, value []byte) error {
 }
 
 func printCalcDebugResultInstance(dr *core.CalcDebugResult) {
-	data, _ := json.MarshalIndent(dr.Results, "", "  ")
-	fmt.Printf("blockHeight : %d\nblockHash : %s\n", dr.BlockHeight, dr.BlockHash)
-	fmt.Printf("%s\n", string(data))
-}
-
-func newCalcDebugResult(key []byte, value []byte) (*core.CalcDebugResult, error) {
-	dr := new(core.CalcDebugResult)
-
-	err := dr.SetBytes(value)
-	if err != nil {
-		fmt.Printf("Failed to initialize debugResult instance\n")
-		return nil, err
-
-	}
-	dr.BlockHeight = common.BytesToUint64(key[:core.BlockHeightSize])
-	blockHash := make([]byte, core.BlockHashSize)
-	copy(blockHash, key[core.BlockHeightSize:core.BlockHeightSize+core.BlockHashSize])
-	dr.BlockHash = "0x" + hex.EncodeToString(blockHash)
-	return dr, nil
-}
-
-func getCalcDebugResultKeys(qdb db.Database, blockHeight uint64) ([][]byte, error) {
-	iter, err := qdb.GetIterator()
-	if err != nil {
-		fmt.Println("Failed to get calcDebugResult db iterator")
-		return nil, err
-	}
-
-	cDebugResultKeys := make([][]byte, 0)
-	iter.New(nil, nil)
-	keyExist := false
-	blockHeightBytesValue := common.Uint64ToBytes(blockHeight)
-	for iter.Next() {
-		key := make([]byte, len(iter.Key()))
-		copy(key, iter.Key())
-		if bytes.Equal(key[core.BlockHeightSize-len(blockHeightBytesValue):core.BlockHeightSize], blockHeightBytesValue) {
-			keyExist = true
-			cDebugResultKeys = append(cDebugResultKeys, key)
-		}
-	}
-	iter.Release()
-
-	if keyExist == false {
-		fmt.Println("Can not find key using given information")
-		return nil, errors.New("calcDebugResult key does not exist")
-	}
-	err = iter.Error()
-	if err != nil {
-		fmt.Println("Error while iterate")
-		return nil, err
-	}
-
-	return cDebugResultKeys, err
+	b, _ := json.MarshalIndent(dr, "", "  ")
+	fmt.Printf("%s\n", string(b))
 }

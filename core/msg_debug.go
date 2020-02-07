@@ -1,8 +1,12 @@
 package core
 
 import (
+	"bytes"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
+	"github.com/icon-project/rewardcalculator/common/db"
 	"log"
 
 	"github.com/icon-project/rewardcalculator/common/codec"
@@ -10,11 +14,12 @@ import (
 )
 
 const (
-	DebugStatistics    uint64 = 0
-	DebugDBInfo        uint64 = 1
-	DebugPRep          uint64 = 2
-	DebugPRepCandidate uint64 = 3
-	DebugGV            uint64 = 4
+	DebugStatistics      uint64 = 0
+	DebugDBInfo          uint64 = 1
+	DebugPRep            uint64 = 2
+	DebugPRepCandidate   uint64 = 3
+	DebugGV              uint64 = 4
+	DebugCalcDebugResult uint64 = 5
 
 	DebugLogCTX uint64 = 100
 
@@ -33,8 +38,9 @@ type DebugMessage struct {
 }
 
 type MessageData struct {
-	Address    common.Address
-	OutputPath string
+	Address     common.Address
+	OutputPath  string
+	BlockHeight uint64
 }
 
 func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
@@ -72,6 +78,8 @@ func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
 		return handleCalcDebugAddresses(c, id, ctx)
 	case DebugCalcOutputPath:
 		return handleCalcResultOutput(c, id, ctx, req.OutputPath)
+	case DebugCalcDebugResult:
+		return handleQueryCalcDebugResult(c, id, ctx, req.Address, req.BlockHeight)
 	}
 
 	return fmt.Errorf("unknown debug message %d", req.Cmd)
@@ -210,4 +218,101 @@ func handleCalcResultOutput(c ipc.Connection, id uint32, ctx *Context, output st
 	ctx.calcDebug.conf.Output = output
 	resp.OutputPath = output
 	return c.Send(MsgDebug, id, &resp)
+}
+
+type ResponseQueryCalcDebugResult struct {
+	Results []*CalcDebugResult
+}
+
+func handleQueryCalcDebugResult(c ipc.Connection, id uint32, ctx *Context,
+	address common.Address, blockHeight uint64) error {
+
+	var resp ResponseQueryCalcDebugResult
+
+	calcDebugDB := db.Open(ctx.DB.info.DBRoot, string(db.GoLevelDBBackend), "calculation_debug")
+	defer calcDebugDB.Close()
+	CalcDebugKeys, err := GetCalcDebugResultKeys(calcDebugDB, blockHeight)
+	if err != nil {
+		return c.Send(MsgDebug, id, &resp)
+	}
+	bucket, err := calcDebugDB.GetBucket(db.PrefixClaim)
+	if err != nil {
+		fmt.Println("Failed to get debugResult Bucket")
+		return c.Send(MsgDebug, id, &resp)
+	}
+
+	nilAddress := new(common.Address)
+	for _, key := range CalcDebugKeys {
+		value, err := bucket.Get(key)
+		if err != nil {
+			fmt.Println("Error while get debugResult")
+			return c.Send(MsgDebug, id, new(ResponseQueryCalcDebugResult))
+		}
+		if value == nil {
+			continue
+		}
+		dr, err := NewCalcDebugResult(key, value)
+		if err != nil {
+			return err
+		} else {
+			for _, calcResult := range dr.Results {
+				if address.Equal(nilAddress) {
+					resp.Results = append(resp.Results, dr)
+				} else if address.Equal(calcResult.Address) {
+					resp.Results = append(resp.Results, dr)
+				}
+			}
+		}
+	}
+	return c.Send(MsgDebug, id, &resp)
+}
+
+func GetCalcDebugResultKeys(qdb db.Database, blockHeight uint64) ([][]byte, error) {
+	iter, err := qdb.GetIterator()
+	if err != nil {
+		fmt.Println("Failed to get calcDebugResult db iterator")
+		return nil, err
+	}
+
+	cDebugResultKeys := make([][]byte, 0)
+	iter.New(nil, nil)
+	keyExist := false
+	blockHeightBytesValue := common.Uint64ToBytes(blockHeight)
+	for iter.Next() {
+		key := make([]byte, len(iter.Key()))
+		copy(key, iter.Key())
+		if bytes.Equal(key[BlockHeightSize-len(blockHeightBytesValue):BlockHeightSize], blockHeightBytesValue) {
+			keyExist = true
+			cDebugResultKeys = append(cDebugResultKeys, key)
+		}
+	}
+	iter.Release()
+
+	if keyExist == false {
+		fmt.Println("Can not find key using given information")
+		return nil, errors.New("calcDebugResult key does not exist")
+	}
+	err = iter.Error()
+	if err != nil {
+		fmt.Println("Error while iterate")
+		return nil, err
+	}
+
+	return cDebugResultKeys, err
+}
+
+func NewCalcDebugResult(key []byte, value []byte) (*CalcDebugResult, error) {
+	dr := new(CalcDebugResult)
+
+	err := dr.SetBytes(value)
+	if err != nil {
+		fmt.Printf("Failed to initialize debugResult instance\n")
+		return nil, err
+
+	}
+	dr.BlockHeight = common.BytesToUint64(key[:BlockHeightSize])
+	blockHash := make([]byte, BlockHashSize)
+	copy(blockHash, key[BlockHeightSize:BlockHeightSize+BlockHashSize])
+	dr.BlockHash = "0x" + hex.EncodeToString(blockHash)
+	return dr, nil
 }

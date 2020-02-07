@@ -29,11 +29,9 @@ func NewCalcDebugConfig() *CalcDebugConfig {
 }
 
 type CalcDebugResult struct {
-	BlockHeight uint64                `json:"CalculationBlockHeight"`
-	BlockHash   string                `json:"CalculationBlockHash"`
-	Preps       []*PRepCandidate      `json:"PReps"`
-	GV          []*GovernanceVariable `json:"GV"`
-	Results     []*CalcResult         `json:"calculation"`
+	BlockHeight uint64 `json:"CalculationBlockHeight"`
+	BlockHash   string `json:"CalculationBlockHash"`
+	CalcDebugData
 }
 
 func (cb CalcDebugResult) String() string {
@@ -56,7 +54,7 @@ func (cb *CalcDebugResult) ID() []byte {
 
 func (cb *CalcDebugResult) Bytes() ([]byte, error) {
 	var bytes []byte
-	if bs, err := codec.MarshalToBytes(&cb.Results); err != nil {
+	if bs, err := codec.MarshalToBytes(&cb.CalcDebugData); err != nil {
 		return nil, err
 	} else {
 		bytes = bs
@@ -65,11 +63,17 @@ func (cb *CalcDebugResult) Bytes() ([]byte, error) {
 }
 
 func (cb *CalcDebugResult) SetBytes(bs []byte) error {
-	_, err := codec.UnmarshalFromBytes(bs, &cb.Results)
+	_, err := codec.UnmarshalFromBytes(bs, &cb.CalcDebugData)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+type CalcDebugData struct {
+	Preps   []*PRepCandidate      `json:"PReps"`
+	GV      []*GovernanceVariable `json:"GV"`
+	Results []*CalcResult         `json:"calculation"`
 }
 
 type CalcResult struct {
@@ -77,14 +81,6 @@ type CalcResult struct {
 	InitialIScore common.HexInt   `json:"InitialIScore"`
 	TotalIScore   common.HexInt   `json:"TotalIScore"`
 	Rewards       []*Reward       `json:"rewards"`
-}
-
-func (cr CalcResult) String() string {
-	b, err := json.Marshal(cr)
-	if err != nil {
-		return "Failed to marshal CalcResult"
-	}
-	return string(b)
 }
 
 func NewCalcResult(address *common.Address) *CalcResult {
@@ -98,14 +94,6 @@ type Reward struct {
 	Beta3       *Beta3 `json:"beta3"`
 }
 
-func (r Reward) String() string {
-	b, err := json.Marshal(r)
-	if err != nil {
-		return "Failed to marshal Reward"
-	}
-	return string(b)
-}
-
 func NewReward(blockHeight uint64) *Reward {
 	return &Reward{blockHeight, NewBeta1(), NewBeta2(), NewBeta3()}
 }
@@ -116,14 +104,6 @@ type Beta1 struct {
 	Validate    []*ValidateInfo `json:"validate"`
 }
 
-func (b1 *Beta1) String() string {
-	b, err := json.Marshal(b1)
-	if err != nil {
-		return "Failed to marshal Beta1"
-	}
-	return string(b)
-}
-
 func NewBeta1() *Beta1 {
 	return &Beta1{*common.NewHexInt(0), NewGenerate(), make([]*ValidateInfo, 0)}
 }
@@ -132,14 +112,6 @@ type Generate struct {
 	BlockCount uint64 `json:"blockCount"`
 	Formula    string `json:"formula"`
 	IScore     uint64 `json:"IScore"`
-}
-
-func (g Generate) String() string {
-	b, err := json.Marshal(g)
-	if err != nil {
-		return "Failed to marshal Generate"
-	}
-	return string(b)
 }
 
 func NewGenerate() *Generate {
@@ -153,25 +125,9 @@ type ValidateInfo struct {
 	IScore         uint64 `json:"IScore"`
 }
 
-func (v ValidateInfo) String() string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return "Failed to marshal ValidateInfo"
-	}
-	return string(b)
-}
-
 type Beta2 struct {
 	Beta2IScore   common.HexInt    `json:"Beta2IScore"`
 	DelegatedInfo []*DelegatedInfo `json:"delegated"`
-}
-
-func (b2 Beta2) String() string {
-	b, err := json.Marshal(b2)
-	if err != nil {
-		return "Failed to marshal Beta2"
-	}
-	return string(b)
 }
 
 func NewBeta2() *Beta2 {
@@ -186,25 +142,9 @@ type DelegatedInfo struct {
 	IScore         uint64 `json:"IScore"`
 }
 
-func (d DelegatedInfo) String() string {
-	b, err := json.Marshal(d)
-	if err != nil {
-		return "Failed to marshal DelegatedInfo"
-	}
-	return string(b)
-}
-
 type Beta3 struct {
 	Beta3IScore    common.HexInt     `json:"Beta3IScore"`
 	DelegationInfo []*DelegationInfo `json:"delegate"`
-}
-
-func (b3 Beta3) String() string {
-	b, err := json.Marshal(b3)
-	if err != nil {
-		return "Failed to marshal Beta3"
-	}
-	return string(b)
 }
 
 func NewBeta3() *Beta3 {
@@ -217,14 +157,6 @@ type DelegationInfo struct {
 	Amount      uint64         `json:"amount"`
 	Formula     string         `json:"formula"`
 	IScore      uint64         `json:"IScore"`
-}
-
-func (d DelegationInfo) String() string {
-	b, err := json.Marshal(d)
-	if err != nil {
-		return "Failed to marshal DelegationInfo"
-	}
-	return string(b)
 }
 
 func InitCalcDebugConfig(ctx *Context, debugConfigPath string) {
@@ -439,31 +371,9 @@ func InitCalcResult(ctx *Context, address common.Address) {
 }
 
 func WriteCalcDebugResult(ctx *Context) {
-	writeCalcDebugResultToDB(ctx)
-	writeCalcDebugResultToFile(ctx)
-}
-
-func writeCalcDebugResultToFile(ctx *Context) {
-	filePath := ctx.calcDebug.conf.Output
-	calcDebugResults := make([]*CalcDebugResult, 0)
-	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0644)
-	defer f.Close()
-	if err != nil {
-		log.Printf("Error while opening calculation debug result")
-		return
-	}
-	fileContents, _ := ioutil.ReadFile(filePath)
-	json.Unmarshal(fileContents, &calcDebugResults)
-	calcDebugResults = append(calcDebugResults, ctx.calcDebug.result)
-	fileContents, _ = json.MarshalIndent(calcDebugResults, "", "  ")
-	if _, e := f.Write(fileContents); e != nil {
-		log.Printf("Error while write calculation debug result")
-		return
-	}
-}
-
-func writeCalcDebugResultToDB(ctx *Context) {
-	bucket, _ := ctx.calcDebug.DB.GetBucket("")
+	calcDebugDB := db.Open(ctx.DB.info.DBRoot, string(db.GoLevelDBBackend), "calculation_debug")
+	defer calcDebugDB.Close()
+	bucket, _ := calcDebugDB.GetBucket("")
 	b, err := ctx.calcDebug.result.Bytes()
 	if err != nil {
 		log.Print("Error while marshaling calculation debug result")

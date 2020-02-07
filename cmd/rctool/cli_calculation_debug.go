@@ -1,24 +1,29 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/core"
 )
 
 func (cli *CLI) calculateDebug(input []string) error {
-	calcDebugUsage := fmt.Errorf("Commands\n" +
+	calcDebugUsage := fmt.Errorf("\nCommands\n" +
 		"\t enable \t enable calculation debug\n" +
 		"\t disable \t disable calculation debug\n" +
 		"\t add <Address> \t add calculation debugging address\n" +
 		"\t delete <Address> \t delete calculation debugging address\n" +
 		"\t output <outputPath> \t change calculation debugging output path\n" +
-		"\t list \t print calculation debugging addresses\n")
+		"\t list \t print calculation debugging addresses\n" +
+		"\t result \t print calculation debugging result. give -h option to check options")
 
 	if len(input) == 0 {
 		return calcDebugUsage
 	}
 	var err error
+	resultFlagSet := flag.NewFlagSet("calcDebugResult", flag.ExitOnError)
+
+	calcDebugResultOptions := initCalcDebugResultOptions(resultFlagSet)
 	switch input[0] {
 	case "enable":
 		err = cli.enableCalcDebug()
@@ -41,6 +46,10 @@ func (cli *CLI) calculateDebug(input []string) error {
 		err = cli.changeCalcDebugResultPath(input[1])
 	case "list":
 		err = cli.printCalcDebuggingAddresses()
+	case "result":
+		err = resultFlagSet.Parse(input[1:])
+		validateInput(resultFlagSet, err, calcDebugResultOptions.help)
+		err = cli.queryCalculationDebugResult(calcDebugResultOptions)
 	default:
 		goto INVALID
 	}
@@ -98,4 +107,22 @@ func (cli *CLI) changeCalcDebugResultPath(path string) error {
 	req.OutputPath = path
 
 	return cli.conn.Send(core.MsgDebug, cli.id, req)
+}
+
+func (cli *CLI) queryCalculationDebugResult(options *Options) error {
+	var req core.DebugMessage
+	var resp core.ResponseQueryCalcDebugResult
+	address := *common.NewAddressFromString(options.address)
+	blockHeight := options.blockHeight
+
+	req.Cmd = core.DebugCalcDebugResult
+	req.Address = address
+	req.BlockHeight = blockHeight
+
+	err := cli.conn.SendAndReceive(core.MsgDebug, cli.id, req, &resp)
+	if err == nil && resp.Results != nil {
+		fmt.Printf("%s\n", Display(resp.Results))
+	}
+
+	return err
 }
