@@ -447,15 +447,15 @@ func writeCalcDebugResultToFile(ctx *Context) {
 	filePath := ctx.calcDebug.conf.Output
 	calcDebugResults := make([]*CalcDebugResult, 0)
 	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0644)
+	defer f.Close()
 	if err != nil {
-		log.Printf("Error while marshaling result")
+		log.Printf("Error while opening calculation debug result")
 		return
 	}
 	fileContents, _ := ioutil.ReadFile(filePath)
 	json.Unmarshal(fileContents, &calcDebugResults)
 	calcDebugResults = append(calcDebugResults, ctx.calcDebug.result)
 	fileContents, _ = json.MarshalIndent(calcDebugResults, "", "  ")
-	defer f.Close()
 	if _, e := f.Write(fileContents); e != nil {
 		log.Printf("Error while write calculation debug result")
 		return
