@@ -237,7 +237,6 @@ func handleQueryCalcDebugResult(c ipc.Connection, id uint32, ctx *Context,
 	}
 	bucket, err := calcDebugDB.GetBucket(db.PrefixClaim)
 	if err != nil {
-		fmt.Println("Failed to get debugResult Bucket")
 		return c.Send(MsgDebug, id, &resp)
 	}
 
@@ -245,7 +244,6 @@ func handleQueryCalcDebugResult(c ipc.Connection, id uint32, ctx *Context,
 	for _, key := range CalcDebugKeys {
 		value, err := bucket.Get(key)
 		if err != nil {
-			fmt.Println("Error while get debugResult")
 			return c.Send(MsgDebug, id, new(ResponseQueryCalcDebugResult))
 		}
 		if value == nil {
@@ -270,7 +268,6 @@ func handleQueryCalcDebugResult(c ipc.Connection, id uint32, ctx *Context,
 func GetCalcDebugResultKeys(qdb db.Database, blockHeight uint64) ([][]byte, error) {
 	iter, err := qdb.GetIterator()
 	if err != nil {
-		fmt.Println("Failed to get calcDebugResult db iterator")
 		return nil, err
 	}
 
@@ -289,12 +286,10 @@ func GetCalcDebugResultKeys(qdb db.Database, blockHeight uint64) ([][]byte, erro
 	iter.Release()
 
 	if keyExist == false {
-		fmt.Println("Can not find key using given information")
 		return nil, errors.New("calcDebugResult key does not exist")
 	}
 	err = iter.Error()
 	if err != nil {
-		fmt.Println("Error while iterate")
 		return nil, err
 	}
 
@@ -306,7 +301,6 @@ func NewCalcDebugResult(key []byte, value []byte) (*CalcDebugResult, error) {
 
 	err := dr.SetBytes(value)
 	if err != nil {
-		fmt.Printf("Failed to initialize debugResult instance\n")
 		return nil, err
 
 	}
