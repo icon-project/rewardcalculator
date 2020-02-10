@@ -2,10 +2,13 @@ package common
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
+	"github.com/syndtr/goleveldb/leveldb/util"
+	"path/filepath"
 )
 
 func QueryCalcDebugResult(qdb db.Database, address *common.Address, blockHeight uint64) error {
@@ -57,4 +60,22 @@ func PrintCalcDebugResult(key []byte, value []byte) error {
 func printCalcDebugResultInstance(dr *core.CalcDebugResult) {
 	b, _ := json.MarshalIndent(dr, "", "  ")
 	fmt.Printf("%s\n", string(b))
+}
+
+func QueryCalcDebugDB(input Input) (err error) {
+	if input.Path == "" {
+		fmt.Println("Enter dbPath")
+		return errors.New("invalid db path")
+	}
+
+	if input.Address == "" && input.Height == 0 {
+		err = PrintDB(input.Path, util.BytesPrefix([]byte(db.PrefixClaim)), PrintCalcDebugResult)
+	} else {
+		dir, name := filepath.Split(input.Path)
+		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
+		defer qdb.Close()
+		address := common.NewAddressFromString(input.Address)
+		err = QueryCalcDebugResult(qdb, address, input.Height)
+	}
+	return
 }

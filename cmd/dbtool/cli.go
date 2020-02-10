@@ -120,7 +120,7 @@ func Run() (err error) {
 	case DBNameCalcDebugResult:
 		err = calcDebugFlagSet.Parse(os.Args[2:])
 		common.ValidateInput(calcDebugFlagSet, err, calcDebugInput.Help)
-		err = queryCalcDebugDB(*calcDebugInput)
+		err = common.QueryCalcDebugDB(*calcDebugInput)
 	default:
 		printUsage()
 		err = errors.New("invalid dbName")
