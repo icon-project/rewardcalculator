@@ -4,23 +4,24 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	cmdCommon "github.com/icon-project/rewardcalculator/cmd/common"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-func queryClaimBackupDB(input Input) (err error) {
-	if input.path == "" {
+func queryClaimBackupDB(input cmdCommon.Input) (err error) {
+	if input.Path == "" {
 		fmt.Println("Enter dbPath")
 		return errors.New("invalid db path")
 	}
 
-	if input.height == 0 {
-		err = printDB(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printClaimBackup)
+	if input.Height == 0 {
+		err = cmdCommon.PrintDB(input.Path, util.BytesPrefix([]byte(db.PrefixClaim)), printClaimBackup)
 	} else {
-		prefix := core.MakeIteratorPrefix(db.PrefixClaim, input.height, nil, 0)
-		err = printDB(input.path, prefix, printClaimBackup)
+		prefix := core.MakeIteratorPrefix(db.PrefixClaim, input.Height, nil, 0)
+		err = cmdCommon.PrintDB(input.Path, prefix, printClaimBackup)
 	}
 	return
 }

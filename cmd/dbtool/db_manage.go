@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	cmdCommon "github.com/icon-project/rewardcalculator/cmd/common"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
@@ -10,23 +11,23 @@ import (
 	"path/filepath"
 )
 
-func queryManagementDB(input Input) (err error) {
-	if input.path == "" {
+func queryManagementDB(input cmdCommon.Input) (err error) {
+	if input.Path == "" {
 		fmt.Println("Enter dbPath")
 		return errors.New("invalid db ")
 	}
-	dir, name := filepath.Split(input.path)
+	dir, name := filepath.Split(input.Path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
 
-	switch input.data {
+	switch input.Data {
 	case "":
 		fmt.Println("============== Database info ==============")
 		if err = queryDBInfo(qdb); err != nil {
 			return
 		}
 		fmt.Println("\n============== Governance variables ==============")
-		if err = iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV); err != nil {
+		if err = cmdCommon.IteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV); err != nil {
 			return
 		}
 		fmt.Println("\n============== P-Rep ==============")
@@ -42,15 +43,15 @@ func queryManagementDB(input Input) (err error) {
 			return
 		}
 	case DataTypeGV:
-		if err = iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV); err != nil {
+		if err = cmdCommon.IteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixGovernanceVariable)), printGV); err != nil {
 			return
 		}
 	case DataTypePRep:
-		if err = queryPRep(qdb, input.height); err != nil {
+		if err = queryPRep(qdb, input.Height); err != nil {
 			return
 		}
 	case DataTypePC:
-		if err = queryPC(qdb, input.address); err != nil {
+		if err = queryPC(qdb, input.Address); err != nil {
 			return
 		}
 	default:
@@ -61,7 +62,7 @@ func queryManagementDB(input Input) (err error) {
 
 func queryPC(qdb db.Database, address string) error {
 	if address == "" {
-		err := iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRepCandidate)), printPC)
+		err := cmdCommon.IteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRepCandidate)), printPC)
 		return err
 	} else {
 		addr := common.NewAddressFromString(address)

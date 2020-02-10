@@ -3,8 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	cmdCommon "github.com/icon-project/rewardcalculator/cmd/common"
 	"github.com/icon-project/rewardcalculator/common"
+	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
+	"github.com/syndtr/goleveldb/leveldb/util"
+	"path/filepath"
 )
 
 func (cli *CLI) calculateDebug(input []string) error {
@@ -15,7 +19,7 @@ func (cli *CLI) calculateDebug(input []string) error {
 		"\t delete <Address> \t delete calculation debugging address\n" +
 		"\t output <outputPath> \t change calculation debugging output path\n" +
 		"\t list \t print calculation debugging addresses\n" +
-		"\t result \t print calculation debugging result. give -h option to check options")
+		"\t result \t print calculation debugging result. give -h option to check input")
 
 	if len(input) == 0 {
 		return calcDebugUsage
@@ -23,7 +27,7 @@ func (cli *CLI) calculateDebug(input []string) error {
 	var err error
 	resultFlagSet := flag.NewFlagSet("calcDebugResult", flag.ExitOnError)
 
-	calcDebugResultOptions := initCalcDebugResultOptions(resultFlagSet)
+	calcDebugResultInput := cmdCommon.InitCalcDebugResult(resultFlagSet)
 	switch input[0] {
 	case "enable":
 		err = cli.enableCalcDebug()
@@ -48,8 +52,8 @@ func (cli *CLI) calculateDebug(input []string) error {
 		err = cli.printCalcDebuggingAddresses()
 	case "result":
 		err = resultFlagSet.Parse(input[1:])
-		validateInput(resultFlagSet, err, calcDebugResultOptions.help)
-		err = cli.queryCalculationDebugResult(calcDebugResultOptions)
+		cmdCommon.ValidateInput(resultFlagSet, err, calcDebugResultInput.Help)
+		err = cli.queryCalculationDebugResult(calcDebugResultInput)
 	default:
 		goto INVALID
 	}
@@ -109,11 +113,27 @@ func (cli *CLI) changeCalcDebugResultPath(path string) error {
 	return cli.conn.Send(core.MsgDebug, cli.id, req)
 }
 
-func (cli *CLI) queryCalculationDebugResult(options *Options) error {
+func (cli *CLI) queryCalculationDebugResult(input *cmdCommon.Input) (err error) {
+	if input.Path == "" {
+		return cli.queryCalculationDebugResultIPC(input)
+	}
+	if input.Address == "" && input.Height == 0 {
+		err = cmdCommon.PrintDB(input.Path, util.BytesPrefix([]byte(db.PrefixClaim)), cmdCommon.PrintCalcDebugResult)
+	} else {
+		dir, name := filepath.Split(input.Path)
+		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
+		defer qdb.Close()
+		address := common.NewAddressFromString(input.Address)
+		err = cmdCommon.QueryCalcDebugResult(qdb, address, input.Height)
+	}
+	return
+}
+
+func (cli *CLI) queryCalculationDebugResultIPC(input *cmdCommon.Input) error {
 	var req core.DebugMessage
 	var resp core.ResponseQueryCalcDebugResult
-	address := *common.NewAddressFromString(options.address)
-	blockHeight := options.blockHeight
+	address := *common.NewAddressFromString(input.Address)
+	blockHeight := input.Height
 
 	req.Cmd = core.DebugCalcDebugResult
 	req.Address = address
