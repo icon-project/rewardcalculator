@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -14,12 +15,14 @@ import (
 )
 
 const claimMinIScore = 1000
+
 var BigIntClaimMinIScore = big.NewInt(claimMinIScore)
 
 type ClaimMessage struct {
 	Address     common.Address
 	BlockHeight uint64
 	BlockHash   []byte
+	PrevHash    []byte
 	TXIndex     uint64
 	TXHash      []byte
 }
@@ -70,6 +73,8 @@ func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	pcDB := ctx.DB.getPreCommitDB()
 	preCommit := newPreCommit(req.BlockHeight, req.BlockHash, req.TXIndex, req.TXHash, req.Address)
+	nilBlockHash := make([]byte, BlockHashSize)
+	prevPreCommit := newPreCommit(req.BlockHeight-1, req.PrevHash, 0, nilBlockHash, req.Address)
 	if preCommit.query(pcDB) == true {
 		if preCommit.Confirmed && req.TXIndex != preCommit.TXIndex {
 			// already claimed in current block
@@ -79,7 +84,10 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 			return preCommit.BlockHeight, &preCommit.Data.IScore
 		}
 	}
-
+	// check if claimed in previous Block when requested BlockHeight is not term starting Block
+	if req.BlockHeight-1 != ctx.DB.getPrevCalcDoneBH() && prevPreCommit.query(pcDB) {
+		return preCommit.BlockHeight, nil
+	}
 	var claim *Claim = nil
 	var ia *IScoreAccount = nil
 	var err error
@@ -228,7 +236,17 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 		err = writePreCommitToClaimDB(iDB.getPreCommitDB(), iDB.getClaimDB(), iDB.getClaimBackupDB(),
 			req.BlockHeight, req.BlockHash)
 		if err == nil {
-			mh.mgr.ctx.DB.setCurrentBlockInfo(req.BlockHeight, req.BlockHash)
+			ctx := mh.mgr.ctx
+			ctx.DB.setCurrentBlockInfo(req.BlockHeight, req.BlockHash)
+			for key, _ := range *ctx.PreCommitInfo {
+				if bytes.Equal(key[:], req.BlockHash) {
+					continue
+				}
+				if err = deletePreCommitChildren(ctx, req.BlockHeight, key[:]); err != nil {
+					return err
+				}
+				//clearPreCommitInfo(ctx, key[:])
+			}
 		}
 	} else {
 		err = flushPreCommit(iDB.getPreCommitDB(), req.BlockHeight, req.BlockHash)
@@ -245,4 +263,66 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCommitBlock), id, resp.String())
 	return c.Send(MsgCommitBlock, id, &resp)
+}
+
+func savePreCommitChild(ctx *Context, prevBlockHash []byte, blockHash []byte) error {
+	var tempHash [BlockHashSize]byte
+	copy(tempHash[:], prevBlockHash)
+	preCommitChildrenInfo, _ := (*ctx.PreCommitInfo)[tempHash]
+	copy(tempHash[:], blockHash)
+	if exist, ok := preCommitChildrenInfo[tempHash]; ok && exist {
+		return nil
+	}
+	preCommitChildrenInfo[tempHash] = true
+	pdb := ctx.DB.preCommitInfo
+	bucket, _ := pdb.GetBucket(db.PrefixIScore)
+	bs, err := bucket.Get(prevBlockHash[:])
+	if err != nil {
+		log.Printf("Error while getting PrecommitHieriachy")
+		return err
+	}
+	preCommitHierarchy := new(PreCommitHierarchy)
+	preCommitHierarchy.SetBytes(bs)
+	preCommitHierarchy.childrenBlockHashes = append(preCommitHierarchy.childrenBlockHashes, tempHash)
+	data, _ := preCommitHierarchy.Bytes()
+	bucket.Set(prevBlockHash[:], data)
+	return nil
+}
+
+func getChildrenHashes(ctx *Context, blockHash []byte) (childrenHashes [][BlockHashSize]byte) {
+	var hash [BlockHashSize]byte
+	copy(hash[:], blockHash)
+	preCommitChildrenInfo, _ := (*ctx.PreCommitInfo)[hash]
+	for k := range preCommitChildrenInfo {
+		childrenHashes = append(childrenHashes, k)
+	}
+	return
+}
+
+func deletePreCommitChildren(ctx *Context, blockHeight uint64, blockHash []byte) error {
+	childrenHashes := getChildrenHashes(ctx, blockHash)
+	for _, childHash := range childrenHashes {
+		prefix := MakeIteratorPrefix(db.PrefixIScore, blockHeight-1, childHash[:], BlockHashSize)
+		err := deletePreCommit(ctx.DB.preCommit, prefix.Start, prefix.Limit)
+		if err != nil {
+			log.Printf("Error while deleting Precommit")
+			return err
+		}
+	}
+	return nil
+}
+
+func clearPreCommitInfo(ctx *Context, blockHash []byte) {
+	var hash [BlockHashSize]byte
+	copy(hash[:], blockHash)
+	if _, ok := (*ctx.PreCommitInfo)[hash]; !ok {
+		delete(*ctx.PreCommitInfo, hash)
+	}
+	pdb := ctx.DB.preCommitInfo
+	bucket, err := pdb.GetBucket(db.PrefixIScore)
+	if err != nil {
+		log.Printf("Error while getting preCommitInfo bucket")
+		return
+	}
+	bucket.Delete(blockHash)
 }
