@@ -583,6 +583,9 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	// Open PreCommitHierarchy DB
 	isDB.preCommitInfo = db.Open(isDB.info.DBRoot, isDB.info.DBType, "preCommit_info")
 
+	ctx.PreCommitInfo = new(PreCommitInfo)
+	*ctx.PreCommitInfo = LoadPreCommitInfo(isDB.preCommitInfo)
+
 	return ctx, nil
 }
 

@@ -19,19 +19,20 @@ const claimMinIScore = 1000
 var BigIntClaimMinIScore = big.NewInt(claimMinIScore)
 
 type ClaimMessage struct {
-	Address     common.Address
-	BlockHeight uint64
-	BlockHash   []byte
-	PrevHash    []byte
-	TXIndex     uint64
-	TXHash      []byte
+	Address       common.Address
+	BlockHeight   uint64
+	BlockHash     []byte
+	PrevBlockHash []byte
+	TXIndex       uint64
+	TXHash        []byte
 }
 
 func (cm *ClaimMessage) String() string {
-	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s, TXIndex: %d, TXHash: %s",
+	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s, PrevBlockHash: %s, TXIndex: %d, TXHash: %s",
 		cm.Address.String(),
 		cm.BlockHeight,
 		hex.EncodeToString(cm.BlockHash),
+		hex.EncodeToString(cm.PrevBlockHash),
 		cm.TXIndex,
 		hex.EncodeToString(cm.TXHash))
 }
@@ -74,7 +75,7 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	pcDB := ctx.DB.getPreCommitDB()
 	preCommit := newPreCommit(req.BlockHeight, req.BlockHash, req.TXIndex, req.TXHash, req.Address)
 	nilBlockHash := make([]byte, BlockHashSize)
-	prevPreCommit := newPreCommit(req.BlockHeight-1, req.PrevHash, 0, nilBlockHash, req.Address)
+	prevPreCommit := newPreCommit(req.BlockHeight-1, req.PrevBlockHash, 0, nilBlockHash, req.Address)
 	if preCommit.query(pcDB) == true {
 		if preCommit.Confirmed && req.TXIndex != preCommit.TXIndex {
 			// already claimed in current block
@@ -84,13 +85,18 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 			return preCommit.BlockHeight, &preCommit.Data.IScore
 		}
 	}
+	var err error
+	err = savePreCommitInfo(ctx, prevPreCommit.BlockHash, req.BlockHash)
+	if err != nil {
+		log.Printf("Failed to write Precommit children info. PrevBlockHash : %s, BlockHash : %s",
+			prevPreCommit.BlockHash, req.BlockHash)
+	}
 	// check if claimed in previous Block when requested BlockHeight is not term starting Block
 	if req.BlockHeight-1 != ctx.DB.getPrevCalcDoneBH() && prevPreCommit.query(pcDB) {
 		return preCommit.BlockHeight, nil
 	}
 	var claim *Claim = nil
 	var ia *IScoreAccount = nil
-	var err error
 	isDB := ctx.DB
 
 	var cDB, qDB db.Database
@@ -245,7 +251,7 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 				if err = deletePreCommitChildren(ctx, req.BlockHeight, key[:]); err != nil {
 					return err
 				}
-				//clearPreCommitInfo(ctx, key[:])
+				clearPreCommitInfo(ctx, key[:])
 			}
 		}
 	} else {
@@ -265,16 +271,27 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 	return c.Send(MsgCommitBlock, id, &resp)
 }
 
-func savePreCommitChild(ctx *Context, prevBlockHash []byte, blockHash []byte) error {
-	var tempHash [BlockHashSize]byte
-	copy(tempHash[:], prevBlockHash)
-	preCommitChildrenInfo, _ := (*ctx.PreCommitInfo)[tempHash]
-	copy(tempHash[:], blockHash)
-	if exist, ok := preCommitChildrenInfo[tempHash]; ok && exist {
+func savePreCommitInfo(ctx *Context, prevBlockHash []byte, blockHash []byte) error {
+	//save PreCommit info in context and DB
+	var prevHash, hash [BlockHashSize]byte
+	copy(hash[:], blockHash)
+	copy(prevHash[:], prevBlockHash)
+	preCommitInfo := ctx.PreCommitInfo
+	preCommitChildrenInfo, ok := (*preCommitInfo)[prevHash]
+	if !ok {
+		(*preCommitInfo)[prevHash] = make(map[[BlockHashSize]byte]bool, 0)
+		preCommitChildrenInfo = (*preCommitInfo)[prevHash]
+	}
+	if exist, ok := preCommitChildrenInfo[hash]; ok && exist {
 		return nil
 	}
-	preCommitChildrenInfo[tempHash] = true
+	preCommitChildrenInfo[hash] = true
 	pdb := ctx.DB.preCommitInfo
+	err := appendPreCommitChildInDB(pdb, prevHash, hash)
+	return err
+}
+
+func appendPreCommitChildInDB(pdb db.Database, prevBlockHash [BlockHashSize]byte, blockHash [BlockHashSize]byte) error {
 	bucket, _ := pdb.GetBucket(db.PrefixIScore)
 	bs, err := bucket.Get(prevBlockHash[:])
 	if err != nil {
@@ -283,7 +300,7 @@ func savePreCommitChild(ctx *Context, prevBlockHash []byte, blockHash []byte) er
 	}
 	preCommitHierarchy := new(PreCommitHierarchy)
 	preCommitHierarchy.SetBytes(bs)
-	preCommitHierarchy.childrenBlockHashes = append(preCommitHierarchy.childrenBlockHashes, tempHash)
+	preCommitHierarchy.childrenBlockHashes = append(preCommitHierarchy.childrenBlockHashes, blockHash)
 	data, _ := preCommitHierarchy.Bytes()
 	bucket.Set(prevBlockHash[:], data)
 	return nil
