@@ -286,24 +286,9 @@ func savePreCommitInfo(ctx *Context, prevBlockHash []byte, blockHash []byte) err
 		return nil
 	}
 	preCommitChildrenInfo[hash] = true
-	pdb := ctx.DB.preCommitInfo
-	err := appendPreCommitChildInDB(pdb, prevHash, hash)
+	pdb := ctx.DB.preCommitHierarchy
+	err := AppendPreCommitChildInDB(pdb, prevHash, hash)
 	return err
-}
-
-func appendPreCommitChildInDB(pdb db.Database, prevBlockHash [BlockHashSize]byte, blockHash [BlockHashSize]byte) error {
-	bucket, _ := pdb.GetBucket(db.PrefixIScore)
-	bs, err := bucket.Get(prevBlockHash[:])
-	if err != nil {
-		log.Printf("Error while getting PrecommitHieriachy")
-		return err
-	}
-	preCommitHierarchy := new(PreCommitHierarchy)
-	preCommitHierarchy.SetBytes(bs)
-	preCommitHierarchy.childrenBlockHashes = append(preCommitHierarchy.childrenBlockHashes, blockHash)
-	data, _ := preCommitHierarchy.Bytes()
-	bucket.Set(prevBlockHash[:], data)
-	return nil
 }
 
 func getChildrenHashes(ctx *Context, blockHash []byte) (childrenHashes [][BlockHashSize]byte) {
@@ -335,11 +320,5 @@ func clearPreCommitInfo(ctx *Context, blockHash []byte) {
 	if _, ok := (*ctx.PreCommitInfo)[hash]; !ok {
 		delete(*ctx.PreCommitInfo, hash)
 	}
-	pdb := ctx.DB.preCommitInfo
-	bucket, err := pdb.GetBucket(db.PrefixIScore)
-	if err != nil {
-		log.Printf("Error while getting preCommitInfo bucket")
-		return
-	}
-	bucket.Delete(blockHash)
+	DeletePreCommitHierarchy(ctx.DB.preCommitHierarchy, blockHash)
 }

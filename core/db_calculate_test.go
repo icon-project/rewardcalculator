@@ -50,7 +50,7 @@ func TestDBCalculate_BytesAndSetBytes(t *testing.T) {
 	assert.Equal(t, bs, bsNew)
 }
 
-func TestDBCalculate_NewClaimFromBytes(t *testing.T) {
+func TestDBCalculate_NewCalculationResultFromBytes(t *testing.T) {
 	calculationResult := makeCalcResult()
 
 	bs, err := calculationResult.Bytes()

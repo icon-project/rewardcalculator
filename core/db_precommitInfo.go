@@ -33,6 +33,38 @@ func (ph *PreCommitHierarchy) SetBytes(bs []byte) error {
 	return nil
 }
 
+func NewPreCommitHierarchyFromBytes(bs []byte) (*PreCommitHierarchy, error) {
+	ph := new(PreCommitHierarchy)
+	if err := ph.SetBytes(bs); err != nil {
+		return nil, err
+	}
+	return ph, nil
+}
+
+func AppendPreCommitChildInDB(pdb db.Database, prevBlockHash [BlockHashSize]byte, blockHash [BlockHashSize]byte) error {
+	bucket, _ := pdb.GetBucket(db.PrefixIScore)
+	bs, err := bucket.Get(prevBlockHash[:])
+	if err != nil {
+		log.Printf("Error while getting PrecommitHieriachy")
+		return err
+	}
+	preCommitHierarchy := new(PreCommitHierarchy)
+	preCommitHierarchy.SetBytes(bs)
+	preCommitHierarchy.childrenBlockHashes = append(preCommitHierarchy.childrenBlockHashes, blockHash)
+	data, _ := preCommitHierarchy.Bytes()
+	bucket.Set(prevBlockHash[:], data)
+	return nil
+}
+
+func DeletePreCommitHierarchy(pdb db.Database, blockHash []byte) {
+	bucket, err := pdb.GetBucket(db.PrefixIScore)
+	if err != nil {
+		log.Printf("Error while getting preCommitHierarchy bucket")
+		return
+	}
+	bucket.Delete(blockHash)
+}
+
 type PreCommitInfo map[[BlockHashSize]byte]map[[BlockHashSize]byte]bool
 
 func LoadPreCommitInfo(pdb db.Database) (preCommitInfo PreCommitInfo) {

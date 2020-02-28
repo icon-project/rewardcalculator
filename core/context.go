@@ -29,12 +29,12 @@ type IScoreDB struct {
 	info *DBInfo
 
 	// DB instance
-	management    db.Database
-	calcResult    db.Database
-	preCommit     db.Database
-	preCommitInfo db.Database
-	claim         db.Database
-	claimBackup   db.Database
+	management         db.Database
+	calcResult         db.Database
+	preCommit          db.Database
+	preCommitHierarchy db.Database
+	claim              db.Database
+	claimBackup        db.Database
 
 	accountLock sync.RWMutex
 	Account0    []db.Database
@@ -581,10 +581,10 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 	ctx.Rollback = NewRollback()
 
 	// Open PreCommitHierarchy DB
-	isDB.preCommitInfo = db.Open(isDB.info.DBRoot, isDB.info.DBType, "preCommit_info")
+	isDB.preCommitHierarchy = db.Open(isDB.info.DBRoot, isDB.info.DBType, "preCommit_info")
 
 	ctx.PreCommitInfo = new(PreCommitInfo)
-	*ctx.PreCommitInfo = LoadPreCommitInfo(isDB.preCommitInfo)
+	*ctx.PreCommitInfo = LoadPreCommitInfo(isDB.preCommitHierarchy)
 
 	return ctx, nil
 }
