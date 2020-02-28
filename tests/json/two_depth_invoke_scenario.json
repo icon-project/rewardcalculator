@@ -1,0 +1,812 @@
+{
+  "name": "calculation_and_claim",
+  "variable": {
+    "EOA_A": "hxaea08c655d5b45e1e43797f83175b8494124e63a",
+    "EOA_B": "hxbea08c655d5b45e1e43797f83175b8494124e63a",
+    "EOA_C": "hxcea08c655d5b45e1e43797f83175b8494124e63a",
+    "PREP_D": "hx22e518ccd16760355023affd8c29f80bf7b8a0bd",
+    "PREP_E": "hx901b280815e88c5b6b310cd0fb6383e5c978aea5",
+    "PREP_F": "hx8ea08c655d5b45e1e43797f83175b8494124e638",
+    "PREP_G": "hx8ea08c655d5b45e1e43797f83175b8494124e63a",
+    "OK": 0,
+    "zero_hash": "00",
+    "dummy_block_hash1_1": "11",
+    "dummy_block_hash1_2": "12",
+    "dummy_tx_hash1": "1111",
+    "dummy_tx_hash2": "1112",
+    "dummy_tx_hash3": "1113",
+    "dummy_tx_hash4": "1211",
+    "dummy_tx_hash5": "1212",
+    "dummy_tx_hash6": "1213",
+    "dummy_block_hash2_1": "21",
+    "dummy_block_hash2_2": "22",
+    "dummy_block_hash3_1": "31",
+    "dummy_block_hash3_2": "32"
+  },
+  "iiss": [
+    {
+      "block_height": 1000,
+      "data": [
+        {
+          "type": "Header",
+          "data": {
+            "version": 2,
+            "block_height": 1000,
+            "revision": 0
+          }
+        },
+        {
+          "type": "GV",
+          "data": {
+            "block_height": 0,
+            "i_rep": 10,
+            "r_rep": 100,
+            "main_p_rep_count": 22,
+            "sub_p_rep_count": 100
+          }
+        },
+        {
+          "type": "GV",
+          "data": {
+            "block_height": 500,
+            "i_rep": 20,
+            "r_rep": 200,
+            "main_p_rep_count": 22,
+            "sub_p_rep_count": 100
+          }
+        },
+        {
+          "type": "GV",
+          "data": {
+            "block_height": 900,
+            "i_rep": 30,
+            "r_rep": 300,
+            "main_p_rep_count": 22,
+            "sub_p_rep_count": 100
+          }
+        },
+        {
+          "type": "BP",
+          "data": {
+            "block_height": 10,
+            "generator": "$PREP_D",
+            "validator": [
+              "$PREP_E",
+              "$PREP_F"
+            ]
+          }
+        },
+        {
+          "type": "BP",
+          "data": {
+            "block_height": 11,
+            "generator": "$PREP_D",
+            "validator": [
+              "$PREP_E",
+              "$PREP_F",
+              "$PREP_G"
+            ]
+          }
+        },
+        {
+          "type": "BP",
+          "data": {
+            "block_height": 12,
+            "generator": "$PREP_E",
+            "validator": [
+              "$PREP_D",
+              "$PREP_F",
+              "$PREP_G"
+            ]
+          }
+        },
+        {
+          "type": "PRep",
+          "data": {
+            "block_height": 0,
+            "total_delegation": 100,
+            "preps": [
+              {
+                "address": "$PREP_D",
+                "delegation": 10
+              },
+              {
+                "address": "$PREP_E",
+                "delegation": 20
+              },
+              {
+                "address": "$PREP_F",
+                "delegation": 30
+              },
+              {
+                "address": "$PREP_G",
+                "delegation": 40
+              }
+            ]
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 0,
+            "block_height": 0,
+            "address": "$PREP_D",
+            "type": "registerPRep"
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 1,
+            "block_height": 0,
+            "address": "$PREP_E",
+            "type": "registerPRep"
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 2,
+            "block_height": 0,
+            "address": "$PREP_F",
+            "type": "registerPRep"
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 3,
+            "block_height": 0,
+            "address": "$PREP_G",
+            "type": "registerPRep"
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 4,
+            "block_height": 10,
+            "address": "$EOA_A",
+            "type": "delegation",
+            "delegations": [
+              {
+                "address": "$PREP_D",
+                "delegation": 1576800
+              }
+            ]
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 5,
+            "block_height": 20,
+            "address": "$EOA_B",
+            "type": "delegation",
+            "delegations": [
+              {
+                "address": "$PREP_D",
+                "delegation": 1576800
+              }
+            ]
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 6,
+            "block_height": 30,
+            "address": "$EOA_C",
+            "type": "delegation",
+            "delegations": [
+              {
+                "address": "$PREP_D",
+                "delegation": 1576800
+              }
+            ]
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 7,
+            "block_height": 800,
+            "address": "$EOA_C",
+            "type": "delegation",
+            "delegations": [
+              {
+                "address": "$PREP_D",
+                "delegation": 1576800
+              }
+            ]
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 8,
+            "block_height": 900,
+            "address": "$PREP_G",
+            "type": "delegation",
+            "delegations": [
+              {
+                "address": "$PREP_G",
+                "delegation": 1576800
+              }
+            ]
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 9,
+            "block_height": 900,
+            "address": "$PREP_D",
+            "type": "delegation",
+            "delegations": [
+              {
+                "address": "$PREP_D",
+                "delegation": 1576800
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "block_height": 2000,
+      "data": [
+        {
+          "type": "Header",
+          "data": {
+            "version": 2,
+            "block_height": 2000,
+            "revision": 0
+          }
+        },
+        {
+          "type": "TX",
+          "data": {
+            "index": 0,
+            "block_height": 1500,
+            "address": "$EOA_A",
+            "type": "delegation",
+            "delegations": [
+              {
+                "address": "$PREP_D",
+                "delegation": 1576800
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "block_height": 3000,
+      "data": [
+        {
+          "type": "Header",
+          "data": {
+            "version": 2,
+            "block_height": 3000,
+            "revision": 1
+          }
+        }
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "name": "calculate_1000",
+      "type": "calculate",
+      "data": {
+        "request": {
+          "block_height": 1000
+        },
+        "expect": {
+          "status": "$OK",
+          "block_height": 1000
+        }
+      }
+    },
+    {
+      "name": "query_eoa_a_1000",
+      "type": "query",
+      "data": {
+        "request": {
+          "address": "$EOA_A"
+        },
+        "expect": {
+          "address": "$EOA_A",
+          "iscore": 0,
+          "block_height": 0
+        }
+      }
+    },
+    {
+      "name": "claim_eoa_a_1500",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$EOA_A",
+          "block_height": 1500,
+          "block_hash": "$zero_hash",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1"
+        },
+        "expect": {
+          "address": "$EOA_A",
+          "block_height": 0,
+          "block_hash": "$zero_hash",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "iscore": 0
+        }
+      }
+    },
+    {
+      "name": "calculate_2000",
+      "type": "calculate",
+      "data": {
+        "request": {
+          "block_height": 2000
+        },
+        "expect": {
+          "status": "$OK",
+          "block_height": 2000
+        }
+      }
+    },
+    {
+      "name": "query_eoa_a_2000",
+      "type": "query",
+      "data": {
+        "request": {
+          "address": "$EOA_A"
+        },
+        "expect": {
+          "address": "$EOA_A",
+          "iscore": 1611,
+          "block_height": 1000
+        }
+      }
+    },
+    {
+      "name": "query_eoa_b_2000",
+      "type": "query",
+      "data": {
+        "request": {
+          "address": "$EOA_B"
+        },
+        "expect": {
+          "address": "$EOA_B",
+          "iscore": 1601,
+          "block_height": 1000
+        }
+      }
+    },
+    {
+      "name": "query_eoa_c_2000",
+      "type": "query",
+      "data": {
+        "request": {
+          "address": "$EOA_C"
+        },
+        "expect": {
+          "address": "$EOA_C",
+          "iscore": 1591,
+          "block_height": 1000
+        }
+      }
+    },
+    {
+      "name": "query_prep_d_2000",
+      "type": "query",
+      "data": {
+        "request": {
+          "address": "$PREP_D"
+        },
+        "expect": {
+          "address": "$PREP_D",
+          "iscore": 160256970,
+          "block_height": 1000
+        }
+      }
+    },
+    {
+      "name": "query_prep_e_2000",
+      "type": "query",
+      "data": {
+        "request": {
+          "address": "$PREP_E"
+        },
+        "expect": {
+          "address": "$PREP_E",
+          "iscore": 320201666,
+          "block_height": 1000
+        }
+      }
+    },
+    {
+      "name": "query_prep_f_2000",
+      "type": "query",
+      "data": {
+        "request": {
+          "address": "$PREP_F"
+        },
+        "expect": {
+          "address": "$PREP_F",
+          "iscore": 480128332,
+          "block_height": 1000
+        }
+      }
+    },
+    {
+      "name": "claim_eoa_a_2999_1",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$EOA_A",
+          "block_height": 2999,
+          "block_hash": "$dummy_block_hash1_1",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$EOA_A",
+          "block_height": 1000,
+          "block_hash": "$dummy_block_hash1_1",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "iscore": 1000
+        }
+      }
+    },
+    {
+      "name": "claim_eoa_b_2999_1",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$EOA_B",
+          "block_height": 2999,
+          "block_hash": "$dummy_block_hash1_1",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 1,
+          "tx_hash": "$dummy_tx_hash2",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$EOA_B",
+          "block_height": 1000,
+          "block_hash": "$dummy_block_hash1_1",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 1,
+          "tx_hash": "$dummy_tx_hash2",
+          "iscore": 1000
+        }
+      }
+    },
+    {
+      "name": "claim_eoa_c_2999_1",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$EOA_C",
+          "block_height": 2999,
+          "block_hash": "$dummy_block_hash1_1",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 2,
+          "tx_hash": "$dummy_tx_hash3",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$EOA_C",
+          "block_height": 1000,
+          "block_hash": "$dummy_block_hash1_1",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 2,
+          "tx_hash": "$dummy_tx_hash3",
+          "iscore": 1000
+        }
+      }
+    },
+    {
+      "name": "claim_prep_d_2999_2",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$PREP_D",
+          "block_height": 2999,
+          "block_hash": "$dummy_block_hash1_2",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$PREP_D",
+          "block_height": 1000,
+          "block_hash": "$dummy_block_hash1_2",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "iscore": 160256000
+        }
+      }
+    },
+    {
+      "name": "claim_prep_e_2999_2",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$PREP_E",
+          "block_height": 2999,
+          "block_hash": "$dummy_block_hash1_2",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash2",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$PREP_E",
+          "block_height": 1000,
+          "block_hash": "$dummy_block_hash1_2",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash2",
+          "iscore": 320201000
+        }
+      }
+    },
+    {
+      "name": "claim_prep_f_2999_2",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$PREP_F",
+          "block_height": 2999,
+          "block_hash": "$dummy_block_hash1_2",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash3",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$PREP_F",
+          "block_height": 1000,
+          "block_hash": "$dummy_block_hash1_2",
+          "prev_block_hash": "$zero_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash3",
+          "iscore": 480128000
+        }
+      }
+    },
+    {
+      "name": "claim_eoa_a_3000_1",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$EOA_A",
+          "block_height": 3000,
+          "block_hash": "$dummy_block_hash2_1",
+          "prev_block_hash": "$dummy_block_hash1_1",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$EOA_A",
+          "block_height": 3000,
+          "block_hash": "$dummy_block_hash2_1",
+          "prev_block_hash": "$dummy_block_hash1_1",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "iscore": 0
+        }
+      }
+    },
+    {
+      "name": "claim_prep_d_3000_1",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$PREP_D",
+          "block_height": 3000,
+          "block_hash": "$dummy_block_hash2_1",
+          "prev_block_hash": "$dummy_block_hash1_1",
+          "tx_index": 1,
+          "tx_hash": "$dummy_tx_hash2",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$PREP_D",
+          "block_height": 1000,
+          "block_hash": "$dummy_block_hash2_1",
+          "prev_block_hash": "$dummy_block_hash1_1",
+          "tx_index": 1,
+          "tx_hash": "$dummy_tx_hash2",
+          "iscore": 160256000
+        }
+      }
+    },
+    {
+      "name": "claim_eoa_b_3000_2",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$EOA_B",
+          "block_height": 3000,
+          "block_hash": "$dummy_block_hash2_2",
+          "prev_block_hash": "$dummy_block_hash1_2",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$EOA_B",
+          "block_height": 1000,
+          "block_hash": "$dummy_block_hash2_2",
+          "prev_block_hash": "$dummy_block_hash1_2",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "iscore": 1000
+        }
+      }
+    },
+    {
+      "name": "claim_prep_2_3000_2",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$PREP_D",
+          "block_height": 3000,
+          "block_hash": "$dummy_block_hash2_2",
+          "prev_block_hash": "$dummy_block_hash1_2",
+          "tx_index": 1,
+          "tx_hash": "$dummy_tx_hash2",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$PREP_D",
+          "block_height": 3000,
+          "block_hash": "$dummy_block_hash2_2",
+          "prev_block_hash": "$dummy_block_hash1_2",
+          "tx_index": 1,
+          "tx_hash": "$dummy_tx_hash2",
+          "iscore": 0
+        }
+      }
+    },
+    {
+      "name": "commit_block_2999_1",
+      "type": "commit_block",
+      "data": {
+        "request": {
+          "success": true,
+          "block_height": 2999,
+          "block_hash": "$dummy_block_hash1_1"
+        },
+        "expect": {
+          "success": true,
+          "block_height": 2999,
+          "block_hash": "$dummy_block_hash1_1"
+        }
+      }
+    },
+    {
+      "name": "calculate_3000",
+      "type": "calculate",
+      "data": {
+        "request": {
+          "block_height": 3000
+        },
+        "expect": {
+          "status": "$OK",
+          "block_height": 3000
+        }
+      }
+    },
+    {
+      "name": "claim_eoa_a_3001_1",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$EOA_A",
+          "block_height": 3001,
+          "block_hash": "$dummy_block_hash3_1",
+          "prev_block_hash": "$dummy_block_hash2_1",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$EOA_A",
+          "block_height": 2000,
+          "block_hash": "$dummy_block_hash3_1",
+          "prev_block_hash": "$dummy_block_hash2_1",
+          "tx_index": 0,
+          "tx_hash": "$dummy_tx_hash1",
+          "iscore": 3000
+        }
+      }
+    },
+    {
+      "name": "claim_eoa_b_3001_1",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$EOA_B",
+          "block_height": 3001,
+          "block_hash": "$dummy_block_hash3_1",
+          "prev_block_hash": "$dummy_block_hash2_1",
+          "tx_index": 1,
+          "tx_hash": "$dummy_tx_hash2",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$EOA_B",
+          "block_height": 2000,
+          "block_hash": "$dummy_block_hash3_1",
+          "prev_block_hash": "$dummy_block_hash2_1",
+          "tx_index": 1,
+          "tx_hash": "$dummy_tx_hash2",
+          "iscore": 3000
+        }
+      }
+    },
+    {
+      "name": "claim_eoa_c_3001_1",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$EOA_C",
+          "block_height": 3001,
+          "block_hash": "$dummy_block_hash3_1",
+          "prev_block_hash": "$dummy_block_hash2_1",
+          "tx_index": 2,
+          "tx_hash": "$dummy_tx_hash3",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$EOA_C",
+          "block_height": 2000,
+          "block_hash": "$dummy_block_hash3_1",
+          "prev_block_hash": "$dummy_block_hash2_1",
+          "tx_index": 2,
+          "tx_hash": "$dummy_tx_hash3",
+          "iscore": 3000
+        }
+      }
+    },
+    {
+      "name": "claim_prep_d_3001_1",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$PREP_D",
+          "block_height": 3001,
+          "block_hash": "$dummy_block_hash3_1",
+          "prev_block_hash": "$dummy_block_hash2_1",
+          "tx_index": 3,
+          "tx_hash": "$dummy_tx_hash1",
+          "no_commit_block": true
+        },
+        "expect": {
+          "address": "$PREP_D",
+          "block_height": 2000,
+          "block_hash": "$dummy_block_hash3_1",
+          "prev_block_hash": "$dummy_block_hash2_1",
+          "tx_index": 3,
+          "tx_hash": "$dummy_tx_hash1",
+          "iscore": 460260000
+        }
+      }
+    }
+  ]
+}

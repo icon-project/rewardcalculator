@@ -92,7 +92,7 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 			prevPreCommit.BlockHash, req.BlockHash)
 	}
 	// check if claimed in previous Block when requested BlockHeight is not term starting Block
-	if req.BlockHeight-1 != ctx.DB.getPrevCalcDoneBH() && prevPreCommit.query(pcDB) {
+	if req.BlockHeight-1 != ctx.DB.getCalcDoneBH() && prevPreCommit.query(pcDB) {
 		return preCommit.BlockHeight, nil
 	}
 	var claim *Claim = nil
@@ -304,7 +304,7 @@ func getChildrenHashes(ctx *Context, blockHash []byte) (childrenHashes [][BlockH
 func deletePreCommitChildren(ctx *Context, blockHeight uint64, blockHash []byte) error {
 	childrenHashes := getChildrenHashes(ctx, blockHash)
 	for _, childHash := range childrenHashes {
-		prefix := MakeIteratorPrefix(db.PrefixIScore, blockHeight-1, childHash[:], BlockHashSize)
+		prefix := MakeIteratorPrefix(db.PrefixIScore, blockHeight+1, childHash[:], BlockHashSize)
 		err := deletePreCommit(ctx.DB.preCommit, prefix.Start, prefix.Limit)
 		if err != nil {
 			log.Printf("Error while deleting Precommit")
@@ -317,7 +317,7 @@ func deletePreCommitChildren(ctx *Context, blockHeight uint64, blockHash []byte)
 func clearPreCommitInfo(ctx *Context, blockHash []byte) {
 	var hash [BlockHashSize]byte
 	copy(hash[:], blockHash)
-	if _, ok := (*ctx.PreCommitInfo)[hash]; !ok {
+	if _, ok := (*ctx.PreCommitInfo)[hash]; ok {
 		delete(*ctx.PreCommitInfo, hash)
 	}
 	DeletePreCommitHierarchy(ctx.DB.preCommitHierarchy, blockHash)

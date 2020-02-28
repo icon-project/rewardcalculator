@@ -162,6 +162,8 @@ type ipcClaim struct {
 		PrevBlockHash string `json:"prev_block_hash"`
 		TXIndex       uint64 `json:"tx_index"`
 		TXHash        string `json:"tx_hash"`
+		NoCommitClaim bool   `json:"no_commit_claim"`
+		NoCommitBlock bool   `json:"no_commit_block"`
 	} `json:"request"`
 	Expect *claimExpect `json:"expect,omitempty"`
 }
@@ -176,7 +178,7 @@ func (c *ipcClaim) json() string {
 
 func (c *ipcClaim) run(opt *testOption) (interface{}, error) {
 	req := c.Request
-	resp, err := opt.ipc.SendClaim(req.Address, req.BlockHeight, req.BlockHash, req.PrevBlockHash, req.TXIndex, req.TXHash, false, false)
+	resp, err := opt.ipc.SendClaim(req.Address, req.BlockHeight, req.BlockHash, req.PrevBlockHash, req.TXIndex, req.TXHash, req.NoCommitClaim, req.NoCommitBlock)
 	if err != nil {
 		return nil, err
 	}
