@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-func iteratePrintDB(qdb db.Database, prefix *util.Range, printFunc func([]byte, []byte) error) error {
+func IteratePrintDB(qdb db.Database, prefix *util.Range, printFunc func([]byte, []byte) error) error {
 	// iterate
 	iter, err := qdb.GetIterator()
 	if err != nil {
@@ -32,11 +32,11 @@ func iteratePrintDB(qdb db.Database, prefix *util.Range, printFunc func([]byte, 
 	return nil
 }
 
-func printDB(path string, prefix *util.Range, printFunc func([]byte, []byte) error) (err error) {
+func PrintDB(path string, prefix *util.Range, printFunc func([]byte, []byte) error) (err error) {
 	fmt.Printf("===================== Data in %s =============\n", path)
 	dir, name := filepath.Split(path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
-	err = iteratePrintDB(qdb, prefix, printFunc)
+	err = IteratePrintDB(qdb, prefix, printFunc)
 	return
 }

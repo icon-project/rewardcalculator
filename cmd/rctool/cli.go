@@ -11,7 +11,7 @@ import (
 )
 
 type CLI struct {
-	id uint32
+	id   uint32
 	conn ipc.Connection
 }
 
@@ -34,6 +34,7 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("\t gv                            Read governance variable\n")
 	fmt.Printf("\t calculate                     Query Calculation status or result\n")
 	fmt.Printf("\t logctx                        Log context information\n")
+	fmt.Printf("\t calculate_debug               Config calculation debugging\n")
 }
 
 func (cli *CLI) validateArgs() {
@@ -94,6 +95,8 @@ func (cli *CLI) Run() {
 		err = cli.calculate(blockHeight)
 	case "logctx":
 		err = cli.logCtx()
+	case "calculate_debug":
+		err = cli.calculateDebug(os.Args[2:])
 	default:
 		cli.printUsage()
 		os.Exit(1)

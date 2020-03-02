@@ -9,6 +9,7 @@ import (
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/core"
+	"github.com/natefinch/lumberjack"
 )
 
 var (
@@ -34,8 +35,17 @@ func main() {
 	flag.IntVar(&cfg.LogMaxBackups, "log-max-backups", 10, "MAX number of old log files")
 	flag.BoolVar(&generate, "gen", false, "Generate configuration file")
 	flag.BoolVar(&optVersion, "version", false, "Print version information")
+	flag.StringVar(&cfg.CalcDebugConf, "calculate-debug-conf", "./calculation_debug.json",
+		"calculation debug config file path")
 	flag.Parse()
 
+	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
+	log.SetOutput(&lumberjack.Logger{
+		Filename:   cfg.LogFile,
+		MaxSize:    cfg.LogMaxSize,
+		MaxBackups: cfg.LogMaxBackups,
+		LocalTime:  true,
+	})
 	common.SetLog(cfg.LogFile, cfg.LogMaxSize, cfg.LogMaxBackups, true)
 
 	if optVersion {

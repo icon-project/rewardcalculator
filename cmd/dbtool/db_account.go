@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	cmdCommon "github.com/icon-project/rewardcalculator/cmd/common"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
@@ -12,12 +13,12 @@ import (
 	"strings"
 )
 
-func queryAccountDB(input Input) (err error) {
-	if input.path != "" {
-		err = queryAccountDBWithPath(input.path, input.address)
+func queryAccountDB(input cmdCommon.Input) (err error) {
+	if input.Path != "" {
+		err = queryAccountDBWithPath(input.Path, input.Address)
 		return
-	} else if input.rcDBRoot != "" {
-		err = queryAccountDBWithRCRoot(input.rcDBRoot, input.address, input.accountType)
+	} else if input.RcDBRoot != "" {
+		err = queryAccountDBWithRCRoot(input.RcDBRoot, input.Address, input.AccountType)
 		return
 	}
 	return errors.New("invalid db path")
@@ -25,7 +26,7 @@ func queryAccountDB(input Input) (err error) {
 
 func queryAccountDBWithPath(path string, address string) error {
 	if address == "" {
-		err := printDB(path, util.BytesPrefix([]byte(db.PrefixIScore)), printAccount)
+		err := cmdCommon.PrintDB(path, util.BytesPrefix([]byte(db.PrefixIScore)), printAccount)
 		return err
 	} else {
 		dir, name := filepath.Split(path)
