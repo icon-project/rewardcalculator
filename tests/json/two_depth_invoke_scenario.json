@@ -15,13 +15,9 @@
     "dummy_tx_hash1": "1111",
     "dummy_tx_hash2": "1112",
     "dummy_tx_hash3": "1113",
-    "dummy_tx_hash4": "1211",
-    "dummy_tx_hash5": "1212",
-    "dummy_tx_hash6": "1213",
     "dummy_block_hash2_1": "21",
     "dummy_block_hash2_2": "22",
-    "dummy_block_hash3_1": "31",
-    "dummy_block_hash3_2": "32"
+    "dummy_block_hash3_1": "31"
   },
   "iiss": [
     {
