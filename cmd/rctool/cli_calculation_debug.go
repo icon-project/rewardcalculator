@@ -14,7 +14,6 @@ func (cli *CLI) calculateDebug(input []string) error {
 		"\t disable \t disable calculation debug\n" +
 		"\t add <Address> \t add calculation debugging address\n" +
 		"\t delete <Address> \t delete calculation debugging address\n" +
-		"\t output <outputPath> \t change calculation debugging output path\n" +
 		"\t list \t print calculation debugging addresses\n" +
 		"\t result \t print calculation debugging result. give -h option to check input")
 
@@ -40,11 +39,6 @@ func (cli *CLI) calculateDebug(input []string) error {
 			goto INVALID
 		}
 		err = cli.deleteCalcDebuggingAddress(input[1])
-	case "output":
-		if len(input) != 2 {
-			goto INVALID
-		}
-		err = cli.changeCalcDebugResultPath(input[1])
 	case "list":
 		err = cli.printCalcDebuggingAddresses()
 	case "result":
@@ -99,13 +93,6 @@ func (cli *CLI) deleteCalcDebuggingAddress(address string) error {
 	var req core.DebugMessage
 	req.Cmd = core.DebugCalcDelAddress
 	req.Address = *common.NewAddressFromString(address)
-
-	return cli.conn.Send(core.MsgDebug, cli.id, req)
-}
-
-func (cli *CLI) changeCalcDebugResultPath(path string) error {
-	var req core.DebugMessage
-	req.OutputPath = path
 
 	return cli.conn.Send(core.MsgDebug, cli.id, req)
 }

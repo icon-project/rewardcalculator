@@ -29,7 +29,6 @@ const (
 	DebugCalcAddAddress           = DebugCalc + 2
 	DebugCalcDelAddress           = DebugCalc + 3
 	DebugCalcListAddresses        = DebugCalc + 4
-	DebugCalcOutputPath           = DebugCalc + 5
 )
 
 type DebugMessage struct {
@@ -76,8 +75,6 @@ func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
 		return handleCalcDebugDeleteAddress(c, id, ctx, req.Address)
 	case DebugCalcListAddresses:
 		return handleCalcDebugAddresses(c, id, ctx)
-	case DebugCalcOutputPath:
-		return handleCalcResultOutput(c, id, ctx, req.OutputPath)
 	case DebugCalcDebugResult:
 		return handleQueryCalcDebugResult(c, id, ctx, req.Address, req.BlockHeight)
 	}
@@ -171,31 +168,52 @@ func handleGV(c ipc.Connection, id uint32, ctx *Context) error {
 	return c.Send(MsgDebug, id, &resp)
 }
 
+type ResponseCalcDebug struct {
+	Success bool
+	MessageData
+}
+
 func handleCalcDebugFlagOn(c ipc.Connection, id uint32, ctx *Context) error {
-	var resp DebugMessage
-	resp.Cmd = DebugCalcFlagOn
+	var resp ResponseCalcDebug
+	if ctx.DB.isCalculating() {
+		resp.Success = false
+	} else {
+		resp.Success = true
+	}
 	ctx.calcDebug.conf.Flag = true
 	return c.Send(MsgDebug, id, &resp)
 }
 
 func handleCalcDebugFlagOff(c ipc.Connection, id uint32, ctx *Context) error {
-	var resp DebugMessage
-	resp.Cmd = DebugCalcFlagOff
+	var resp ResponseCalcDebug
+	if ctx.DB.isCalculating() {
+		resp.Success = false
+	} else {
+		resp.Success = true
+	}
 	ctx.calcDebug.conf.Flag = false
 	return c.Send(MsgDebug, id, &resp)
 }
 
 func handleCalcDebugAddAddress(c ipc.Connection, id uint32, ctx *Context, address common.Address) error {
-	var resp DebugMessage
-	resp.Cmd = DebugCalcAddAddress
+	var resp ResponseCalcDebug
+	if ctx.DB.isCalculating() {
+		resp.Success = false
+	} else {
+		resp.Success = true
+	}
 	resp.Address = address
 	AddDebuggingAddress(ctx, address)
 	return c.Send(MsgDebug, id, &resp)
 }
 
 func handleCalcDebugDeleteAddress(c ipc.Connection, id uint32, ctx *Context, address common.Address) error {
-	var resp DebugMessage
-	resp.Cmd = DebugCalcDelAddress
+	var resp ResponseCalcDebug
+	if ctx.DB.isCalculating() {
+		resp.Success = false
+	} else {
+		resp.Success = true
+	}
 	resp.Address = address
 	DeleteDebuggingAddress(ctx, address)
 	return c.Send(MsgDebug, id, &resp)
@@ -210,13 +228,6 @@ func handleCalcDebugAddresses(c ipc.Connection, id uint32, ctx *Context) error {
 	var resp ResponseCalcDebugAddressList
 	resp.Cmd = DebugCalcListAddresses
 	resp.Addresses = ctx.calcDebug.conf.Addresses
-	return c.Send(MsgDebug, id, &resp)
-}
-
-func handleCalcResultOutput(c ipc.Connection, id uint32, ctx *Context, output string) error {
-	var resp DebugMessage
-	ctx.calcDebug.conf.Output = output
-	resp.OutputPath = output
 	return c.Send(MsgDebug, id, &resp)
 }
 

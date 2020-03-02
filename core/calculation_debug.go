@@ -15,17 +15,15 @@ import (
 type CalcDebug struct {
 	conf   *CalcDebugConfig
 	result *CalcDebugResult
-	DB     db.Database
 }
 
 type CalcDebugConfig struct {
 	Flag      bool              `json:"enable"`
 	Addresses []*common.Address `json:"addresses"`
-	Output    string            `json:"output"`
 }
 
 func NewCalcDebugConfig() *CalcDebugConfig {
-	return &CalcDebugConfig{Output: "CalculateResult"}
+	return &CalcDebugConfig{}
 }
 
 type CalcDebugResult struct {
