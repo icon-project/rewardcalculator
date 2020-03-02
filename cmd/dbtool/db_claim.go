@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	cmdCommon "github.com/icon-project/rewardcalculator/cmd/common"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
@@ -10,19 +11,19 @@ import (
 	"path/filepath"
 )
 
-func queryClaimDB(input Input) (err error) {
-	if input.path == "" {
+func queryClaimDB(input cmdCommon.Input) (err error) {
+	if input.Path == "" {
 		fmt.Println("Enter dbPath")
 		return errors.New("invalid db path")
 	}
 
-	if input.address == "" {
-		err = printDB(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printClaim)
+	if input.Address == "" {
+		err = cmdCommon.PrintDB(input.Path, util.BytesPrefix([]byte(db.PrefixClaim)), printClaim)
 	} else {
-		dir, name := filepath.Split(input.path)
+		dir, name := filepath.Split(input.Path)
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 		defer qdb.Close()
-		address := common.NewAddressFromString(input.address)
+		address := common.NewAddressFromString(input.Address)
 		if claim, err := getClaim(qdb, address); err != nil {
 		} else {
 			printClaimInstance(claim)

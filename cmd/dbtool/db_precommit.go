@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	cmdCommon "github.com/icon-project/rewardcalculator/cmd/common"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
@@ -11,20 +12,20 @@ import (
 	"path/filepath"
 )
 
-func queryPreCommitDB(input Input) (err error) {
-	if input.path == "" {
+func queryPreCommitDB(input cmdCommon.Input) (err error) {
+	if input.Path == "" {
 		fmt.Println("Enter dbPath")
 		return errors.New("invalid db path")
 	}
 
-	if input.address == "" && input.height == 0 {
-		err = printDB(input.path, util.BytesPrefix([]byte(db.PrefixClaim)), printPreCommit)
+	if input.Address == "" && input.Height == 0 {
+		err = cmdCommon.PrintDB(input.Path, util.BytesPrefix([]byte(db.PrefixClaim)), printPreCommit)
 	} else {
-		dir, name := filepath.Split(input.path)
+		dir, name := filepath.Split(input.Path)
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 		defer qdb.Close()
-		address := common.NewAddressFromString(input.address)
-		err = queryPreCommits(qdb, address, input.height)
+		address := common.NewAddressFromString(input.Address)
+		err = queryPreCommits(qdb, address, input.Height)
 	}
 	return
 }
@@ -103,7 +104,7 @@ func getKeys(qdb db.Database, address *common.Address, blockHeight uint64) ([][]
 		key := make([]byte, len(iter.Key()))
 		copy(key, iter.Key())
 		if address.Equal(tmpAddress) == false && blockHeight != 0 {
-			if bytes.Equal(key[:core.BlockHeightSize], blockHeightBytesValue) &&
+			if bytes.Equal(key[core.BlockHeightSize-len(blockHeightBytesValue):core.BlockHeightSize], blockHeightBytesValue) &&
 				bytes.Equal(key[core.BlockHeightSize+core.BlockHashSize:], address.Bytes()) {
 				keyExist = true
 				preCommitKeys = append(preCommitKeys, key)

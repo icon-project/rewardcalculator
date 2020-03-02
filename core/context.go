@@ -327,7 +327,10 @@ type Context struct {
 
 	stats         *Statistics
 	Rollback      *Rollback
+
 	PreCommitInfo *PreCommitInfo
+
+	calcDebug *CalcDebug
 }
 
 func (ctx *Context) getGVByBlockHeight(blockHeight uint64) *GovernanceVariable {
@@ -521,10 +524,12 @@ func (ctx *Context) Print() {
 		log.Printf("\t%d: %s\n", i, v.String())
 	}
 	log.Printf("P-Rep candidate count : %d\n", len(ctx.PRepCandidates))
+	log.Print("Calculation Debug flag : ", ctx.calcDebug.conf.Flag)
+	log.Print("Calculation Debugging Addresses : ", ctx.calcDebug.conf.Addresses)
 	log.Printf("============================================================================")
 }
 
-func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Context, error) {
+func NewContext(dbPath string, dbType string, dbName string, dbCount int, debugConfigPath string) (*Context, error) {
 	ctx := new(Context)
 	isDB := new(IScoreDB)
 	ctx.DB = isDB
@@ -561,6 +566,8 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int) (*Cont
 		log.Printf("Failed to load P-Rep candidate structure\n")
 		return nil, err
 	}
+
+	InitCalcDebugConfig(ctx, debugConfigPath)
 
 	// Open calculation result DB
 	isDB.calcResult = db.Open(isDB.info.DBRoot, isDB.info.DBType, "calculation_result")

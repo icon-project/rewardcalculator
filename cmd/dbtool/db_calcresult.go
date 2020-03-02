@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	cmdCommon "github.com/icon-project/rewardcalculator/cmd/common"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
@@ -10,21 +11,21 @@ import (
 	"path/filepath"
 )
 
-func queryCalcResultDB(input Input)  error {
-	if input.path == "" {
+func queryCalcResultDB(input cmdCommon.Input) error {
+	if input.Path == "" {
 		fmt.Println("Enter dbPath")
 		return errors.New("invalid db path")
 	}
 
-	if input.height == 0 {
-		err := printDB(input.path, util.BytesPrefix([]byte(db.PrefixCalcResult)), printCalcResult)
+	if input.Height == 0 {
+		err := cmdCommon.PrintDB(input.Path, util.BytesPrefix([]byte(db.PrefixCalcResult)), printCalcResult)
 		return err
 	} else {
-		dir, name := filepath.Split(input.path)
+		dir, name := filepath.Split(input.Path)
 		qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 		defer qdb.Close()
 
-		if cr, err := getCalcResult(qdb, input.height); err != nil {
+		if cr, err := getCalcResult(qdb, input.Height); err != nil {
 			return err
 		} else {
 			printCalculationResult(cr)

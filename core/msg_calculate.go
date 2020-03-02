@@ -21,7 +21,7 @@ import (
 const (
 	writeBatchCount = 10
 
-	minRewardRep  = 200
+	minRewardRep = 200
 
 	blocksPerYear    = 15552000
 	gvDivider        = 10000
@@ -92,8 +92,8 @@ func (cd *CalculateDone) String() string {
 		hex.EncodeToString(cd.StateHash))
 }
 
-func calculateDelegationReward(delegation *common.HexInt, start uint64, end uint64,
-	gvList []*GovernanceVariable, pRep *PRepCandidate) *common.HexInt {
+func calculateDelegationReward(ctx *Context, delegationInfo *DelegateData, start uint64, end uint64,
+	pRep *PRepCandidate, rewardAddress common.Address) *common.HexInt {
 	// adjust start and end with P-Rep candidate
 	if start < pRep.Start {
 		start = pRep.Start
@@ -106,36 +106,36 @@ func calculateDelegationReward(delegation *common.HexInt, start uint64, end uint
 	total := new(common.HexInt)
 
 	// period in gv
-	for i, gv := range gvList {
+	for i, gv := range ctx.GV {
 		var s, e = start, end
 
 		if start < gv.BlockHeight {
 			s = gv.BlockHeight
 		}
-		if i+1 < len(gvList) && gvList[i+1].BlockHeight < end {
-			e = gvList[i+1].BlockHeight
+		if i+1 < len(ctx.GV) && ctx.GV[i+1].BlockHeight < end {
+			e = ctx.GV[i+1].BlockHeight
 		}
 
-		if e  <= s {
+		if e <= s {
 			continue
 		}
 		period := common.NewHexIntFromUint64(e - s)
 
 		// reward = delegation amount * period * GV / rewardDivider
 		var reward common.HexInt
-		reward.Mul(&delegation.Int, &period.Int)
+		reward.Mul(&delegationInfo.Delegate.Int, &period.Int)
 		reward.Mul(&reward.Int, &gv.RewardRep.Int)
 		reward.Div(&reward.Int, BigIntRewardDivider)
 
 		// update total
 		total.Add(&total.Int, &reward.Int)
+		WriteBeta3Info(ctx, rewardAddress, gv.RewardRep.Uint64(), delegationInfo, period.Uint64(), e)
 	}
 
 	return total
 }
 
-func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
-	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64) (bool, *common.HexInt) {
+func calculateIScore(ctx *Context, ia *IScoreAccount, blockHeight uint64) (bool, *common.HexInt) {
 	//log.Printf("[Delegation reward] Read data: %s\n", ia.String())
 
 	totalReward := common.NewHexIntFromUint64(0)
@@ -155,13 +155,14 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 			continue
 		}
 
-		_, ok := pRepCandidates[dg.Address]
+		_, ok := ctx.PRepCandidates[dg.Address]
 		if ok == false {
 			// there is no P-Rep
 			continue
 		}
 
-		reward := calculateDelegationReward(&dg.Delegate, ia.BlockHeight, blockHeight, gvList, pRepCandidates[dg.Address])
+		reward := calculateDelegationReward(ctx, dg, ia.BlockHeight,
+			blockHeight, ctx.PRepCandidates[dg.Address], ia.Address)
 
 		// update totalReward
 		totalReward.Add(&totalReward.Int, &reward.Int)
@@ -179,8 +180,7 @@ func calculateIScore(ia *IScoreAccount,  gvList []*GovernanceVariable,
 	return true, totalReward
 }
 
-func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db.Database, gvList []*GovernanceVariable,
-	pRepCandidates map[common.Address]*PRepCandidate, blockHeight uint64, batchCount uint64) (uint64, *Statistics, []byte) {
+func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db.Database, ctx *Context, blockHeight uint64, batchCount uint64) (uint64, *Statistics, []byte) {
 
 	iter, _ := readDB.GetIterator()
 	bucket, _ := writeDB.GetBucket(db.PrefixIScore)
@@ -218,7 +218,7 @@ func calculateDB(quit <-chan struct{}, index int, readDB db.Database, writeDB db
 		stats.Increase("Accounts", uint64(1))
 
 		// calculate
-		ok, reward := calculateIScore(ia, gvList, pRepCandidates, blockHeight)
+		ok, reward := calculateIScore(ctx, ia, blockHeight)
 		if ok == false {
 			continue
 		}
@@ -411,6 +411,8 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 
 	ctx.Print()
 
+	InitCalcDebugResult(ctx, blockHeight, req.BlockHash)
+
 	//
 	// Calculate I-Score @ Account DB
 	//
@@ -432,10 +434,10 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 
 			// Update all Accounts in the calculate DB
 			count, statsList[index], stateHashList[index] =
-				calculateDB(ch, index, read, write, ctx.GV, ctx.PRepCandidates, blockHeight, writeBatchCount)
+				calculateDB(ch, index, read, write, ctx, blockHeight, writeBatchCount)
 
 			totalCount += count
-		} (quit, i, queryDBList[i], cDB)
+		}(quit, i, queryDBList[i], cDB)
 	}
 	wait.Wait()
 
@@ -490,6 +492,12 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 		elapsedTime, ctx.DB.getCalcDoneBH(), blockHeight, iScoreDB.info.DBCount, writeBatchCount, totalCount)
 	log.Printf("%s", stats.String())
 	log.Printf("stateHash : %s", hex.EncodeToString(stateHash))
+
+	if NeedToUpdateCalcDebugResult(ctx) {
+		log.Printf("CalculationResult : %s", ctx.calcDebug.result.String())
+		WriteCalcDebugResult(ctx)
+		ResetCalcDebugResults(ctx)
+	}
 
 	// set blockHeight
 	ctx.DB.setCalcDoneBH(blockHeight)
@@ -549,7 +557,7 @@ func calculateIISSTX(ctx *Context, iissDB db.Database, blockHeight uint64, verbo
 				// calculated I-Score from tx.BlockHeight to blockHeight with old delegation Info
 				ia.BlockHeight = tx.BlockHeight
 				ia.IScore.SetUint64(0)
-				calculateIScore(ia, ctx.GV, ctx.PRepCandidates, blockHeight)
+				calculateIScore(ctx, ia, blockHeight)
 
 				// reset I-Score to tx.BlockHeight
 				newIA.IScore.Sub(&newIA.IScore.Int, &ia.IScore.Int)
@@ -561,7 +569,7 @@ func calculateIISSTX(ctx *Context, iissDB db.Database, blockHeight uint64, verbo
 			}
 
 			// calculate I-Score from tx.BlockHeight to blockHeight with new delegation Info.
-			ok, reward := calculateIScore(newIA, ctx.GV, ctx.PRepCandidates, blockHeight)
+			ok, reward := calculateIScore(ctx, newIA, blockHeight)
 			// Statistics
 			if ok == true {
 				stats.Add(&stats.Int, &reward.Int)
@@ -645,6 +653,7 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 			validator.Add(&validator.Int, &valReward.Int)
 			bpMap[v] = validator
 		}
+		WriteBeta1Info(ctx, gv.BlockProduceReward.Uint64(), bp)
 	}
 	iter.Release()
 	err := iter.Error()
@@ -662,7 +671,7 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 		bucket, _ := cDB.GetBucket(db.PrefixIScore)
 
 		// update IScoreAccount
-		var ia  *IScoreAccount
+		var ia *IScoreAccount
 		var err error
 		data, _ := bucket.Get(addr.Bytes())
 		if data != nil {
@@ -683,7 +692,7 @@ func calculateIISSBlockProduce(ctx *Context, iissDB db.Database, blockHeight uin
 			ia = new(IScoreAccount)
 			ia.IScore.Set(&reward.Int)
 			ia.Address = addr
-			ia.BlockHeight = blockHeight	// has no delegation. Set blockHeight to blocHeight of calculation msg
+			ia.BlockHeight = blockHeight // has no delegation. Set blockHeight to blocHeight of calculation msg
 
 			newAccount++
 		}
@@ -741,7 +750,7 @@ func calculatePRepReward(ctx *Context, to uint64) (uint64, *common.HexInt, []byt
 		}
 		//log.Printf("[P-Rep reward] : s, e : %d - %d", s, e)
 
-		if e  <= s {
+		if e <= s {
 			continue
 		}
 
@@ -770,7 +779,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep, blockHeig
 	// calculate P-Rep reward for Governance variable
 	for i, gv := range ctx.GV {
 		//log.Printf("setPRepReward: gv: %s", gv.String())
-		var s, e  = start, end
+		var s, e = start, end
 
 		if s <= gv.BlockHeight {
 			s = gv.BlockHeight
@@ -791,7 +800,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep, blockHeig
 		rewardRate.Mul(&period.Int, &gv.PRepReward.Int)
 
 		// update rewards
-		for i, dgInfo:= range prep.List {
+		for i, dgInfo := range prep.List {
 			var iScore common.HexInt
 			iScore.Mul(&rewardRate.Int, &dgInfo.DelegatedAmount.Int)
 			iScore.Div(&iScore.Int, &prep.TotalDelegation.Int)
@@ -799,6 +808,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep, blockHeig
 			rewards[i].blockHeight = e
 			//log.Printf("[P-Rep reward] delegation: %s, reward: %s,%d\n",
 			//	dgInfo.String(), rewards[i].IScore.String(), rewards[i].blockHeight)
+			WriteBeta2Info(ctx, dgInfo, *prep, s, e, gv.PRepReward.Uint64())
 		}
 	}
 
@@ -812,7 +822,7 @@ func setPRepReward(ctx *Context, start uint64, end uint64, prep *PRep, blockHeig
 		bucket, _ := cDB.GetBucket(db.PrefixIScore)
 
 		// update IScoreAccount
-		var ia  *IScoreAccount
+		var ia *IScoreAccount
 		var err error
 		data, _ := bucket.Get(dgInfo.Address.Bytes())
 		if data != nil {

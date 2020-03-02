@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	cmdCommon "github.com/icon-project/rewardcalculator/cmd/common"
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"github.com/icon-project/rewardcalculator/core"
@@ -10,16 +11,16 @@ import (
 	"path/filepath"
 )
 
-func queryIISSDB(input Input) (err error) {
-	if input.path == "" {
+func queryIISSDB(input cmdCommon.Input) (err error) {
+	if input.Path == "" {
 		fmt.Println("Enter dbPath")
 		return errors.New("invalid db path")
 	}
-	dir, name := filepath.Split(input.path)
+	dir, name := filepath.Split(input.Path)
 	qdb := db.Open(dir, string(db.GoLevelDBBackend), name)
 	defer qdb.Close()
 
-	switch input.data {
+	switch input.Data {
 	case "":
 		fmt.Println("============== Header ==============")
 		if err = queryHeader(qdb); err != nil {
@@ -50,15 +51,15 @@ func queryIISSDB(input Input) (err error) {
 			return
 		}
 	case DataTypeBP:
-		if err = queryBP(qdb, input.height); err != nil {
+		if err = queryBP(qdb, input.Height); err != nil {
 			return
 		}
 	case DataTypePRep:
-		if err = queryPRep(qdb, input.height); err != nil {
+		if err = queryPRep(qdb, input.Height); err != nil {
 			return
 		}
 	case DataTypeTX:
-		if err = queryTX(qdb, input.height); err != nil {
+		if err = queryTX(qdb, input.Height); err != nil {
 			return
 		}
 	default:
@@ -69,7 +70,7 @@ func queryIISSDB(input Input) (err error) {
 
 func queryBP(qdb db.Database, blockHeight uint64) error {
 	if blockHeight == 0 {
-		err := iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSBPInfo)), printBP)
+		err := cmdCommon.IteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSBPInfo)), printBP)
 		return err
 	} else {
 		if bp, err := getBP(qdb, blockHeight); err != nil {
@@ -83,7 +84,7 @@ func queryBP(qdb db.Database, blockHeight uint64) error {
 
 func queryPRep(qdb db.Database, blockHeight uint64) error {
 	if blockHeight == 0 {
-		err := iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRep)), printPRep)
+		err := cmdCommon.IteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixPRep)), printPRep)
 		return err
 	} else {
 		if prep, err := getPRep(qdb, blockHeight); err != nil {
@@ -97,7 +98,7 @@ func queryPRep(qdb db.Database, blockHeight uint64) error {
 
 func queryTX(qdb db.Database, blockHeight uint64) (err error) {
 	if blockHeight == 0 {
-		err = iteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSTX)), printTX)
+		err = cmdCommon.IteratePrintDB(qdb, util.BytesPrefix([]byte(db.PrefixIISSTX)), printTX)
 	} else {
 		err = queryTransaction(qdb, blockHeight)
 	}
