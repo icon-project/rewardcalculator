@@ -29,12 +29,12 @@ type IScoreDB struct {
 	info *DBInfo
 
 	// DB instance
-	management         db.Database
-	calcResult         db.Database
-	preCommit          db.Database
-	preCommitHierarchy db.Database
-	claim              db.Database
-	claimBackup        db.Database
+	management     db.Database
+	calcResult     db.Database
+	preCommit      db.Database
+	childrenHashes db.Database
+	claim          db.Database
+	claimBackup    db.Database
 
 	accountLock sync.RWMutex
 	Account0    []db.Database
@@ -325,10 +325,10 @@ type Context struct {
 	PRepCandidates map[common.Address]*PRepCandidate
 	GV             []*GovernanceVariable
 
-	stats         *Statistics
-	Rollback      *Rollback
+	stats    *Statistics
+	Rollback *Rollback
 
-	PreCommitInfo *PreCommitInfo
+	BlockHierarchy *BlockHierarchy
 
 	calcDebug *CalcDebug
 }
@@ -587,11 +587,11 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int, debugC
 	// make new Rollback stuff
 	ctx.Rollback = NewRollback()
 
-	// Open PreCommitHierarchy DB
-	isDB.preCommitHierarchy = db.Open(isDB.info.DBRoot, isDB.info.DBType, "preCommit_info")
+	// Open ChildrenHashInfo DB
+	isDB.childrenHashes = db.Open(isDB.info.DBRoot, isDB.info.DBType, "childrenHashes")
 
-	ctx.PreCommitInfo = new(PreCommitInfo)
-	*ctx.PreCommitInfo = LoadPreCommitInfo(isDB.preCommitHierarchy)
+	ctx.BlockHierarchy = new(BlockHierarchy)
+	*ctx.BlockHierarchy = LoadBlockHierarchy(isDB.childrenHashes)
 
 	return ctx, nil
 }

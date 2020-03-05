@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func makePreCommitHierarchy() *PreCommitHierarchy {
-	preCommitHierarchy := new(PreCommitHierarchy)
+func makePreCommitHierarchy() *ChildrenHashInfo {
+	preCommitHierarchy := new(ChildrenHashInfo)
 	var blockHash [BlockHashSize]byte
 	var childrenHash1 [BlockHashSize]byte
 	var childrenHash2 [BlockHashSize]byte
@@ -32,7 +32,7 @@ func TestDBPreCommitHierarchy_ID(t *testing.T) {
 func TestDBPreCommitHierarchy_BytesAndSetBytes(t *testing.T) {
 	preCommitHierarchy := makePreCommitHierarchy()
 
-	var preCommitHierarchyNew PreCommitHierarchy
+	var preCommitHierarchyNew ChildrenHashInfo
 
 	bs, err := preCommitHierarchy.Bytes()
 	assert.NoError(t, err)
@@ -50,7 +50,7 @@ func TestDBPreCommitHierarchy_NewPreCommitHierarchy(t *testing.T) {
 
 	bs, err := preCommitHierarchy.Bytes()
 	assert.NoError(t, err)
-	preCommitHierarchyNew, err := NewPreCommitHierarchyFromBytes(bs)
+	preCommitHierarchyNew, err := NewChildrenHashInfoFromBytes(bs)
 	assert.NoError(t, err)
 	bsNew, err := preCommitHierarchyNew.Bytes()
 	assert.NoError(t, err)
@@ -60,11 +60,11 @@ func TestDBPreCommitHierarchy_NewPreCommitHierarchy(t *testing.T) {
 }
 
 func TestDBPreCommitInfo_PreCommitHierarchy(t *testing.T) {
-	var preCommitHierarchy PreCommitHierarchy
+	var preCommitHierarchy ChildrenHashInfo
 
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
-	pdb := ctx.DB.preCommitHierarchy
+	pdb := ctx.DB.childrenHashes
 
 	var blockHash [BlockHashSize]byte
 	var childrenHash1 [BlockHashSize]byte
@@ -73,9 +73,9 @@ func TestDBPreCommitInfo_PreCommitHierarchy(t *testing.T) {
 	binary.BigEndian.PutUint64(childrenHash1[:], 34)
 	binary.BigEndian.PutUint64(childrenHash2[:], 35)
 
-	err := AppendPreCommitChildInDB(pdb, blockHash, childrenHash1)
+	err := AppendChildHashInDB(pdb, blockHash, childrenHash1)
 	assert.NoError(t, err)
-	err = AppendPreCommitChildInDB(pdb, blockHash, childrenHash2)
+	err = AppendChildHashInDB(pdb, blockHash, childrenHash2)
 	assert.NoError(t, err)
 
 	bucket, err := pdb.GetBucket(db.PrefixIScore)
@@ -88,7 +88,7 @@ func TestDBPreCommitInfo_PreCommitHierarchy(t *testing.T) {
 	childrenHashesBytes, _ := preCommitHierarchy.Bytes()
 	assert.Equal(t, childrenHashesBytes, bs)
 
-	DeletePreCommitHierarchy(pdb, blockHash[:])
+	DeleteChildrenHashInfo(pdb, blockHash[:])
 	bs, _ = bucket.Get(common.Uint64ToBytes(calcBlockHeight))
 	assert.Nil(t, bs)
 }
@@ -96,7 +96,7 @@ func TestDBPreCommitInfo_PreCommitHierarchy(t *testing.T) {
 func TestLoadPreCommitInfo(t *testing.T) {
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
-	pdb := ctx.DB.preCommitHierarchy
+	pdb := ctx.DB.childrenHashes
 
 	var blockHash [BlockHashSize]byte
 	var childrenHash1 [BlockHashSize]byte
@@ -105,17 +105,17 @@ func TestLoadPreCommitInfo(t *testing.T) {
 	binary.BigEndian.PutUint64(childrenHash1[:], 34)
 	binary.BigEndian.PutUint64(childrenHash2[:], 35)
 
-	preCommitInfo := make(PreCommitInfo, 0)
+	preCommitInfo := make(BlockHierarchy, 0)
 	preCommitInfo[blockHash] = make(map[[BlockHashSize]byte]bool, 0)
 	preCommitInfo[blockHash][childrenHash1] = true
 	preCommitInfo[blockHash][childrenHash2] = true
 
-	err := AppendPreCommitChildInDB(pdb, blockHash, childrenHash1)
+	err := AppendChildHashInDB(pdb, blockHash, childrenHash1)
 	assert.NoError(t, err)
-	err = AppendPreCommitChildInDB(pdb, blockHash, childrenHash2)
+	err = AppendChildHashInDB(pdb, blockHash, childrenHash2)
 	assert.NoError(t, err)
 
-	loadedPreCommitInfo := LoadPreCommitInfo(pdb)
+	loadedPreCommitInfo := LoadBlockHierarchy(pdb)
 
 	assert.Equal(t, preCommitInfo, loadedPreCommitInfo)
 }
