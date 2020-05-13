@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/core"
@@ -82,14 +84,24 @@ func main() {
 	}
 
 	rcm, err := core.InitManager(&cfg)
+	sigs := make(chan os.Signal, 1)
+	done := make(chan bool, 1)
+
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
 	if err != nil {
 		log.Panicf("Failed to start RewardCalculator manager. %+v", err)
 	}
 
-	forever := make(chan bool)
+	go func() {
+		sig := <-sigs
+		log.Println("Catch ", sig, "signal")
+		rcm.Close()
+		done <- true
+	}()
 
 	go rcm.Loop()
 
 	fmt.Printf("[*] To exit press CTRL+C\n")
-	<-forever
+	<-done
 }
