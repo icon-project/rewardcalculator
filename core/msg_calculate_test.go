@@ -735,10 +735,10 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	ctx.DB.setCalculatingBH(uint64(50))
 
 	quitChannel := ctx.CancelCalculation.GetChannel()
-	ctx.CancelCalculation.notifyCancelCalculation()
+	ctx.CancelCalculation.notifyRollback()
 	err, blockHeight, _, _ = DoCalculate(quitChannel, ctx, &req, nil, 0)
 	assert.Error(t, err)
-	assert.True(t, strings.HasSuffix(err.Error(), "was canceled"))
+	assert.True(t, strings.HasSuffix(err.Error(), "was canceled by ROLLBACK"))
 }
 
 func newIScoreAccount(addr common.Address, blockHeight uint64, reward common.HexInt) *IScoreAccount {
@@ -812,6 +812,6 @@ func TestMsgQueryCalc_DoQueryCalculateResult(t *testing.T) {
 }
 
 func Test_isCalcCancelByRollback(t *testing.T) {
-	assert.True(t, isCalcCancelByRollback(&CalcCancelError{}))
+	assert.True(t, isCalcCancelByRollback(&CalcCancelByRollbackError{}))
 	assert.False(t, isCalcCancelByRollback(&os.PathError{}))
 }

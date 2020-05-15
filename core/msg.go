@@ -158,9 +158,9 @@ func (rv *ResponseVersion) String() string {
 }
 
 func (mh *msgHandler) version(c ipc.Connection, id uint32) error {
-	mh.mgr.IncreaseMessageTask()
+	mh.mgr.IncreaseMsgTask()
 	cBI := mh.mgr.ctx.DB.getCurrentBlockInfo()
-	mh.mgr.DecreaseMessageTask()
+	mh.mgr.DecreaseMsgTask()
 	return sendVersion(c, MsgVersion, id, cBI.BlockHeight, cBI.BlockHash)
 }
 
@@ -190,7 +190,7 @@ func (rq *ResponseQuery) String() string {
 
 func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 	var addr common.Address
-	mh.mgr.IncreaseMessageTask()
+	mh.mgr.IncreaseMsgTask()
 	if _, err := codec.MP.UnmarshalFromBytes(data, &addr); err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
 
 	resp := DoQuery(mh.mgr.ctx, addr)
 
-	mh.mgr.DecreaseMessageTask()
+	mh.mgr.DecreaseMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQuery), id, resp.String())
 	return c.Send(MsgQuery, id, &resp)
 }
@@ -254,7 +254,7 @@ func (resp *ResponseInit) String() string {
 
 func (mh *msgHandler) init(c ipc.Connection, id uint32, data []byte) error {
 	var blockHeight uint64
-	mh.mgr.IncreaseMessageTask()
+	mh.mgr.IncreaseMsgTask()
 	if _, err := codec.MP.UnmarshalFromBytes(data, &blockHeight); err != nil {
 		return err
 	}
@@ -267,7 +267,7 @@ func (mh *msgHandler) init(c ipc.Connection, id uint32, data []byte) error {
 		resp.Success = false
 	}
 
-	mh.mgr.DecreaseMessageTask()
+	mh.mgr.DecreaseMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgINIT), id, resp.String())
 	return c.Send(MsgINIT, id, &resp)
 }

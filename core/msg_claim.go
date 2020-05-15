@@ -45,7 +45,7 @@ func (rc *ResponseClaim) String() string {
 
 func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 	var req ClaimMessage
-	mh.mgr.IncreaseMessageTask()
+	mh.mgr.IncreaseMsgTask()
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		log.Printf("Failed to deserialize CLAIM message. err=%+v", err)
 		return err
@@ -61,7 +61,7 @@ func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 		resp.IScore.Set(&IScore.Int)
 	}
 
-	mh.mgr.DecreaseMessageTask()
+	mh.mgr.DecreaseMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgClaim), id, resp.String())
 	return c.Send(MsgClaim, id, &resp)
 }
@@ -169,7 +169,7 @@ func (cc *CommitClaim) String() string {
 func (mh *msgHandler) commitClaim(c ipc.Connection, id uint32, data []byte) error {
 	var req CommitClaim
 	var err error
-	mh.mgr.IncreaseMessageTask()
+	mh.mgr.IncreaseMsgTask()
 
 	if _, err = codec.MP.UnmarshalFromBytes(data, &req); nil != err {
 		return err
@@ -182,7 +182,7 @@ func (mh *msgHandler) commitClaim(c ipc.Connection, id uint32, data []byte) erro
 		return nil
 	}
 
-	mh.mgr.DecreaseMessageTask()
+	mh.mgr.DecreaseMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCommitClaim), id, "ack")
 	return c.Send(MsgCommitClaim, id, nil)
 }
@@ -222,7 +222,7 @@ func (cb *CommitBlock) String() string {
 func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) error {
 	var req CommitBlock
 	var err error
-	mh.mgr.IncreaseMessageTask()
+	mh.mgr.IncreaseMsgTask()
 	if _, err = codec.MP.UnmarshalFromBytes(data, &req); nil != err {
 		return err
 	}
@@ -249,7 +249,7 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 	resp = req
 	resp.Success = ret
 
-	mh.mgr.DecreaseMessageTask()
+	mh.mgr.DecreaseMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCommitBlock), id, resp.String())
 	return c.Send(MsgCommitBlock, id, &resp)
 }
