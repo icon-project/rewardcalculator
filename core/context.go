@@ -324,8 +324,8 @@ type Context struct {
 	PRepCandidates map[common.Address]*PRepCandidate
 	GV             []*GovernanceVariable
 
-	stats    *Statistics
-	Rollback *Rollback
+	stats             *Statistics
+	CancelCalculation *CancelCalculation
 
 	calcDebug *CalcDebug
 }
@@ -581,8 +581,8 @@ func NewContext(dbPath string, dbType string, dbName string, dbCount int, debugC
 	// Open account DB
 	isDB.OpenAccountDB()
 
-	// make new Rollback stuff
-	ctx.Rollback = NewRollback()
+	// make new CancelCalculation stuff
+	ctx.CancelCalculation = NewCancel()
 
 	return ctx, nil
 }

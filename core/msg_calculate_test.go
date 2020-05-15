@@ -50,7 +50,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 	// TX 0: Add new delegation at block height 10
 	// iconist delegates MinDelegation to prepA and delegates 2 * MinDelegation to prepB
-	dgDataSlice := []DelegateData {
+	dgDataSlice := []DelegateData{
 		{prepA.Address, *common.NewHexIntFromUint64(MinDelegation)},
 		{prepB.Address, *common.NewHexIntFromUint64(MinDelegation * 2)},
 	}
@@ -61,7 +61,7 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 
 	// TX 1: Modify delegation at block height 20
 	// iconist delegates MinDelegation to prepA and delegates MinDelegation to iconist
-	dgDataSlice = []DelegateData {
+	dgDataSlice = []DelegateData{
 		{prepA.Address, *common.NewHexIntFromUint64(MinDelegation)},
 		{iconist, *common.NewHexIntFromUint64(MinDelegation)},
 	}
@@ -97,16 +97,16 @@ func TestMsgCalc_CalculateIISSTX(t *testing.T) {
 	h := sha3.NewShake256()
 	iaHash.IScore.SetUint64(3 * MinDelegation * (100 - 10) * minRewardRep / rewardDivider)
 	h.Write(iaHash.BytesForHash())
-	iaHash.IScore.SetUint64(3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
-		MinDelegation * (100 - 20) * minRewardRep / rewardDivider)
+	iaHash.IScore.SetUint64(3*MinDelegation*(20-10)*minRewardRep/rewardDivider +
+		MinDelegation*(100-20)*minRewardRep/rewardDivider)
 	h.Write(iaHash.BytesForHash())
-	iaHash.IScore.SetUint64(3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
-		MinDelegation * (30 - 20) * minRewardRep / rewardDivider)
+	iaHash.IScore.SetUint64(3*MinDelegation*(20-10)*minRewardRep/rewardDivider +
+		MinDelegation*(30-20)*minRewardRep/rewardDivider)
 	h.Write(iaHash.BytesForHash())
 	h.Read(stateHash)
 
-	reward := 3 * MinDelegation * (20 - 10) * minRewardRep / rewardDivider +
-		MinDelegation * (30 - 20) * minRewardRep / rewardDivider
+	reward := 3*MinDelegation*(20-10)*minRewardRep/rewardDivider +
+		MinDelegation*(30-20)*minRewardRep/rewardDivider
 
 	assert.Equal(t, uint64(reward), ia.IScore.Uint64())
 	assert.Equal(t, uint64(reward), stats.Uint64())
@@ -148,7 +148,7 @@ func TestMsgCalc_CalculateIISSTX_small_delegation(t *testing.T) {
 
 	// TX 0: Add new delegation at block height 10
 	// iconist delegates MinDelegation - 1 to prepA
-	dgDataSlice := []DelegateData {
+	dgDataSlice := []DelegateData{
 		{prepA.Address, *common.NewHexIntFromUint64(MinDelegation - 1)},
 	}
 	tx := makeIISSTX(TXDataTypeDelegate, iconist.String(), dgDataSlice)
@@ -523,7 +523,6 @@ func testCalculatePRepReward(t *testing.T, revision uint64) {
 		assert.Equal(t, BlockHeight2, ia.BlockHeight)
 	}
 
-
 	totalReward.Add(&totalReward.Int, &reward0.Int)
 
 	// check stats
@@ -559,14 +558,14 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 
 		calculateBlockHeight uint64 = 100
 
-		addr1BlockHeight uint64 = 1
-		addr1InitIScore = 100
-		addr1DelegationToPRepA = 10 + MinDelegation
+		addr1BlockHeight       uint64 = 1
+		addr1InitIScore               = 100
+		addr1DelegationToPRepA        = 10 + MinDelegation
 
-		addr2BlockHeight uint64 = 10
-		addr2InitIScore = 0
-		addr2DelegationToPRepA = 20 + MinDelegation
-		addr2DelegationToPRepB = 30 + MinDelegation
+		addr2BlockHeight       uint64 = 10
+		addr2InitIScore               = 0
+		addr2DelegationToPRepA        = 20 + MinDelegation
+		addr2DelegationToPRepB        = 30 + MinDelegation
 	)
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
@@ -632,7 +631,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 	bucket.Set(ia.ID(), ia.Bytes())
 
 	// calculate
-	count, stats, hash := calculateDB(ctx.Rollback.GetChannel(), 0, queryDB, calcDB, ctx,
+	count, stats, hash := calculateDB(ctx.CancelCalculation.GetChannel(), 0, queryDB, calcDB, ctx,
 		calculateBlockHeight, writeBatchCount)
 
 	var reward, totalReward uint64
@@ -647,7 +646,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 		return
 	}
 	// calculate delegation reward for P-Rep only
-	reward = gv.RewardRep.Uint64() * period * addr1DelegationToPRepA / rewardDivider + addr1InitIScore
+	reward = gv.RewardRep.Uint64()*period*addr1DelegationToPRepA/rewardDivider + addr1InitIScore
 
 	bucket, _ = calcDB.GetBucket(db.PrefixIScore)
 	bs, _ := bucket.Get(addr1.Bytes())
@@ -668,7 +667,7 @@ func TestMsgCalc_CalculateDB(t *testing.T) {
 		assert.True(t, false)
 		return
 	}
-	reward = gv.RewardRep.Uint64() * period * (addr2DelegationToPRepA + addr2DelegationToPRepB) / rewardDivider + addr2InitIScore
+	reward = gv.RewardRep.Uint64()*period*(addr2DelegationToPRepA+addr2DelegationToPRepB)/rewardDivider + addr2InitIScore
 
 	bs, _ = bucket.Get(addr2.Bytes())
 	ia, _ = NewIScoreAccountFromBytes(bs)
@@ -695,18 +694,18 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	defer finalizeTest(ctx)
 
 	iissDBDir := testDBDir + "/iiss"
-	req := CalculateRequest{Path: iissDBDir, BlockHeight:100, BlockHash: testHash}
+	req := CalculateRequest{Path: iissDBDir, BlockHeight: 100, BlockHash: testHash}
 
 	// get CALCULATE message while processing CALCULATE message
 	ctx.DB.setCalculatingBH(uint64(50))
-	err, blockHeight, _, _ := DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+	err, blockHeight, _, _ := DoCalculate(ctx.CancelCalculation.GetChannel(), ctx, &req, nil, 0)
 	assert.Error(t, err)
 	assert.True(t, strings.HasPrefix(err.Error(), "calculating now. drop calculate message"), err)
 	assert.Equal(t, req.BlockHeight, blockHeight)
 	ctx.DB.resetCalculatingBH()
 
 	// get CALCULATE message with no IISS data
-	err, blockHeight, _, _ = DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+	err, blockHeight, _, _ = DoCalculate(ctx.CancelCalculation.GetChannel(), ctx, &req, nil, 0)
 	assert.Error(t, err)
 	assert.True(t, strings.HasPrefix(err.Error(), "Failed to load IISS data"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
@@ -718,7 +717,7 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 
 	// get CALCULATE message with invalid block height
 	ctx.DB.setCalcDoneBH(uint64(200))
-	err, blockHeight, _, _ = DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+	err, blockHeight, _, _ = DoCalculate(ctx.CancelCalculation.GetChannel(), ctx, &req, nil, 0)
 	assert.Error(t, err)
 	assert.True(t, strings.HasPrefix(err.Error(), "too low blockHeight"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
@@ -726,17 +725,17 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	// get CALCULATE message with duplicated block height
 	ctx.DB.setCalcDoneBH(uint64(100))
 	ctx.DB.setCalculatingBH(uint64(100))
-	err, blockHeight, _, _ = DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, 0)
+	err, blockHeight, _, _ = DoCalculate(ctx.CancelCalculation.GetChannel(), ctx, &req, nil, 0)
 	assert.Error(t, err)
 	assert.True(t, strings.HasPrefix(err.Error(), "duplicated block"))
 	assert.Equal(t, req.BlockHeight, blockHeight)
 
-	// Cancel with ROLLBACK
+	// Rollback with ROLLBACK
 	ctx.DB.setCalcDoneBH(uint64(50))
 	ctx.DB.setCalculatingBH(uint64(50))
 
-	quitChannel := ctx.Rollback.GetChannel()
-	ctx.Rollback.notifyRollback()
+	quitChannel := ctx.CancelCalculation.GetChannel()
+	ctx.CancelCalculation.notifyRollback()
 	err, blockHeight, _, _ = DoCalculate(quitChannel, ctx, &req, nil, 0)
 	assert.Error(t, err)
 	assert.True(t, strings.HasSuffix(err.Error(), "was canceled by ROLLBACK"))
