@@ -45,7 +45,7 @@ type MessageData struct {
 func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
 	var req DebugMessage
 	var result error
-	mh.mgr.waitGroup.Add(1)
+	mh.mgr.IncreaseMessageTask()
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		log.Printf("Failed to deserialize DEBUG message. err=%+v", err)
 		return err
@@ -84,7 +84,7 @@ func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
 		result = fmt.Errorf("unknown debug message %d", req.Cmd)
 	}
 
-	mh.mgr.waitGroup.Done()
+	mh.mgr.DecreaseMessageTask()
 	return result
 }
 

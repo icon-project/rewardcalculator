@@ -85,7 +85,7 @@ func TestRollback_notifyRollback(t *testing.T) {
 
 	oldChannel := c.GetChannel()
 
-	c.notifyRollback()
+	c.notifyCancelCalculation()
 	assert.NotEqual(t, oldChannel, c.GetChannel())
 	assert.NotNil(t, c.GetChannel())
 }

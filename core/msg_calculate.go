@@ -294,7 +294,7 @@ func sendCalculateACK(c ipc.Connection, id uint32, status uint16, blockHeight ui
 func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error {
 	success := true
 	var req CalculateRequest
-	mh.mgr.waitGroup.Add(1)
+	mh.mgr.IncreaseMessageTask()
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
@@ -325,7 +325,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	}
 	resp.StateHash = stateHash
 
-	mh.mgr.waitGroup.Done()
+	mh.mgr.DecreaseMessageTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCalculateDone), 0, resp.String())
 	return c.Send(MsgCalculateDone, 0, &resp)
 }
@@ -444,15 +444,7 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 	wait.Wait()
 
 	if quit != ctx.CancelCalculation.GetChannel() {
-		var err error
-		switch ctx.CancelCalculation.cancelCode {
-		case CancelExit:
-			return &CalcCancelByExit{blockHeight}, blockHeight, nil, nil
-		case CancelRollback:
-			err = &CalcCancelByRollbackError{blockHeight}
-		}
-		ctx.CancelCalculation.cancelCode = CancelNone
-		return err, blockHeight, nil, nil
+		return &CalcCancelError{blockHeight}, blockHeight, nil, nil
 	}
 
 	// update Statistics
@@ -904,14 +896,14 @@ func (cs *QueryCalculateStatusResponse) String() string {
 
 func (mh *msgHandler) queryCalculateStatus(c ipc.Connection, id uint32, data []byte) error {
 	ctx := mh.mgr.ctx
-	mh.mgr.waitGroup.Add(1)
+	mh.mgr.IncreaseMessageTask()
 
 	// send QUERY_CALCULATE_STATUS response
 	var resp QueryCalculateStatusResponse
 
 	DoQueryCalculateStatus(ctx, &resp)
 
-	mh.mgr.waitGroup.Done()
+	mh.mgr.DecreaseMessageTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateStatus), id, resp.String())
 	return c.Send(MsgQueryCalculateStatus, id, &resp)
 }
@@ -965,7 +957,7 @@ func (cr *QueryCalculateResultResponse) String() string {
 
 func (mh *msgHandler) queryCalculateResult(c ipc.Connection, id uint32, data []byte) error {
 	var blockHeight uint64
-	mh.mgr.waitGroup.Add(1)
+	mh.mgr.IncreaseMessageTask()
 	if _, err := codec.MP.UnmarshalFromBytes(data, &blockHeight); err != nil {
 		log.Printf("Failed to unmarshal data. err=%+v", err)
 		return err
@@ -979,7 +971,7 @@ func (mh *msgHandler) queryCalculateResult(c ipc.Connection, id uint32, data []b
 
 	DoQueryCalculateResult(ctx, blockHeight, &resp)
 
-	mh.mgr.waitGroup.Done()
+	mh.mgr.DecreaseMessageTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateResult), id, resp.String())
 	return c.Send(MsgQueryCalculateResult, id, &resp)
 }
@@ -1016,23 +1008,15 @@ func DoQueryCalculateResult(ctx *Context, blockHeight uint64, resp *QueryCalcula
 	}
 }
 
-type CalcCancelByRollbackError struct {
+type CalcCancelError struct {
 	BlockHeight uint64
 }
 
-func (e *CalcCancelByRollbackError) Error() string {
-	return fmt.Sprintf("CALCULATE(%d) was canceled by ROLLBACK", e.BlockHeight)
+func (e *CalcCancelError) Error() string {
+	return fmt.Sprintf("CALCULATE(%d) was canceled", e.BlockHeight)
 }
 
 func isCalcCancelByRollback(err error) bool {
-	_, ok := err.(*CalcCancelByRollbackError)
+	_, ok := err.(*CalcCancelError)
 	return ok
-}
-
-type CalcCancelByExit struct {
-	BlockHeight uint64
-}
-
-func (e *CalcCancelByExit) Error() string {
-	return fmt.Sprintf("CALCULATE(%d) was canceled due to RC process shutting down", e.BlockHeight)
 }

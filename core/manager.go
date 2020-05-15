@@ -71,7 +71,7 @@ func (m *manager) Loop() error {
 }
 
 func (m *manager) Close() error {
-	m.ctx.CancelCalculation.notifyExit()
+	m.ctx.CancelCalculation.notifyCancelCalculation()
 	m.waitGroup.Wait()
 	if m.clientMode {
 		m.conn.Close()
@@ -97,6 +97,14 @@ func (m *manager) OnClose(c ipc.Connection) error {
 	// use sync.WaitGroup ?
 
 	return nil
+}
+
+func (m *manager) IncreaseMessageTask() {
+	m.waitGroup.Add(1)
+}
+
+func (m *manager) DecreaseMessageTask() {
+	m.waitGroup.Done()
 }
 
 func InitManager(cfg *RcConfig) (*manager, error) {
