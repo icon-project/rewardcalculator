@@ -44,6 +44,8 @@ type MessageData struct {
 
 func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
 	var req DebugMessage
+	var result error
+	mh.mgr.AddMsgTask()
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		log.Printf("Failed to deserialize DEBUG message. err=%+v", err)
 		return err
@@ -54,32 +56,36 @@ func (mh *msgHandler) debug(c ipc.Connection, id uint32, data []byte) error {
 
 	switch req.Cmd {
 	case DebugStatistics:
-		return handleStats(c, id, ctx)
+		result = handleStats(c, id, ctx)
 	case DebugDBInfo:
-		return handleDBInfo(c, id, ctx)
+		result = handleDBInfo(c, id, ctx)
 	case DebugPRep:
-		return handlePRep(c, id, ctx)
+		result = handlePRep(c, id, ctx)
 	case DebugPRepCandidate:
-		return handlePRepCandidate(c, id, ctx)
+		result = handlePRepCandidate(c, id, ctx)
 	case DebugGV:
-		return handleGV(c, id, ctx)
+		result = handleGV(c, id, ctx)
 	case DebugLogCTX:
 		ctx.Print()
+		result = nil
 	case DebugCalcFlagOn:
-		return handleCalcDebugFlagOn(c, id, ctx)
+		result = handleCalcDebugFlagOn(c, id, ctx)
 	case DebugCalcFlagOff:
-		return handleCalcDebugFlagOff(c, id, ctx)
+		result = handleCalcDebugFlagOff(c, id, ctx)
 	case DebugCalcAddAddress:
-		return handleCalcDebugAddAddress(c, id, ctx, req.Address)
+		result = handleCalcDebugAddAddress(c, id, ctx, req.Address)
 	case DebugCalcDelAddress:
-		return handleCalcDebugDeleteAddress(c, id, ctx, req.Address)
+		result = handleCalcDebugDeleteAddress(c, id, ctx, req.Address)
 	case DebugCalcListAddresses:
-		return handleCalcDebugAddresses(c, id, ctx)
+		result = handleCalcDebugAddresses(c, id, ctx)
 	case DebugCalcDebugResult:
-		return handleQueryCalcDebugResult(c, id, ctx, req.Address, req.BlockHeight)
+		result = handleQueryCalcDebugResult(c, id, ctx, req.Address, req.BlockHeight)
+	default:
+		result = fmt.Errorf("unknown debug message %d", req.Cmd)
 	}
 
-	return fmt.Errorf("unknown debug message %d", req.Cmd)
+	mh.mgr.DoneMsgTask()
+	return result
 }
 
 type ResponseDebugStats struct {

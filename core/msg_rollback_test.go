@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 func TestMsgRollback_checkRollback(t *testing.T) {
 	ctx := initTest(2)
 	defer finalizeTest(ctx)
@@ -17,24 +16,24 @@ func TestMsgRollback_checkRollback(t *testing.T) {
 	ctx.DB.setCalcDoneBH(calcBlockHeight2)
 
 	tests := []struct {
-		name string
+		name     string
 		rollback uint64
-		error bool
-	} {
+		error    bool
+	}{
 		{
-			name: "too low1",
+			name:     "too low1",
 			rollback: calcBlockHeight1 - 1,
-			error: true,
+			error:    true,
 		},
 		{
-			name: "too low2",
+			name:     "too low2",
 			rollback: calcBlockHeight1,
-			error: true,
+			error:    true,
 		},
 		{
-			name: "good",
+			name:     "good",
 			rollback: calcBlockHeight1 + 1,
-			error: false,
+			error:    false,
 		},
 	}
 	for _, tt := range tests {
@@ -60,33 +59,33 @@ func TestMsgRollback_checkAccountDBRollback(t *testing.T) {
 
 	const calcBlockHeight uint64 = 100
 	ctx.DB.setCalcDoneBH(calcBlockHeight)
-	assert.True(t, checkAccountDBRollback(ctx, calcBlockHeight - 1))
+	assert.True(t, checkAccountDBRollback(ctx, calcBlockHeight-1))
 	assert.True(t, checkAccountDBRollback(ctx, calcBlockHeight))
-	assert.False(t, checkAccountDBRollback(ctx, calcBlockHeight + 1))
+	assert.False(t, checkAccountDBRollback(ctx, calcBlockHeight+1))
 }
 
 func TestRollback_newChannel(t *testing.T) {
-	var rb Rollback
+	var c CancelCalculation
 
-	assert.Nil(t, rb.channel)
-	rb.newChannel()
-	assert.NotNil(t, rb.channel)
+	assert.Nil(t, c.channel)
+	c.newChannel()
+	assert.NotNil(t, c.channel)
 }
 
 func TestRollback_getChannel(t *testing.T) {
-	var rb Rollback
-	rb.newChannel()
+	var c CancelCalculation
+	c.newChannel()
 
-	assert.Equal(t, rb.channel, rb.GetChannel())
+	assert.Equal(t, c.channel, c.GetChannel())
 }
 
 func TestRollback_notifyRollback(t *testing.T) {
-	var rb Rollback
-	rb.newChannel()
+	var c CancelCalculation
+	c.newChannel()
 
-	oldChannel := rb.GetChannel()
+	oldChannel := c.GetChannel()
 
-	rb.notifyRollback()
-	assert.NotEqual(t, oldChannel, rb.GetChannel())
-	assert.NotNil(t, rb.GetChannel())
+	c.notifyRollback()
+	assert.NotEqual(t, oldChannel, c.GetChannel())
+	assert.NotNil(t, c.GetChannel())
 }

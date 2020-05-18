@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"path/filepath"
+	"sync"
 )
 
 const (
@@ -50,7 +51,8 @@ type manager struct {
 	server      ipc.Server
 	conn        ipc.Connection
 
-	ctx *Context
+	ctx       *Context
+	waitGroup *sync.WaitGroup
 }
 
 func (m *manager) Loop() error {
@@ -69,6 +71,8 @@ func (m *manager) Loop() error {
 }
 
 func (m *manager) Close() error {
+	m.ctx.CancelCalculation.notifyExit()
+	m.WaitMsgTasksDone()
 	if m.clientMode {
 		m.conn.Close()
 	} else {
@@ -78,6 +82,7 @@ func (m *manager) Close() error {
 	}
 
 	CloseIScoreDB(m.ctx.DB)
+	log.Printf("Exit Reward Calculator")
 	return nil
 }
 
@@ -95,11 +100,25 @@ func (m *manager) OnClose(c ipc.Connection) error {
 	return nil
 }
 
+func (m *manager) AddMsgTask() {
+	m.waitGroup.Add(1)
+}
+
+func (m *manager) DoneMsgTask() {
+	m.waitGroup.Done()
+}
+
+func (m *manager) WaitMsgTasksDone() {
+	log.Printf("Wait until all goroutines accessing DB done")
+	m.waitGroup.Wait()
+}
 func InitManager(cfg *RcConfig) (*manager, error) {
 
 	var err error
+	waitGroup := new(sync.WaitGroup)
 	m := new(manager)
 	m.clientMode = cfg.ClientMode
+	m.waitGroup = waitGroup
 
 	// Initialize DB and load context values
 	m.ctx, err = NewContext(cfg.DBDir, string(db.GoLevelDBBackend), "IScore", cfg.DBCount, cfg.CalcDebugConf)
@@ -137,6 +156,7 @@ func InitManager(cfg *RcConfig) (*manager, error) {
 		monitor := new(manager)
 		monitor.ctx = m.ctx
 		monitor.monitorMode = true
+		monitor.waitGroup = waitGroup
 
 		srv := ipc.NewServer()
 		err = srv.Listen("unix", DebugAddress)
@@ -162,7 +182,7 @@ func reloadIISSData(ctx *Context, dir string) {
 		req.BlockHeight = reloadBlockHeight
 
 		log.Printf("Reload IISS Data. %s", req.Path)
-		err, _, _, _ := DoCalculate(ctx.Rollback.GetChannel(), ctx, &req, nil, reloadMsgID)
+		err, _, _, _ := DoCalculate(ctx.CancelCalculation.GetChannel(), ctx, &req, nil, reloadMsgID)
 
 		if err != nil {
 			log.Printf("Failed to reload IISS Data. %s. %v", req.Path, err)
