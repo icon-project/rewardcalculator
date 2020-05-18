@@ -108,6 +108,7 @@ func (m *manager) DoneMsgTask() {
 }
 
 func (m *manager) WaitMsgTasksDone() {
+	log.Printf("Wait until all goroutines accessing DB done")
 	m.waitGroup.Wait()
 }
 func InitManager(cfg *RcConfig) (*manager, error) {

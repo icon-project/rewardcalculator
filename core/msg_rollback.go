@@ -151,6 +151,7 @@ func (c *CancelCalculation) notifyRollback() {
 
 func (c *CancelCalculation) notifyExit() {
 	// close channel to notify Exiting RC process to all listening goroutines
+	log.Printf("Notify goroutines that RC process will exit")
 	c.notifyCancelCalculation(CancelExit)
 }
 
