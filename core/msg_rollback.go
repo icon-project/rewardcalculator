@@ -33,7 +33,7 @@ func (mh *msgHandler) rollback(c ipc.Connection, id uint32, data []byte) error {
 	success := true
 	var req RollBackRequest
 	var err error
-	mh.mgr.IncreaseMsgTask()
+	mh.mgr.AddMsgTask()
 	if _, err = codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (mh *msgHandler) rollback(c ipc.Connection, id uint32, data []byte) error {
 	resp.BlockHash = make([]byte, BlockHashSize)
 	copy(resp.BlockHash, req.BlockHash)
 
-	mh.mgr.DecreaseMsgTask()
+	mh.mgr.DoneMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgRollBack), id, resp.String())
 	return c.Send(MsgRollBack, id, &resp)
 }

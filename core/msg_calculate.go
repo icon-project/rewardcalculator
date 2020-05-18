@@ -294,7 +294,7 @@ func sendCalculateACK(c ipc.Connection, id uint32, status uint16, blockHeight ui
 func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error {
 	success := true
 	var req CalculateRequest
-	mh.mgr.IncreaseMsgTask()
+	mh.mgr.AddMsgTask()
 	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
@@ -325,7 +325,7 @@ func (mh *msgHandler) calculate(c ipc.Connection, id uint32, data []byte) error 
 	}
 	resp.StateHash = stateHash
 
-	mh.mgr.DecreaseMsgTask()
+	mh.mgr.DoneMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCalculateDone), 0, resp.String())
 	return c.Send(MsgCalculateDone, 0, &resp)
 }
@@ -904,14 +904,14 @@ func (cs *QueryCalculateStatusResponse) String() string {
 
 func (mh *msgHandler) queryCalculateStatus(c ipc.Connection, id uint32, data []byte) error {
 	ctx := mh.mgr.ctx
-	mh.mgr.IncreaseMsgTask()
+	mh.mgr.AddMsgTask()
 
 	// send QUERY_CALCULATE_STATUS response
 	var resp QueryCalculateStatusResponse
 
 	DoQueryCalculateStatus(ctx, &resp)
 
-	mh.mgr.DecreaseMsgTask()
+	mh.mgr.DoneMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateStatus), id, resp.String())
 	return c.Send(MsgQueryCalculateStatus, id, &resp)
 }
@@ -965,7 +965,7 @@ func (cr *QueryCalculateResultResponse) String() string {
 
 func (mh *msgHandler) queryCalculateResult(c ipc.Connection, id uint32, data []byte) error {
 	var blockHeight uint64
-	mh.mgr.IncreaseMsgTask()
+	mh.mgr.AddMsgTask()
 	if _, err := codec.MP.UnmarshalFromBytes(data, &blockHeight); err != nil {
 		log.Printf("Failed to unmarshal data. err=%+v", err)
 		return err
@@ -979,7 +979,7 @@ func (mh *msgHandler) queryCalculateResult(c ipc.Connection, id uint32, data []b
 
 	DoQueryCalculateResult(ctx, blockHeight, &resp)
 
-	mh.mgr.DecreaseMsgTask()
+	mh.mgr.DoneMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQueryCalculateResult), id, resp.String())
 	return c.Send(MsgQueryCalculateResult, id, &resp)
 }

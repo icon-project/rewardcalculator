@@ -99,11 +99,11 @@ func (m *manager) OnClose(c ipc.Connection) error {
 	return nil
 }
 
-func (m *manager) IncreaseMsgTask() {
+func (m *manager) AddMsgTask() {
 	m.waitGroup.Add(1)
 }
 
-func (m *manager) DecreaseMsgTask() {
+func (m *manager) DoneMsgTask() {
 	m.waitGroup.Done()
 }
 
