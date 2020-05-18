@@ -82,6 +82,7 @@ func (m *manager) Close() error {
 	}
 
 	CloseIScoreDB(m.ctx.DB)
+	log.Printf("Exit Reward Calculator")
 	return nil
 }
 
