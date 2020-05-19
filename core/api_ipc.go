@@ -13,7 +13,7 @@ import (
 
 type RCIPC struct {
 	conn ipc.Connection
-	id uint32
+	id   uint32
 }
 
 func InitRCIPC(net string, address string) (*RCIPC, error) {
@@ -79,7 +79,7 @@ func (rc *RCIPC) SendClaim(address string, blockHeight uint64, blockHash string,
 	req.TXIndex = txIndex
 	req.TXHash = make([]byte, TXHashSize)
 	if len(txHash) == 0 {
-		binary.BigEndian.PutUint64(req.TXHash, blockHeight + txIndex)
+		binary.BigEndian.PutUint64(req.TXHash, blockHeight+txIndex)
 	} else {
 		th, err := hex.DecodeString(txHash)
 		if err != nil {
@@ -128,7 +128,7 @@ func (rc *RCIPC) SendQuery(address string) (*ResponseQuery, error) {
 	return resp, err
 }
 
-func (rc *RCIPC) SendCalculate(iissData string, blockHeight uint64) (*CalculateResponse, error){
+func (rc *RCIPC) SendCalculate(iissData string, blockHeight uint64) (*CalculateResponse, error) {
 	var req CalculateRequest
 	resp := new(CalculateResponse)
 
@@ -209,7 +209,7 @@ func (rc *RCIPC) SendCommitClaim(success bool, address string, blockHeight uint6
 	req.TXIndex = txIndex
 	req.TXHash = make([]byte, TXHashSize)
 	if len(txHash) == 0 {
-		binary.BigEndian.PutUint64(req.TXHash, blockHeight + txIndex)
+		binary.BigEndian.PutUint64(req.TXHash, blockHeight+txIndex)
 	} else {
 		th, err := hex.DecodeString(txHash)
 		if err != nil {
@@ -227,7 +227,7 @@ func (rc *RCIPC) SendCommitClaim(success bool, address string, blockHeight uint6
 	return err
 }
 
-func (rc *RCIPC) SendQueryCalculateStatus() (*QueryCalculateStatusResponse, error){
+func (rc *RCIPC) SendQueryCalculateStatus() (*QueryCalculateStatusResponse, error) {
 	resp := new(QueryCalculateStatusResponse)
 
 	// Send QUERY_CALCULATE_STATUS and get response
@@ -266,7 +266,7 @@ func (rc *RCIPC) SendRollback(blockHeight uint64, blockHash string) (*RollBackRe
 
 	req.BlockHeight = blockHeight
 	req.BlockHash = make([]byte, BlockHashSize)
-	copy(req.BlockHash, hash[0:BlockHashSize])
+	copy(req.BlockHash, hash)
 
 	err = rc.conn.SendAndReceive(MsgRollBack, rc.id, &req, &resp)
 	if err != nil {
