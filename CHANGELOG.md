@@ -1,5 +1,8 @@
 # ChangeLog - rewardcalculator
 
+## 1.2.3 - 2020-12-04
+* Fix bugs by reflections package(#48)
+
 ## 1.2.2 - 2020-06-19
 * Add integration test (#43)
 * Graceful shutdown (#46)
