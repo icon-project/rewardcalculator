@@ -3,7 +3,7 @@
   "variable": {
     "EOA_A": "hxaea08c655d5b45e1e43797f83175b8494124e63a",
     "EOA_B": "hxbea08c655d5b45e1e43797f83175b8494124e63a",
-    "EOA_C": "hxcea08c655d5b45e1e43797f83175b8494124e63a",
+    "CONTRACT_A": "cxcea08c655d5b45e1e43797f83175b8494124e63a",
     "PREP_D": "hx22e518ccd16760355023affd8c29f80bf7b8a0bd",
     "PREP_E": "hx901b280815e88c5b6b310cd0fb6383e5c978aea5",
     "PREP_F": "hx8ea08c655d5b45e1e43797f83175b8494124e638",
@@ -184,7 +184,7 @@
           "data": {
             "index": 6,
             "block_height": 30,
-            "address": "$EOA_C",
+            "address": "$CONTRACT_A",
             "type": "delegation",
             "delegations": [
               {
@@ -199,7 +199,7 @@
           "data": {
             "index": 7,
             "block_height": 800,
-            "address": "$EOA_C",
+            "address": "$CONTRACT_A",
             "type": "delegation",
             "delegations": [
               {
@@ -422,14 +422,14 @@
       }
     },
     {
-      "name": "query_eoa_c_3000",
+      "name": "query_contract_a_3000",
       "type": "query",
       "data": {
         "request": {
-          "address": "$EOA_C"
+          "address": "$CONTRACT_A"
         },
         "expect": {
-          "address": "$EOA_C",
+          "address": "$CONTRACT_A",
           "iscore": 4089,
           "block_height": 2000
         }
@@ -522,6 +522,41 @@
         "expect": {
           "address": "$EOA_A",
           "iscore": 85,
+          "block_height": 2000
+        }
+      }
+    },
+    {
+      "name": "claim_contract_a_3500",
+      "type": "claim",
+      "data": {
+        "request": {
+          "address": "$CONTRACT_A",
+          "block_height": 3500,
+          "block_hash": "$dummy_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_hash"
+        },
+        "expect": {
+          "address": "$CONTRACT_A",
+          "block_height": 2000,
+          "block_hash": "$dummy_hash",
+          "tx_index": 0,
+          "tx_hash": "$dummy_hash",
+          "iscore": 4000
+        }
+      }
+    },
+    {
+      "name": "query_contract_a_3500_after_claim",
+      "type": "query",
+      "data": {
+        "request": {
+          "address": "$CONTRACT_A"
+        },
+        "expect": {
+          "address": "$CONTRACT_A",
+          "iscore": 89,
           "block_height": 2000
         }
       }
