@@ -348,7 +348,6 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 			blockHeight, req.Path)
 		return err, blockHeight, nil, nil
 	}
-	ctx.DB.setCalculatingBH(req.BlockHeight)
 
 	startTime := time.Now()
 
@@ -370,6 +369,8 @@ func DoCalculate(quit <-chan struct{}, ctx *Context, req *CalculateRequest, c ip
 	if blockHeight == 0 {
 		blockHeight = iScoreDB.getCalcDoneBH() + 1
 	}
+
+	ctx.DB.setCalculatingBH(blockHeight)
 
 	// check blockHeight and blockHash
 	calcDoneBH := iScoreDB.getCalcDoneBH()

@@ -741,6 +741,56 @@ func TestMsgCalc_DoCalculate_Error(t *testing.T) {
 	assert.True(t, strings.HasSuffix(err.Error(), "was canceled by ROLLBACK"))
 }
 
+// test RC write calculating field with header. not request
+//assume that calculation period is 50
+func Test_calculating_value(t *testing.T) {
+	ctx := initTest(1)
+	defer finalizeTest(ctx)
+
+	bh := uint64(100)
+	iissDBDir := testDBDir + "/iiss"
+	req := CalculateRequest{Path: iissDBDir, BlockHeight: bh, BlockHash: testHash}
+
+	// write IISS data DB BH : 100
+	_, iissDB := writeHeader(testDBDir, "iiss", bh)
+	iissDB.Close()
+	defer os.RemoveAll(iissDBDir)
+
+	// calcDoneBH is not set yet so that set calcDoneBH to 50
+	ctx.DB.setCalcDoneBH(uint64(50))
+	err, blockHeight, _, _ := DoCalculate(ctx.CancelCalculation.GetChannel(), ctx, &req, nil, 0)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, bh, blockHeight)
+	assert.Equal(t, bh, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, bh, ctx.DB.getCalculatingBH())
+
+	// write IISS data DB BH : 150
+	bh = uint64(150)
+	_, iissDB = writeHeader(testDBDir, "iiss", bh)
+	iissDB.Close()
+
+	//set req.BlockHeight to reloadBlockHeight
+	req.BlockHeight = reloadBlockHeight
+
+	err, blockHeight, _, _ = DoCalculate(ctx.CancelCalculation.GetChannel(), ctx, &req, nil, 0)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, bh, blockHeight)
+	assert.Equal(t, bh, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, bh, ctx.DB.getCalculatingBH())
+
+	assert.False(t, ctx.DB.isCalculating())
+
+	bh = uint64(200)
+	_, iissDB = writeHeader(testDBDir, "iiss", bh)
+	req.BlockHeight = bh
+	iissDB.Close()
+	err, blockHeight, _, _ = DoCalculate(ctx.CancelCalculation.GetChannel(), ctx, &req, nil, 0)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, bh, blockHeight)
+	assert.Equal(t, bh, ctx.DB.getCalcDoneBH())
+	assert.Equal(t, bh, ctx.DB.getCalculatingBH())
+}
+
 func newIScoreAccount(addr common.Address, blockHeight uint64, reward common.HexInt) *IScoreAccount {
 	ia := new(IScoreAccount)
 	ia.Address = addr
