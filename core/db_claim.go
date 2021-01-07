@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -199,6 +200,10 @@ func (pc *PreCommit) SetBytes(bs []byte) error {
 	return nil
 }
 
+func (pc *PreCommit) IsEmpty() bool {
+	return pc.BlockHeight == 0
+}
+
 func newPreCommit(blockHeight uint64, blockHash []byte, txIndex uint64, txHash []byte, address common.Address) *PreCommit {
 	pc := new(PreCommit)
 
@@ -341,6 +346,36 @@ func deletePreCommit(pcDB db.Database, start []byte, limit []byte) error {
 	}
 
 	return nil
+}
+
+func findPreCommit(pcDB db.Database, address common.Address, txHash []byte) (*PreCommit, error) {
+	bsSize := len(db.PrefixClaim)
+	bs := make([]byte, bsSize)
+	copy(bs, db.PrefixClaim)
+	prefix := util.BytesPrefix(bs)
+
+	iter, err := pcDB.GetIterator()
+	if err != nil {
+		return nil, err
+	}
+
+	// iterate & find
+	pc := new(PreCommit)
+	iter.New(prefix.Start, prefix.Limit)
+	for iter.Next() {
+		pc.SetBytes(iter.Value())
+		if pc.Address.Equal(&address) && bytes.Compare(pc.TXHash, txHash) == 0 {
+			pc.SetID(iter.Key())
+			break
+		}
+	}
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		log.Printf("There is error while find preCommit. %v", err)
+		return nil, err
+	}
+	return pc, nil
 }
 
 func writePreCommitToClaimDB(preCommitDB db.Database, claimDB db.Database, claimBackupDB db.Database,
