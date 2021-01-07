@@ -79,6 +79,10 @@ func (cli *CLI) Run() {
 	commitClaimTXIndex := commitClaimCmd.Uint64("txindex", 0, "TX index")
 	commitClaimTXHash := commitClaimCmd.String("txhash", "", "TX hash")
 
+	startBlockCmd := flag.NewFlagSet("startblock", flag.ExitOnError)
+	startBlockBlockHeight := startBlockCmd.Uint64("blockheight", 0, "Block height")
+	startBlockBlockHash := startBlockCmd.String("blockhash", "", "Block hash")
+
 	commitBlockCmd := flag.NewFlagSet("commitblock", flag.ExitOnError)
 	commitBlockFail := commitBlockCmd.Bool("fail", true, "Success")
 	commitBlockBlockHeight := commitBlockCmd.Uint64("blockheight", 0, "Block height")
@@ -131,6 +135,12 @@ func (cli *CLI) Run() {
 		err := commitClaimCmd.Parse(os.Args[3:])
 		if err != nil {
 			commitClaimCmd.PrintDefaults()
+			os.Exit(1)
+		}
+	case "startblock":
+		err := startBlockCmd.Parse(os.Args[3:])
+		if err != nil {
+			startBlockCmd.PrintDefaults()
 			os.Exit(1)
 		}
 	case "commitblock":
@@ -222,6 +232,11 @@ func (cli *CLI) Run() {
 		// send COMMIT_CLAIM message
 		cli.commitClaim(conn, *commitClaimFail, *commitClaimAddress, *commitClaimBlockHeight, *commitClaimBlockHash,
 			*commitClaimTXIndex, *commitClaimTXHash)
+	}
+
+	if startBlockCmd.Parsed() {
+		// send START_BLOCK message
+		cli.startBlock(conn, *startBlockBlockHeight, *startBlockBlockHash)
 	}
 
 	if commitBlockCmd.Parsed() {
