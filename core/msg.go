@@ -27,6 +27,7 @@ const (
 	MsgQueryCalculateResult      = 7
 	MsgRollBack                  = 8
 	MsgINIT                      = 9
+	MsgStartBlock                = 10
 
 	MsgNotify        = 100
 	MsgReady         = MsgNotify + 0
@@ -61,6 +62,8 @@ func MsgToString(msg uint) string {
 		return "ROLLBACK"
 	case MsgINIT:
 		return "INIT"
+	case MsgStartBlock:
+		return "START_BLOCK"
 	case MsgDebug:
 		return "DEBUG"
 	default:
@@ -96,6 +99,7 @@ func newConnection(m *manager, c ipc.Connection) (*msgHandler, error) {
 	} else {
 		c.SetHandler(MsgClaim, handler)
 		c.SetHandler(MsgCalculate, handler)
+		c.SetHandler(MsgStartBlock, handler)
 		c.SetHandler(MsgCommitBlock, handler)
 		c.SetHandler(MsgCommitClaim, handler)
 		c.SetHandler(MsgRollBack, handler)
@@ -125,6 +129,8 @@ func (mh *msgHandler) HandleMessage(c ipc.Connection, msg uint, id uint32, data 
 		go mh.query(c, id, data)
 	case MsgCalculate:
 		go mh.calculate(c, id, data)
+	case MsgStartBlock:
+		go mh.startBlock(c, id, data)
 	case MsgCommitBlock:
 		go mh.commitBlock(c, id, data)
 	case MsgDebug:

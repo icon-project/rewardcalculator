@@ -65,10 +65,10 @@ func TestMsgClaim_DoClaim(t *testing.T) {
 		CommitClaim{Success:true, Address: claim.Address, BlockHeight:claim.BlockHeight, BlockHash:claim.BlockHash}
 	DoCommitClaim(ctx, &commit)
 
-	// re-invoke same claim TX
+	// claim again in same TX
 	blockHeight, iScore = DoClaim(ctx, &claim)
 	assert.Equal(t, claim.BlockHeight, blockHeight)
-	assert.Equal(t, uint64(db1IScore - (db1IScore % claimMinIScore)), iScore.Uint64())
+	assert.Nil(t, iScore)
 
 	// already claimed in current block
 	blockHeight, iScore = DoClaim(ctx, &alreadyClaimedInCurrentBlockClaim)
