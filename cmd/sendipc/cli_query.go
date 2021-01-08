@@ -10,13 +10,14 @@ import (
 
 
 
-func (cli *CLI) query(conn ipc.Connection, address string) *core.ResponseQuery {
-	var addr common.Address
+func (cli *CLI) query(conn ipc.Connection, address string, txHash []byte) *core.ResponseQuery {
+	req := &core.Query{
+		Address: *common.NewAddressFromString(address),
+		TXHash: txHash,
+	}
 	resp := new(core.ResponseQuery)
 
-	addr.SetString(address)
-
-	conn.SendAndReceive(core.MsgQuery, cli.id, &addr, resp)
+	conn.SendAndReceive(core.MsgQuery, cli.id, req, resp)
 	fmt.Printf("QUERY command get response: %s\n", resp.String())
 
 	return resp

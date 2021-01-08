@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -61,6 +62,7 @@ func (cli *CLI) Run() {
 
 	queryCmd := flag.NewFlagSet("query", flag.ExitOnError)
 	queryAddress := queryCmd.String("address", "", "Account address")
+	queryTXHash := queryCmd.String("txHash", "", "Transaction hash in hex string.(Optional)")
 
 	claimCmd := flag.NewFlagSet("claim", flag.ExitOnError)
 	claimAddress := claimCmd.String("address", "", "Account address")
@@ -249,8 +251,18 @@ func (cli *CLI) Run() {
 			queryCmd.PrintDefaults()
 			os.Exit(1)
 		}
+		var txHash []byte
+		if *queryTXHash == "" {
+			txHash = nil
+		} else {
+			txHash, err = hex.DecodeString(*queryTXHash)
+			if err != nil {
+				queryCmd.Usage()
+				os.Exit(1)
+			}
+		}
 		// send QUERY message
-		cli.query(conn, *queryAddress)
+		cli.query(conn, *queryAddress, txHash)
 	}
 
 	if calculateCmd.Parsed() {

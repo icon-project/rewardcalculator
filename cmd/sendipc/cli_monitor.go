@@ -52,7 +52,7 @@ func (cli *CLI) readAndPush(conn ipc.Connection, targets []monitorTarget, url st
 
 	for _, target := range targets {
 		// read IScore from RC
-		resp := cli.query(conn, target.Address.String())
+		resp := cli.query(conn, target.Address.String(), nil)
 		target.IScore.Set(&resp.IScore.Int)
 
 		// set metric
