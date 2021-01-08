@@ -319,6 +319,7 @@
           "address": "$EOA_A",
           "block_height": 1500,
           "block_hash": "$dummy_hash",
+          "prev_block_hash": "$dummy_hash",
           "tx_index": 0,
           "tx_hash": "$dummy_hash"
         },
@@ -326,6 +327,7 @@
           "address": "$EOA_A",
           "block_height": 0,
           "block_hash": "$dummy_hash",
+          "prev_block_hash": "$dummy_hash",
           "tx_index": 0,
           "tx_hash": "$dummy_hash",
           "iscore": 0
@@ -367,6 +369,7 @@
           "address": "$EOA_A",
           "block_height": 2500,
           "block_hash": "$dummy_hash",
+          "prev_block_hash": "$dummy_hash",
           "tx_index": 0,
           "tx_hash": "$dummy_hash"
         },
@@ -374,6 +377,7 @@
           "address": "$EOA_A",
           "block_height": 0,
           "block_hash": "$dummy_hash",
+          "prev_block_hash": "$dummy_hash",
           "tx_index": 0,
           "tx_hash": "$dummy_hash",
           "iscore": 0
@@ -499,6 +503,7 @@
           "address": "$EOA_A",
           "block_height": 3500,
           "block_hash": "$dummy_hash",
+          "prev_block_hash": "$dummy_hash",
           "tx_index": 0,
           "tx_hash": "$dummy_hash"
         },
@@ -506,6 +511,7 @@
           "address": "$EOA_A",
           "block_height": 2000,
           "block_hash": "$dummy_hash",
+          "prev_block_hash": "$dummy_hash",
           "tx_index": 0,
           "tx_hash": "$dummy_hash",
           "iscore": 3000

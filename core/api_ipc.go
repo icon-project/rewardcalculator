@@ -57,7 +57,7 @@ func (rc *RCIPC) SendVersion() (*ResponseVersion, error) {
 	return resp, err
 }
 
-func (rc *RCIPC) SendClaim(address string, blockHeight uint64, blockHash string,
+func (rc *RCIPC) SendClaim(address string, blockHeight uint64, blockHash string, prevBlockHash string,
 	txIndex uint64, txHash string, noCommitClaim bool, noCommitBlock bool) (*ResponseClaim, error) {
 	var req ClaimMessage
 	resp := new(ResponseClaim)
@@ -75,6 +75,17 @@ func (rc *RCIPC) SendClaim(address string, blockHeight uint64, blockHash string,
 			return nil, err
 		}
 		copy(req.BlockHash, bh)
+	}
+	req.PrevBlockHash = make([]byte, BlockHashSize)
+	if len(prevBlockHash) == 0 {
+		binary.BigEndian.PutUint64(req.PrevBlockHash, blockHeight-1)
+	} else {
+		bh, err := hex.DecodeString(prevBlockHash)
+		if err != nil {
+			log.Printf("Failed to send CLAIM. Invalid prev block hash. %v\n", err)
+			return nil, err
+		}
+		copy(req.PrevBlockHash, bh)
 	}
 	req.TXIndex = txIndex
 	req.TXHash = make([]byte, TXHashSize)

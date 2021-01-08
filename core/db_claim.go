@@ -21,12 +21,12 @@ const (
 	PreCommitIDSize = BlockHeightSize + BlockHashSize + common.AddressBytes
 
 	ClaimBackupIDSize = BlockHeightSize + common.AddressBytes
-	ClaimBackupPeriod = 43120 * 2 - 1
+	ClaimBackupPeriod = 43120*2 - 1
 )
 
 type ClaimData struct {
-	BlockHeight   uint64
-	IScore        common.HexInt
+	BlockHeight uint64
+	IScore      common.HexInt
 }
 
 func (cd *ClaimData) String() string {
@@ -38,8 +38,8 @@ func (cd *ClaimData) equal(cmpData *ClaimData) bool {
 }
 
 type Claim struct {
-	Address  common.Address
-	Data     ClaimData
+	Address common.Address
+	Data    ClaimData
 }
 
 func (c *Claim) ID() []byte {
@@ -50,7 +50,7 @@ func (c *Claim) BackupID(blockHeight uint64) []byte {
 	id := make([]byte, ClaimBackupIDSize)
 
 	bh := common.Uint64ToBytes(blockHeight)
-	copy(id[BlockHeightSize- len(bh):], bh)
+	copy(id[BlockHeightSize-len(bh):], bh)
 	copy(id[BlockHeightSize:], c.ID())
 
 	return id
@@ -81,7 +81,7 @@ func (c *Claim) SetBytes(bs []byte) error {
 
 func NewClaimFromBytes(bs []byte) (*Claim, error) {
 	claim := new(Claim)
-	if err:= claim.SetBytes(bs); err != nil {
+	if err := claim.SetBytes(bs); err != nil {
 		return nil, err
 	} else {
 		return claim, nil
@@ -98,7 +98,7 @@ func ClaimBackupKey(blockHeight uint64, address common.Address) []byte {
 	id := make([]byte, ClaimBackupIDSize)
 
 	bh := common.Uint64ToBytes(blockHeight)
-	copy(id[BlockHeightSize- len(bh):], bh)
+	copy(id[BlockHeightSize-len(bh):], bh)
 	copy(id[BlockHeightSize:], address.Bytes())
 
 	return id
@@ -106,7 +106,7 @@ func ClaimBackupKey(blockHeight uint64, address common.Address) []byte {
 
 type ClaimBackupInfo struct {
 	FirstBlockHeight uint64
-	LastBlockHeight uint64
+	LastBlockHeight  uint64
 }
 
 func (cb *ClaimBackupInfo) ID() []byte {
@@ -138,8 +138,8 @@ func (cb *ClaimBackupInfo) SetBytes(bs []byte) error {
 
 type PreCommitData struct {
 	Confirmed bool
-	TXIndex uint64
-	TXHash []byte
+	TXIndex   uint64
+	TXHash    []byte
 	Claim
 }
 
@@ -153,7 +153,7 @@ func (pc *PreCommitData) String() string {
 
 type PreCommit struct {
 	BlockHeight uint64
-	BlockHash []byte
+	BlockHash   []byte
 	PreCommitData
 }
 
@@ -288,7 +288,7 @@ func MakeIteratorPrefix(prefix db.BucketID, blockHeight uint64, data []byte, dat
 	bs := make([]byte, bsSize)
 
 	copy(bs, prefix)
-	copy(bs[len(prefix) + BlockHeightSize - len(bh):], bh)
+	copy(bs[len(prefix)+BlockHeightSize-len(bh):], bh)
 	if data != nil {
 		copy(bs[bsSize-dataSize:], data)
 	}
@@ -306,7 +306,7 @@ func flushPreCommit(pcDB db.Database, blockHeight uint64, blockHash []byte) erro
 
 // Delete PreCommit data with block height greater than blockHeight
 func initPreCommit(pcDB db.Database, blockHeight uint64) error {
-	prefix := MakeIteratorPrefix(db.PrefixClaim, blockHeight + 1, nil, BlockHashSize)
+	prefix := MakeIteratorPrefix(db.PrefixClaim, blockHeight+1, nil, BlockHashSize)
 
 	return deletePreCommit(pcDB, prefix.Start, nil)
 }
@@ -419,11 +419,11 @@ func writePreCommitToClaimDB(preCommitDB db.Database, claimDB db.Database, claim
 		// read value original from claim DB
 		if bs, _ := bucket.Get(claim.ID()); bs != nil {
 			// write original value to claim backup DB
-			cbBucket.Set(claim.BackupID(blockHeight - 1), bs)
+			cbBucket.Set(claim.BackupID(blockHeight-1), bs)
 		} else {
 			// write empty value to claim backup DB
 			var nilClaim Claim
-			cbBucket.Set(claim.BackupID(blockHeight - 1), nilClaim.Bytes())
+			cbBucket.Set(claim.BackupID(blockHeight-1), nilClaim.Bytes())
 		}
 
 		// write to claim DB
@@ -470,7 +470,7 @@ func writeClaimBackupInfo(claimBackupDB db.Database, blockHeight uint64) error {
 	}
 
 	// do garbage collection of claim backup DB
-	if blockHeight > ClaimBackupPeriod + cbInfo.FirstBlockHeight {
+	if blockHeight > ClaimBackupPeriod+cbInfo.FirstBlockHeight {
 		garbageBlock := blockHeight - ClaimBackupPeriod - 1
 
 		err = garbageCollectClaimBackupDB(claimBackupDB, cbInfo.FirstBlockHeight, garbageBlock)
@@ -478,7 +478,7 @@ func writeClaimBackupInfo(claimBackupDB db.Database, blockHeight uint64) error {
 			return err
 		}
 		// set first block height
-		if cbInfo.FirstBlockHeight < garbageBlock + 1 {
+		if cbInfo.FirstBlockHeight < garbageBlock+1 {
 			cbInfo.FirstBlockHeight = garbageBlock + 1
 		}
 	}
@@ -530,7 +530,7 @@ func garbageCollectClaimBackupDB(cbDB db.Database, from uint64, to uint64) error
 
 func checkClaimDBRollback(cbInfo *ClaimBackupInfo, rollback uint64) (bool, error) {
 	if cbInfo.FirstBlockHeight > rollback {
-		return false, &RollbackLowBlockHeightError{ cbInfo.FirstBlockHeight, rollback}
+		return false, &RollbackLowBlockHeightError{cbInfo.FirstBlockHeight, rollback}
 	}
 
 	if cbInfo.LastBlockHeight <= rollback {

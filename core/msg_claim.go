@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -18,18 +19,20 @@ const claimMinIScore = 1000
 var BigIntClaimMinIScore = big.NewInt(claimMinIScore)
 
 type ClaimMessage struct {
-	Address     common.Address
-	BlockHeight uint64
-	BlockHash   []byte
-	TXIndex     uint64
-	TXHash      []byte
+	Address       common.Address
+	BlockHeight   uint64
+	BlockHash     []byte
+	PrevBlockHash []byte
+	TXIndex       uint64
+	TXHash        []byte
 }
 
 func (cm *ClaimMessage) String() string {
-	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s, TXIndex: %d, TXHash: %s",
+	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s, PrevBlockHash: %s, TXIndex: %d, TXHash: %s",
 		cm.Address.String(),
 		cm.BlockHeight,
 		hex.EncodeToString(cm.BlockHash),
+		hex.EncodeToString(cm.PrevBlockHash),
 		cm.TXIndex,
 		hex.EncodeToString(cm.TXHash))
 }
@@ -73,14 +76,24 @@ func (mh *msgHandler) claim(c ipc.Connection, id uint32, data []byte) error {
 func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	pcDB := ctx.DB.getPreCommitDB()
 	preCommit := newPreCommit(req.BlockHeight, req.BlockHash, req.TXIndex, req.TXHash, req.Address)
+	nilBlockHash := make([]byte, BlockHashSize)
+	prevPreCommit := newPreCommit(req.BlockHeight-1, req.PrevBlockHash, 0, nilBlockHash, req.Address)
 	if preCommit.query(pcDB) == true {
 		// already claimed in current block
 		return preCommit.BlockHeight, nil
 	}
-
+	var err error
+	err = saveChildHash(ctx, prevPreCommit.BlockHash, req.BlockHash)
+	if err != nil {
+		log.Printf("Failed to write Precommit children info. PrevBlockHash : %s, BlockHash : %s",
+			prevPreCommit.BlockHash, req.BlockHash)
+	}
+	// check if claimed in previous Block when requested BlockHeight is not term starting Block
+	if req.BlockHeight-1 != ctx.DB.getCalcDoneBH() && prevPreCommit.query(pcDB) {
+		return preCommit.BlockHeight, nil
+	}
 	var claim *Claim = nil
 	var ia *IScoreAccount = nil
-	var err error
 	isDB := ctx.DB
 
 	var cDB, qDB db.Database
@@ -263,7 +276,17 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 		err = writePreCommitToClaimDB(iDB.getPreCommitDB(), iDB.getClaimDB(), iDB.getClaimBackupDB(),
 			req.BlockHeight, req.BlockHash)
 		if err == nil {
-			mh.mgr.ctx.DB.setCurrentBlockInfo(req.BlockHeight, req.BlockHash)
+			ctx := mh.mgr.ctx
+			ctx.DB.setCurrentBlockInfo(req.BlockHeight, req.BlockHash)
+			for key, _ := range *ctx.BlockHierarchy {
+				if bytes.Equal(key[:], req.BlockHash) {
+					continue
+				}
+				if err = deleteChildrenPreCommitData(ctx, req.BlockHeight, key[:]); err != nil {
+					return err
+				}
+				clearChildrenHashInfo(ctx, key[:])
+			}
 		}
 	} else {
 		err = flushPreCommit(iDB.getPreCommitDB(), req.BlockHeight, req.BlockHash)
@@ -281,4 +304,56 @@ func (mh *msgHandler) commitBlock(c ipc.Connection, id uint32, data []byte) erro
 	mh.mgr.DoneMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgCommitBlock), id, resp.String())
 	return c.Send(MsgCommitBlock, id, &resp)
+}
+
+func saveChildHash(ctx *Context, prevBlockHash []byte, blockHash []byte) error {
+	//save PreCommit info in context and DB
+	var prevHash, hash [BlockHashSize]byte
+	copy(hash[:], blockHash)
+	copy(prevHash[:], prevBlockHash)
+	blockHierarchy := ctx.BlockHierarchy
+	childrenHashes, ok := (*blockHierarchy)[prevHash]
+	if !ok {
+		(*blockHierarchy)[prevHash] = make(map[[BlockHashSize]byte]bool, 0)
+		childrenHashes = (*blockHierarchy)[prevHash]
+	}
+	if exist, ok := childrenHashes[hash]; ok && exist {
+		return nil
+	}
+	childrenHashes[hash] = true
+	pdb := ctx.DB.childrenHashes
+	err := AppendChildHashInDB(pdb, prevHash, hash)
+	return err
+}
+
+func getChildrenHashes(ctx *Context, blockHash []byte) (childrenHashes [][BlockHashSize]byte) {
+	var hash [BlockHashSize]byte
+	copy(hash[:], blockHash)
+	preCommitChildrenInfo, _ := (*ctx.BlockHierarchy)[hash]
+	for k := range preCommitChildrenInfo {
+		childrenHashes = append(childrenHashes, k)
+	}
+	return
+}
+
+func deleteChildrenPreCommitData(ctx *Context, blockHeight uint64, blockHash []byte) error {
+	childrenHashes := getChildrenHashes(ctx, blockHash)
+	for _, childHash := range childrenHashes {
+		prefix := MakeIteratorPrefix(db.PrefixIScore, blockHeight+1, childHash[:], BlockHashSize)
+		err := deletePreCommit(ctx.DB.preCommit, prefix.Start, prefix.Limit)
+		if err != nil {
+			log.Printf("Error while deleting Precommit")
+			return err
+		}
+	}
+	return nil
+}
+
+func clearChildrenHashInfo(ctx *Context, blockHash []byte) {
+	var hash [BlockHashSize]byte
+	copy(hash[:], blockHash)
+	if _, ok := (*ctx.BlockHierarchy)[hash]; ok {
+		delete(*ctx.BlockHierarchy, hash)
+	}
+	DeleteChildrenHashInfo(ctx.DB.childrenHashes, blockHash)
 }
