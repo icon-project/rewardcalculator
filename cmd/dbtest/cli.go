@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -21,7 +22,9 @@ func (cli *CLI) printUsage() {
 	fmt.Printf("\n [command]\n")
 	fmt.Printf("\t create N NUM                 Create an Account DB with N Accout DBs and NUM accounts\n")
 	fmt.Printf("\t delete                       Delete an Account DB\n")
-	fmt.Printf("\t query ADDRESS                Query I-Score value with ADDRESS\n")
+	fmt.Printf("\t query ADDRESS [TXHash]       Query I-Score value with ADDRESS\n")
+	fmt.Printf("\t       ADDRESS                Address to query\n")
+	fmt.Printf("\t       TXHash                 Transaction hash in hex string to query.(Optional)\n")
 	fmt.Printf("\t calculate TO BATCH           Calculate I-Score of all account\n")
 	fmt.Printf("\t           TO                 Block height to calculate. Set 0 if you want current block+1\n")
 	fmt.Printf("\t           BATCH              The number of DB write batch count\n")
@@ -49,6 +52,7 @@ func (cli *CLI) Run() {
 	createDBCount := createCmd.Int("db", 16, "The number of RC Account DB. (MAX:256)")
 	createAccountCount := createCmd.Int("account", 10000, "The account number of RC Account DB")
 	queryAddress := queryCmd.String("address", "", "Account address")
+	queryTXHash := queryCmd.String("txHash", "", "Transaction hash in hex string.(Optional)")
 	calculateBlockHeight := calculateCmd.Uint64("block", 0, "Block height to calculate, Set 0 if you want current block +1")
 	calculateWriteBatch := calculateCmd.Uint64("writebatch", 0, "The number of DB write batch count")
 
@@ -113,7 +117,12 @@ func (cli *CLI) Run() {
 			queryCmd.Usage()
 			os.Exit(1)
 		}
-		cli.query(dbName, *queryAddress)
+		txHash, err := hex.DecodeString(*queryTXHash)
+		if err != nil {
+			queryCmd.Usage()
+			os.Exit(1)
+		}
+		cli.query(dbName, *queryAddress, txHash)
 	}
 
 	if calculateCmd.Parsed() {

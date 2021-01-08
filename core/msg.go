@@ -181,6 +181,15 @@ func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64, bloc
 	return c.Send(msg, id, resp)
 }
 
+type Query struct {
+	Address common.Address
+	TXHash  []byte
+}
+
+func (q *Query) String() string {
+	return fmt.Sprintf("Address: %s, TXHash: %s", q.Address.String(), hex.EncodeToString(q.TXHash[:]))
+}
+
 type ResponseQuery struct {
 	Address     common.Address
 	IScore      common.HexInt
@@ -195,41 +204,52 @@ func (rq *ResponseQuery) String() string {
 }
 
 func (mh *msgHandler) query(c ipc.Connection, id uint32, data []byte) error {
-	var addr common.Address
+	var req Query
 	mh.mgr.AddMsgTask()
-	if _, err := codec.MP.UnmarshalFromBytes(data, &addr); err != nil {
+	if _, err := codec.MP.UnmarshalFromBytes(data, &req); err != nil {
 		return err
 	}
-	log.Printf("\t QUERY request: address: %s", addr.String())
+	log.Printf("\t QUERY request: %s", req.String())
 
-	resp := DoQuery(mh.mgr.ctx, addr)
+	resp := DoQuery(mh.mgr.ctx, &req)
 
 	mh.mgr.DoneMsgTask()
 	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgQuery), id, resp.String())
 	return c.Send(MsgQuery, id, &resp)
 }
 
-func DoQuery(ctx *Context, addr common.Address) *ResponseQuery {
+func DoQuery(ctx *Context, req *Query) *ResponseQuery {
 	var claim *Claim = nil
 	var ia *IScoreAccount = nil
 	isDB := ctx.DB
 
 	// make response
 	var resp ResponseQuery
-	resp.Address = addr
+	resp.Address = req.Address
+
+	// search from preCommit DB
+	if len(req.TXHash) != 0 {
+		pcDB := isDB.getPreCommitDB()
+		pc, _ := findPreCommit(pcDB, req.Address, req.TXHash)
+		if !pc.IsEmpty() {
+			resp.BlockHeight = pc.Data.BlockHeight
+			resp.IScore.SetInt64(0)
+			return &resp
+		}
+	}
 
 	// read from claim DB
 	cDB := isDB.getClaimDB()
 	bucket, _ := cDB.GetBucket(db.PrefixIScore)
-	bs, _ := bucket.Get(addr.Bytes())
+	bs, _ := bucket.Get(req.Address.Bytes())
 	if bs != nil {
 		claim, _ = NewClaimFromBytes(bs)
 	}
 
 	// read from Query DB
-	qDB := isDB.getQueryDB(addr)
+	qDB := isDB.getQueryDB(req.Address)
 	bucket, _ = qDB.GetBucket(db.PrefixIScore)
-	bs, _ = bucket.Get(addr.Bytes())
+	bs, _ = bucket.Get(req.Address.Bytes())
 	if bs != nil {
 		ia, _ = NewIScoreAccountFromBytes(bs)
 		resp.BlockHeight = ia.BlockHeight

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/hex"
 	"github.com/icon-project/rewardcalculator/common/db"
 	"testing"
 
@@ -13,9 +14,27 @@ func TestMsg_DoQuery(t *testing.T) {
 	dbContent0 := IScoreAccount { Address: *address }
 	dbContent0.BlockHeight = 100
 	dbContent0.IScore.SetUint64(claimMinIScore + 100)
+	txHash := make([]byte, TXHashSize)
+	bs, _ := hex.DecodeString("abcd0123")
+	copy(txHash, bs)
 
-	claim := ClaimMessage{BlockHeight: 101, BlockHash: []byte("1-1"), Address: *address}
-	commit := CommitClaim{Success:true, BlockHeight:claim.BlockHeight, BlockHash:claim.BlockHash, Address:claim.Address}
+	query := &Query{Address: *address}
+	queryWithTXHash := &Query{Address: *address, TXHash: txHash}
+	claim := ClaimMessage{
+		BlockHeight: 101,
+		BlockHash: []byte("1-1"),
+		Address: *address,
+		TXIndex: 0,
+		TXHash: txHash,
+	}
+	commit := CommitClaim{
+		Success:true,
+		BlockHeight:claim.BlockHeight,
+		BlockHash:claim.BlockHash,
+		Address:claim.Address,
+		TXIndex: 0,
+		TXHash: txHash,
+	}
 
 	ctx := initTest(1)
 	defer finalizeTest(ctx)
@@ -26,7 +45,7 @@ func TestMsg_DoQuery(t *testing.T) {
 	bucket.Set(dbContent0.ID(), dbContent0.Bytes())
 
 	// Query
-	resp := DoQuery(ctx, *address)
+	resp := DoQuery(ctx, query)
 	assert.Equal(t, dbContent0.BlockHeight, resp.BlockHeight)
 	assert.Equal(t, 0, dbContent0.IScore.Cmp(&resp.IScore.Int))
 
@@ -34,15 +53,20 @@ func TestMsg_DoQuery(t *testing.T) {
 	DoClaim(ctx, &claim)
 
 	// Query to claimed Account before commit
-	resp = DoQuery(ctx, *address)
+	resp = DoQuery(ctx, query)
 	assert.Equal(t, dbContent0.BlockHeight, resp.BlockHeight)
 	assert.Equal(t, 0, dbContent0.IScore.Cmp(&resp.IScore.Int))
+
+	// Query with TX hash to claimed Account before commit
+	resp = DoQuery(ctx, queryWithTXHash)
+	assert.Equal(t, dbContent0.BlockHeight+1, resp.BlockHeight)
+	assert.Equal(t, int64(0), resp.IScore.Int64())
 
 	// commit claim
 	DoCommitClaim(ctx, &commit)
 
 	// Query to claimed Account before commit to claim DB
-	resp = DoQuery(ctx, *address)
+	resp = DoQuery(ctx, query)
 	assert.Equal(t, dbContent0.BlockHeight, resp.BlockHeight)
 	assert.Equal(t, 0, dbContent0.IScore.Cmp(&resp.IScore.Int))
 
@@ -51,11 +75,10 @@ func TestMsg_DoQuery(t *testing.T) {
 		claim.BlockHeight, claim.BlockHash)
 
 	// Query to claimed Account after commit
-	resp = DoQuery(ctx, *address)
+	resp = DoQuery(ctx, query)
 	assert.Equal(t, dbContent0.BlockHeight, resp.BlockHeight)
-	assert.Equal(t, 0, resp.IScore.Cmp(&common.NewHexIntFromUint64(100).Int))
+	assert.Equal(t, int64(100), resp.IScore.Int64())
 }
-
 
 func TestMsg_DoInit(t *testing.T) {
 	ctx := initTest(1)
