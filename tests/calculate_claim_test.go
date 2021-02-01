@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func Test_sample(t *testing.T) {
+func Test_CalculateClaim(t *testing.T) {
 	var scenario TestScenario
 	scenarioFile := "./json/calculate_claim_scenario.json"
 

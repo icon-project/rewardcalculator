@@ -34,7 +34,7 @@ func initTest() *testOption {
 
 	dbPath := filepath.Join(opts.rootPath, ".iscoredb")
 	address := filepath.Join(opts.rootPath, "/icon_rc.sock")
-	cmd := exec.Command("icon_rc", "-db", dbPath, "-ipc-addr",  address)
+	cmd := exec.Command("icon_rc", "-db", dbPath, "-ipc-addr", address)
 	err = cmd.Start()
 	if err != nil {
 		log.Fatal(err)
@@ -66,11 +66,10 @@ func finalizeTest(opts *testOption) {
 	}
 }
 
-
 type TestScenario struct {
-	Name string					`json:"name"`
-	IISS []iiss					`json:"iiss"`
-	Tests []ipc					`json:"tests,omitempty"`
+	Name  string `json:"name"`
+	IISS  []iiss `json:"iiss"`
+	Tests []ipc  `json:"tests,omitempty"`
 }
 
 func (ts *TestScenario) load(file string) error {
@@ -78,7 +77,7 @@ func (ts *TestScenario) load(file string) error {
 	f, _ := os.Open(file)
 	defer f.Close()
 
-	original , _ := ioutil.ReadAll(f)
+	original, _ := ioutil.ReadAll(f)
 	bs, err := ts.translate(original)
 	if err != nil {
 		log.Printf("Failed to translate test scenario. err=%+v\n", err)
@@ -108,7 +107,7 @@ func (ts *TestScenario) translate(bs []byte) ([]byte, error) {
 	// get variable Info.
 	type replaceValue struct {
 		index int
-		new interface{}
+		new   interface{}
 	}
 	replace := make([]replaceValue, 0)
 	fields := bytes.Fields(bs)
@@ -167,12 +166,12 @@ func (ts *TestScenario) run(t *testing.T, opts *testOption) {
 		}
 	})
 
-	t.Run(ts.Name, func(t *testing.T) {
-		for _, ipc := range ts.Tests {
-			err := ipc.run(opts)
+	for _, tt := range ts.Tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			err := tt.run(opts)
 			if err != nil {
 				t.Error(err)
 			}
-		}
-	})
+		})
+	}
 }
