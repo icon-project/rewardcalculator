@@ -74,13 +74,8 @@ func DoClaim(ctx *Context, req *ClaimMessage) (uint64, *common.HexInt) {
 	pcDB := ctx.DB.getPreCommitDB()
 	preCommit := newPreCommit(req.BlockHeight, req.BlockHash, req.TXIndex, req.TXHash, req.Address)
 	if preCommit.query(pcDB) == true {
-		if preCommit.Confirmed && req.TXIndex != preCommit.TXIndex {
-			// already claimed in current block
-			return preCommit.BlockHeight, nil
-		} else {
-			// re-invoke same TX in same Block
-			return preCommit.BlockHeight, &preCommit.Data.IScore
-		}
+		// already claimed in current block
+		return preCommit.BlockHeight, nil
 	}
 
 	var claim *Claim = nil
@@ -204,6 +199,40 @@ func DoCommitClaim(ctx *Context, req *CommitClaim) error {
 
 	// do not return error
 	return nil
+}
+
+type StartBlock struct {
+	BlockHeight uint64
+	BlockHash   []byte
+}
+
+func (sb *StartBlock) String() string {
+	return fmt.Sprintf("BlockHeight: %d, BlockHash: %s",
+		sb.BlockHeight,
+		hex.EncodeToString(sb.BlockHash))
+}
+
+func (mh *msgHandler) startBlock(c ipc.Connection, id uint32, data []byte) error {
+	var req StartBlock
+	var err error
+	mh.mgr.AddMsgTask()
+	if _, err = codec.MP.UnmarshalFromBytes(data, &req); nil != err {
+		return err
+	}
+	log.Printf("\t START_BLOCK request: %s", req.String())
+
+	iDB := mh.mgr.ctx.DB
+	err = flushPreCommit(iDB.getPreCommitDB(), req.BlockHeight, req.BlockHash)
+	if err != nil {
+		log.Printf("Failed to start block. %+v", err)
+	}
+
+	var resp StartBlock
+	resp = req
+
+	mh.mgr.DoneMsgTask()
+	log.Printf("Send message. (msg:%s, id:%d, data:%s)", MsgToString(MsgStartBlock), id, resp.String())
+	return c.Send(MsgStartBlock, id, &resp)
 }
 
 type CommitBlock struct {

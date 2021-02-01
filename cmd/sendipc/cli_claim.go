@@ -94,6 +94,27 @@ func (cli *CLI) commitClaim(conn ipc.Connection, success bool, address string, b
 	fmt.Printf("Get COMMIT_CLAIM ack\n")
 }
 
+func (cli *CLI) startBlock(conn ipc.Connection, blockHeight uint64, blockHash string) {
+	var req core.StartBlock
+	var resp core.StartBlock
+	req.BlockHash = make([]byte, core.BlockHashSize)
+	if len(blockHash) == 0 {
+		binary.BigEndian.PutUint64(req.BlockHash, blockHeight)
+	} else {
+		bh, err := hex.DecodeString(blockHash)
+		if err != nil {
+			fmt.Printf("Failed to START_BLOCK. Invalid block hash. %v\n", err)
+			return
+		}
+		copy(req.BlockHash, bh)
+	}
+	req.BlockHeight = blockHeight
+
+	fmt.Printf("Send START_BLOCK message: %s\n", req.String())
+	conn.SendAndReceive(core.MsgStartBlock, cli.id, &req, &resp)
+	fmt.Printf("Get START_BLOCK response: %s\n", resp.String())
+}
+
 func (cli *CLI) commitBlock(conn ipc.Connection, success bool, blockHeight uint64, blockHash string) {
 	var req core.CommitBlock
 	var resp core.CommitBlock

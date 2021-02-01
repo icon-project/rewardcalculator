@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 )
 
@@ -117,13 +116,20 @@ func (rc *RCIPC) SendClaim(address string, blockHeight uint64, blockHash string,
 	return resp, nil
 }
 
-func (rc *RCIPC) SendQuery(address string) (*ResponseQuery, error) {
-	var addr common.Address
+func (rc *RCIPC) SendQuery(address string, txHash string) (*ResponseQuery, error) {
+	var req Query
 	resp := new(ResponseQuery)
 
-	addr.SetString(address)
+	req.Address.SetString(address)
+	req.TXHash = make([]byte, TXHashSize)
+	th, err := hex.DecodeString(txHash)
+	if err != nil {
+		log.Printf("Failed to QUERY. Invalid TX hash. %v\n", err)
+		return resp, err
+	}
+	copy(req.TXHash, th)
 
-	err := rc.conn.SendAndReceive(MsgQuery, rc.id, &addr, resp)
+	err = rc.conn.SendAndReceive(MsgQuery, rc.id, &req, resp)
 
 	return resp, err
 }
@@ -160,6 +166,31 @@ func (rc *RCIPC) SendCalculate(iissData string, blockHeight uint64) (*CalculateR
 	}
 
 	return resp, nil
+}
+
+func (rc *RCIPC) SendStartBlock(success bool, blockHeight uint64, blockHash string) (*StartBlock, error) {
+	var req StartBlock
+	resp := new(StartBlock)
+
+	req.BlockHash = make([]byte, BlockHashSize)
+	if len(blockHash) == 0 {
+		binary.BigEndian.PutUint64(req.BlockHash, blockHeight)
+	} else {
+		bh, err := hex.DecodeString(blockHash)
+		if err != nil {
+			log.Printf("Failed to START_BLOCK. Invalid block hash. %v\n", err)
+			return resp, err
+		}
+		copy(req.BlockHash, bh)
+	}
+	req.BlockHeight = blockHeight
+
+	log.Printf("Send START_BLOCK message: %s\n", req.String())
+	rc.id++
+	err := rc.conn.SendAndReceive(MsgStartBlock, rc.id, &req, &resp)
+	log.Printf("Get START_BLOCK response: %s\n", resp.String())
+
+	return resp, err
 }
 
 func (rc *RCIPC) SendCommitBlock(success bool, blockHeight uint64, blockHash string) (*CommitBlock, error) {

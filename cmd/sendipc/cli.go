@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -61,6 +62,7 @@ func (cli *CLI) Run() {
 
 	queryCmd := flag.NewFlagSet("query", flag.ExitOnError)
 	queryAddress := queryCmd.String("address", "", "Account address")
+	queryTXHash := queryCmd.String("txHash", "", "Transaction hash in hex string.(Optional)")
 
 	claimCmd := flag.NewFlagSet("claim", flag.ExitOnError)
 	claimAddress := claimCmd.String("address", "", "Account address")
@@ -78,6 +80,10 @@ func (cli *CLI) Run() {
 	commitClaimBlockHash := commitClaimCmd.String("blockhash", "", "Block hash")
 	commitClaimTXIndex := commitClaimCmd.Uint64("txindex", 0, "TX index")
 	commitClaimTXHash := commitClaimCmd.String("txhash", "", "TX hash")
+
+	startBlockCmd := flag.NewFlagSet("startblock", flag.ExitOnError)
+	startBlockBlockHeight := startBlockCmd.Uint64("blockheight", 0, "Block height")
+	startBlockBlockHash := startBlockCmd.String("blockhash", "", "Block hash")
 
 	commitBlockCmd := flag.NewFlagSet("commitblock", flag.ExitOnError)
 	commitBlockFail := commitBlockCmd.Bool("fail", true, "Success")
@@ -131,6 +137,12 @@ func (cli *CLI) Run() {
 		err := commitClaimCmd.Parse(os.Args[3:])
 		if err != nil {
 			commitClaimCmd.PrintDefaults()
+			os.Exit(1)
+		}
+	case "startblock":
+		err := startBlockCmd.Parse(os.Args[3:])
+		if err != nil {
+			startBlockCmd.PrintDefaults()
 			os.Exit(1)
 		}
 	case "commitblock":
@@ -224,6 +236,11 @@ func (cli *CLI) Run() {
 			*commitClaimTXIndex, *commitClaimTXHash)
 	}
 
+	if startBlockCmd.Parsed() {
+		// send START_BLOCK message
+		cli.startBlock(conn, *startBlockBlockHeight, *startBlockBlockHash)
+	}
+
 	if commitBlockCmd.Parsed() {
 		// send COMMIT_BLOCK message
 		cli.commitBlock(conn, *commitBlockFail, *commitBlockBlockHeight, *commitBlockBlockHash)
@@ -234,8 +251,18 @@ func (cli *CLI) Run() {
 			queryCmd.PrintDefaults()
 			os.Exit(1)
 		}
+		var txHash []byte
+		if *queryTXHash == "" {
+			txHash = nil
+		} else {
+			txHash, err = hex.DecodeString(*queryTXHash)
+			if err != nil {
+				queryCmd.Usage()
+				os.Exit(1)
+			}
+		}
 		// send QUERY message
-		cli.query(conn, *queryAddress)
+		cli.query(conn, *queryAddress, txHash)
 	}
 
 	if calculateCmd.Parsed() {
