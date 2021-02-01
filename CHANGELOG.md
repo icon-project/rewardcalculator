@@ -1,5 +1,9 @@
 # ChangeLog - rewardcalculator
 
+## 1.2.5 - 2021-01-11
+* Add START_BLOCK message (#53)
+* Fix QUERY message handling (#54)
+
 ## 1.2.4 - 2020-12-16
 * fix bug
   * store calculatingBH as Header data not request data

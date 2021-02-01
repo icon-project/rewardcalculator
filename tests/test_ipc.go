@@ -12,16 +12,16 @@ import (
 )
 
 const (
-	ipcTypeVersion = "version"
-	ipcTypeClaim = "claim"
-	ipcTypeQuery = "query"
-	ipcTypeCalculate = "calculate"
-	ipcTypeCommitBlock = "commit_block"
-	ipcTypeCommitClaim = "commit_claim"
+	ipcTypeVersion         = "version"
+	ipcTypeClaim           = "claim"
+	ipcTypeQuery           = "query"
+	ipcTypeCalculate       = "calculate"
+	ipcTypeCommitBlock     = "commit_block"
+	ipcTypeCommitClaim     = "commit_claim"
 	ipcTypeQueryCalcStatus = "query_calc_status"
 	ipcTypeQueryCalcResult = "query_calc_result"
-	ipcTypeRollback = "rollback"
-	ipcTypeINIT = "init"
+	ipcTypeRollback        = "rollback"
+	ipcTypeINIT            = "init"
 )
 
 type TestIPC interface {
@@ -109,9 +109,9 @@ type versionExpect struct {
 }
 
 type ipcVersion struct {
-	Request struct{
-	}	`json:"request"`
-	Expect *versionExpect	`json:"expect,omitempty"`
+	Request struct {
+	} `json:"request"`
+	Expect *versionExpect `json:"expect,omitempty"`
 }
 
 func (v *ipcVersion) json() string {
@@ -132,7 +132,9 @@ func (v *ipcVersion) run(opt *testOption) (interface{}, error) {
 }
 
 func (v *ipcVersion) convertExpectToResponse() interface{} {
-	if v.Expect == nil { return nil }
+	if v.Expect == nil {
+		return nil
+	}
 	resp := new(core.ResponseVersion)
 	resp.Version = v.Expect.Version
 	resp.BlockHeight = v.Expect.BlockHeight
@@ -143,23 +145,23 @@ func (v *ipcVersion) convertExpectToResponse() interface{} {
 }
 
 type claimExpect struct {
-	Address string		`json:"address"`
-	BlockHeight uint64	`json:"block_height"`
-	BlockHash string	`json:"block_hash"`
-	TXIndex uint64		`json:"tx_index"`
-	TXHash string		`json:"tx_hash"`
-	IScore uint64		`json:"iscore"`
+	Address     string `json:"address"`
+	BlockHeight uint64 `json:"block_height"`
+	BlockHash   string `json:"block_hash"`
+	TXIndex     uint64 `json:"tx_index"`
+	TXHash      string `json:"tx_hash"`
+	IScore      uint64 `json:"iscore"`
 }
 
 type ipcClaim struct {
 	Request struct {
-		Address string		`json:"address"`
-		BlockHeight uint64	`json:"block_height"`
-		BlockHash string	`json:"block_hash"`
-		TXIndex uint64		`json:"tx_index"`
-		TXHash string		`json:"tx_hash"`
-	}	`json:"request"`
-	Expect *claimExpect		`json:"expect,omitempty"`
+		Address     string `json:"address"`
+		BlockHeight uint64 `json:"block_height"`
+		BlockHash   string `json:"block_hash"`
+		TXIndex     uint64 `json:"tx_index"`
+		TXHash      string `json:"tx_hash"`
+	} `json:"request"`
+	Expect *claimExpect `json:"expect,omitempty"`
 }
 
 func (c *ipcClaim) json() string {
@@ -181,7 +183,9 @@ func (c *ipcClaim) run(opt *testOption) (interface{}, error) {
 }
 
 func (c *ipcClaim) convertExpectToResponse() interface{} {
-	if c.Expect == nil { return nil }
+	if c.Expect == nil {
+		return nil
+	}
 	exp := c.Expect
 	resp := new(core.ResponseClaim)
 	resp.Address = *common.NewAddressFromString(exp.Address)
@@ -199,16 +203,17 @@ func (c *ipcClaim) convertExpectToResponse() interface{} {
 }
 
 type queryExpect struct {
-	Address string		`json:"address"`
-	IScore uint64		`json:"iscore"`
-	BlockHeight uint64	`json:"block_height"`
+	Address     string `json:"address"`
+	IScore      uint64 `json:"iscore"`
+	BlockHeight uint64 `json:"block_height"`
 }
 
 type ipcQuery struct {
-	Request struct{
-		Address string		`json:"address"`
-	}	`json:"request"`
-	Expect *queryExpect		`json:"expect,omitempty"`
+	Request struct {
+		Address string `json:"address"`
+		TxHash  string `json:"tx_hash,omitempty"`
+	} `json:"request"`
+	Expect *queryExpect `json:"expect,omitempty"`
 }
 
 func (q *ipcQuery) json() string {
@@ -220,7 +225,7 @@ func (q *ipcQuery) json() string {
 }
 
 func (q *ipcQuery) run(opt *testOption) (interface{}, error) {
-	resp, err := opt.ipc.SendQuery(q.Request.Address)
+	resp, err := opt.ipc.SendQuery(q.Request.Address, q.Request.TxHash)
 	if err != nil {
 		return nil, err
 	}
@@ -229,25 +234,27 @@ func (q *ipcQuery) run(opt *testOption) (interface{}, error) {
 }
 
 func (q *ipcQuery) convertExpectToResponse() interface{} {
-	if q.Expect == nil { return nil }
+	if q.Expect == nil {
+		return nil
+	}
 	exp := q.Expect
 	resp := new(core.ResponseQuery)
 	resp.Address = *common.NewAddressFromString(exp.Address)
 	resp.BlockHeight = exp.BlockHeight
-	resp.IScore =  *common.NewHexIntFromUint64(exp.IScore)
+	resp.IScore = *common.NewHexIntFromUint64(exp.IScore)
 	return resp
 }
 
 type calculateExpect struct {
-	Status uint16		`json:"status"`
-	BlockHeight uint64	`json:"block_height"`
+	Status      uint16 `json:"status"`
+	BlockHeight uint64 `json:"block_height"`
 }
 
 type ipcCalculate struct {
-	Request struct{
-		BlockHeight uint64	`json:"block_height"`
-	}	`json:"request"`
-	Expect *calculateExpect	`json:"expect,omitempty"`
+	Request struct {
+		BlockHeight uint64 `json:"block_height"`
+	} `json:"request"`
+	Expect *calculateExpect `json:"expect,omitempty"`
 }
 
 func (c *ipcCalculate) json() string {
@@ -270,7 +277,9 @@ func (c *ipcCalculate) run(opt *testOption) (interface{}, error) {
 }
 
 func (c *ipcCalculate) convertExpectToResponse() interface{} {
-	if c.Expect == nil { return nil }
+	if c.Expect == nil {
+		return nil
+	}
 	exp := c.Expect
 	resp := new(core.CalculateResponse)
 	resp.Status = exp.Status
@@ -279,18 +288,18 @@ func (c *ipcCalculate) convertExpectToResponse() interface{} {
 }
 
 type commitBlockExpect struct {
-	Success bool		`json:"success"`
-	BlockHeight uint64	`json:"block_height"`
-	BlockHash string	`json:"block_hash"`
+	Success     bool   `json:"success"`
+	BlockHeight uint64 `json:"block_height"`
+	BlockHash   string `json:"block_hash"`
 }
 
 type ipcCommitBlock struct {
-	Request struct{
-		Success bool		`json:"success"`
-		BlockHeight uint64	`json:"block_height"`
-		BlockHash string	`json:"block_hash"`
-	}	`json:"request"`
-	Expect *commitBlockExpect	`json:"expect,omitempty"`
+	Request struct {
+		Success     bool   `json:"success"`
+		BlockHeight uint64 `json:"block_height"`
+		BlockHash   string `json:"block_hash"`
+	} `json:"request"`
+	Expect *commitBlockExpect `json:"expect,omitempty"`
 }
 
 func (c *ipcCommitBlock) json() string {
@@ -312,7 +321,9 @@ func (c *ipcCommitBlock) run(opt *testOption) (interface{}, error) {
 }
 
 func (c *ipcCommitBlock) convertExpectToResponse() interface{} {
-	if c.Expect == nil { return nil }
+	if c.Expect == nil {
+		return nil
+	}
 	exp := c.Expect
 	resp := new(core.CommitBlock)
 	resp.Success = exp.Success
@@ -324,16 +335,16 @@ func (c *ipcCommitBlock) convertExpectToResponse() interface{} {
 }
 
 type ipcCommitClaim struct {
-	Request struct{
-		Success bool		`json:"success"`
-		Address string		`json:"address"`
-		BlockHeight uint64	`json:"block_height"`
-		BlockHash string	`json:"block_hash"`
-		TXIndex uint64		`json:"tx_index"`
-		TXHash string		`json:"tx_hash"`
-	}	`json:"request"`
+	Request struct {
+		Success     bool   `json:"success"`
+		Address     string `json:"address"`
+		BlockHeight uint64 `json:"block_height"`
+		BlockHash   string `json:"block_hash"`
+		TXIndex     uint64 `json:"tx_index"`
+		TXHash      string `json:"tx_hash"`
+	} `json:"request"`
 	Expect struct {
-	}	`json:"expect,omitempty"`
+	} `json:"expect,omitempty"`
 }
 
 func (c *ipcCommitClaim) json() string {
@@ -359,14 +370,14 @@ func (c *ipcCommitClaim) convertExpectToResponse() interface{} {
 }
 
 type queryCalcStatusExpect struct {
-	Status uint64		`json:"status"`
-	BlockHeight uint64	`json:"block_height"`
+	Status      uint64 `json:"status"`
+	BlockHeight uint64 `json:"block_height"`
 }
 
 type ipcQueryCalcStatus struct {
-	Request struct{
-	}	`json:"request,omitempty"`
-	Expect *queryCalcStatusExpect	`json:"expect,omitempty"`
+	Request struct {
+	} `json:"request,omitempty"`
+	Expect *queryCalcStatusExpect `json:"expect,omitempty"`
 }
 
 func (q *ipcQueryCalcStatus) json() string {
@@ -387,7 +398,9 @@ func (q *ipcQueryCalcStatus) run(opt *testOption) (interface{}, error) {
 }
 
 func (q *ipcQueryCalcStatus) convertExpectToResponse() interface{} {
-	if q.Expect == nil { return nil }
+	if q.Expect == nil {
+		return nil
+	}
 	exp := q.Expect
 	resp := new(core.QueryCalculateStatusResponse)
 	resp.Status = exp.Status
@@ -396,16 +409,16 @@ func (q *ipcQueryCalcStatus) convertExpectToResponse() interface{} {
 }
 
 type queryCalcResultExpect struct {
-	Status uint16		`json:"status"`
-	BlockHeight uint64	`json:"block_height"`
-	IScore uint64		`json:"iscore"`
-	StateHash string	`json:"state_hash"`
+	Status      uint16 `json:"status"`
+	BlockHeight uint64 `json:"block_height"`
+	IScore      uint64 `json:"iscore"`
+	StateHash   string `json:"state_hash"`
 }
 
 type ipcQueryCalcResult struct {
-	Request struct{
-		BlockHeight uint64	`json:"block_height"`
-	}	`json:"request"`
+	Request struct {
+		BlockHeight uint64 `json:"block_height"`
+	} `json:"request"`
 	Expect *queryCalcResultExpect `json:"expect,omitempty"`
 }
 
@@ -428,7 +441,9 @@ func (q *ipcQueryCalcResult) run(opt *testOption) (interface{}, error) {
 }
 
 func (q *ipcQueryCalcResult) convertExpectToResponse() interface{} {
-	if q.Expect == nil { return nil }
+	if q.Expect == nil {
+		return nil
+	}
 	exp := q.Expect
 	resp := new(core.QueryCalculateResultResponse)
 	resp.Status = exp.Status
@@ -440,17 +455,17 @@ func (q *ipcQueryCalcResult) convertExpectToResponse() interface{} {
 }
 
 type rollbackExpect struct {
-	Success bool		`json:"success"`
-	BlockHeight uint64	`json:"block_height"`
-	BlockHash string	`json:"block_hash"`
+	Success     bool   `json:"success"`
+	BlockHeight uint64 `json:"block_height"`
+	BlockHash   string `json:"block_hash"`
 }
 
 type ipcRollback struct {
-	Request struct{
-		BlockHeight uint64	`json:"block_height"`
-		BlockHash string	`json:"block_hash"`
-	}	`json:"request"`
-	Expect *rollbackExpect	`json:"expect,omitempty"`
+	Request struct {
+		BlockHeight uint64 `json:"block_height"`
+		BlockHash   string `json:"block_hash"`
+	} `json:"request"`
+	Expect *rollbackExpect `json:"expect,omitempty"`
 }
 
 func (r *ipcRollback) json() string {
@@ -472,7 +487,9 @@ func (r *ipcRollback) run(opt *testOption) (interface{}, error) {
 }
 
 func (r *ipcRollback) convertExpectToResponse() interface{} {
-	if r.Expect == nil { return nil }
+	if r.Expect == nil {
+		return nil
+	}
 	exp := r.Expect
 	resp := new(core.RollBackResponse)
 	resp.Success = exp.Success
@@ -484,15 +501,15 @@ func (r *ipcRollback) convertExpectToResponse() interface{} {
 }
 
 type initExpecct struct {
-	Success bool		`json:"success"`
-	BlockHeight uint64	`json:"block_height"`
+	Success     bool   `json:"success"`
+	BlockHeight uint64 `json:"block_height"`
 }
 
 type ipcINIT struct {
-	Request struct{
-		BlockHeight uint64	`json:"block_height"`
-	}	`json:"request"`
-	Expect *initExpecct		`json:"expect,omitempty"`
+	Request struct {
+		BlockHeight uint64 `json:"block_height"`
+	} `json:"request"`
+	Expect *initExpecct `json:"expect,omitempty"`
 }
 
 func (i *ipcINIT) json() string {
@@ -514,7 +531,9 @@ func (i *ipcINIT) run(opt *testOption) (interface{}, error) {
 }
 
 func (i *ipcINIT) convertExpectToResponse() interface{} {
-	if i.Expect == nil { return nil }
+	if i.Expect == nil {
+		return nil
+	}
 	exp := i.Expect
 	resp := new(core.ResponseInit)
 	resp.Success = exp.Success

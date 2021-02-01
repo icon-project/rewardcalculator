@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/icon-project/rewardcalculator/common"
 	"github.com/icon-project/rewardcalculator/common/ipc"
 )
 
@@ -117,13 +116,20 @@ func (rc *RCIPC) SendClaim(address string, blockHeight uint64, blockHash string,
 	return resp, nil
 }
 
-func (rc *RCIPC) SendQuery(address string) (*ResponseQuery, error) {
-	var addr common.Address
+func (rc *RCIPC) SendQuery(address string, txHash string) (*ResponseQuery, error) {
+	var req Query
 	resp := new(ResponseQuery)
 
-	addr.SetString(address)
+	req.Address.SetString(address)
+	req.TXHash = make([]byte, TXHashSize)
+	th, err := hex.DecodeString(txHash)
+	if err != nil {
+		log.Printf("Failed to QUERY. Invalid TX hash. %v\n", err)
+		return resp, err
+	}
+	copy(req.TXHash, th)
 
-	err := rc.conn.SendAndReceive(MsgQuery, rc.id, &addr, resp)
+	err = rc.conn.SendAndReceive(MsgQuery, rc.id, &req, resp)
 
 	return resp, err
 }
