@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -182,12 +183,19 @@ func sendVersion(c ipc.Connection, msg uint, id uint32, blockHeight uint64, bloc
 }
 
 type Query struct {
-	Address common.Address
-	TXHash  []byte
+	Address     common.Address
+	BlockHeight uint64
+	BlockHash   []byte
+	TXHash      []byte
 }
 
 func (q *Query) String() string {
-	return fmt.Sprintf("Address: %s, TXHash: %s", q.Address.String(), hex.EncodeToString(q.TXHash[:]))
+	return fmt.Sprintf("Address: %s, BlockHeight: %d, BlockHash: %s, TXHash: %s",
+		q.Address.String(),
+		q.BlockHeight,
+		hex.EncodeToString(q.BlockHash),
+		hex.EncodeToString(q.TXHash),
+	)
 }
 
 type ResponseQuery struct {
@@ -230,8 +238,8 @@ func DoQuery(ctx *Context, req *Query) *ResponseQuery {
 	// search from preCommit DB
 	if len(req.TXHash) != 0 {
 		pcDB := isDB.getPreCommitDB()
-		pc, _ := findPreCommit(pcDB, req.Address, req.TXHash)
-		if !pc.IsEmpty() {
+		pc, _ := findPreCommit(pcDB, req.Address, req.BlockHeight, req.BlockHash[:])
+		if pc != nil && bytes.Compare(pc.TXHash, req.TXHash[:]) == 0 && !pc.IsEmpty() {
 			resp.BlockHeight = pc.Data.BlockHeight
 			resp.IScore.SetInt64(0)
 			return &resp
