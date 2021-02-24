@@ -33,7 +33,7 @@ func initTest() *testOption {
 	opts.rootPath = testDir
 
 	dbPath := filepath.Join(opts.rootPath, ".iscoredb")
-	address := filepath.Join(opts.rootPath, "/icon_rc.sock")
+	address := filepath.Join(opts.rootPath, "icon_rc.sock")
 	cmd := exec.Command("icon_rc", "-db", dbPath, "-ipc-addr", address)
 	err = cmd.Start()
 	if err != nil {

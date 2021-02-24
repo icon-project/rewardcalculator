@@ -14,15 +14,17 @@ func TestMsg_DoQuery(t *testing.T) {
 	dbContent0 := IScoreAccount { Address: *address }
 	dbContent0.BlockHeight = 100
 	dbContent0.IScore.SetUint64(claimMinIScore + 100)
+	blockHeight := uint64(101)
+	blockHash := []byte("1a1")
 	txHash := make([]byte, TXHashSize)
 	bs, _ := hex.DecodeString("abcd0123")
 	copy(txHash, bs)
 
 	query := &Query{Address: *address}
-	queryWithTXHash := &Query{Address: *address, TXHash: txHash}
+	queryWithTXHash := &Query{Address: *address, BlockHeight: blockHeight, BlockHash: blockHash, TXHash: txHash}
 	claim := ClaimMessage{
-		BlockHeight: 101,
-		BlockHash: []byte("1-1"),
+		BlockHeight: blockHeight,
+		BlockHash: blockHash,
 		Address: *address,
 		TXIndex: 0,
 		TXHash: txHash,

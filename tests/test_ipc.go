@@ -210,8 +210,10 @@ type queryExpect struct {
 
 type ipcQuery struct {
 	Request struct {
-		Address string `json:"address"`
-		TxHash  string `json:"tx_hash,omitempty"`
+		Address     string `json:"address"`
+		BlockHeight uint64 `json:"block_height"`
+		BlockHash   string `json:"block_hash"`
+		TxHash      string `json:"tx_hash"`
 	} `json:"request"`
 	Expect *queryExpect `json:"expect,omitempty"`
 }
@@ -225,7 +227,7 @@ func (q *ipcQuery) json() string {
 }
 
 func (q *ipcQuery) run(opt *testOption) (interface{}, error) {
-	resp, err := opt.ipc.SendQuery(q.Request.Address, q.Request.TxHash)
+	resp, err := opt.ipc.SendQuery(q.Request.Address, q.Request.BlockHeight, q.Request.BlockHash, q.Request.TxHash)
 	if err != nil {
 		return nil, err
 	}

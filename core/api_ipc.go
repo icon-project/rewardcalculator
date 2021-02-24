@@ -116,11 +116,19 @@ func (rc *RCIPC) SendClaim(address string, blockHeight uint64, blockHash string,
 	return resp, nil
 }
 
-func (rc *RCIPC) SendQuery(address string, txHash string) (*ResponseQuery, error) {
+func (rc *RCIPC) SendQuery(address string, blockHeight uint64, blockHash string, txHash string) (*ResponseQuery, error) {
 	var req Query
 	resp := new(ResponseQuery)
 
 	req.Address.SetString(address)
+	req.BlockHeight = blockHeight
+	req.BlockHash = make([]byte, BlockHashSize)
+	bh, err := hex.DecodeString(blockHash)
+	if err != nil {
+		log.Printf("Failed to QUERY. Invalid block hash. %v\n", err)
+		return resp, err
+	}
+	copy(req.BlockHash, bh)
 	req.TXHash = make([]byte, TXHashSize)
 	th, err := hex.DecodeString(txHash)
 	if err != nil {

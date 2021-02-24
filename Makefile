@@ -15,6 +15,7 @@ GOBUILD = go build
 GOTEST = go test
 GOTOOL = go tool
 GOMOD = go mod
+GOCLEAN = go clean
 GOBUILD_TAGS =
 GOBUILD_ENVS = CGO_ENABLED=0 GO111MODULE=on
 GOBUILD_LDFLAGS = -ldflags ""
@@ -56,7 +57,7 @@ darwin : ## Build the tools for OS X
 	@ echo "[#] build for $@"
 	@ make GOBUILD_ENVS="$(GOBUILD_ENVS) GOOS=$@ GOARCH=amd64"
 
-test : ## Run unittest
+test : install ## Run unittest
 	$(GOTEST) -test.short ./...
 
 test_cov : ## Run unittest with code coverage
@@ -64,6 +65,9 @@ test_cov : ## Run unittest with code coverage
 
 test_cov_view : ## View unittest code coverage result
 	$(GOTOOL) cover -html=./cp.out
+
+test_clean: ## clean test cache
+	$(GOCLEAN) -testcache
 
 modules : ## Update modules in vendor/
 	$(GOMOD) tidy
