@@ -66,6 +66,9 @@ test_cov : ## Run unittest with code coverage
 test_cov_view : ## View unittest code coverage result
 	$(GOTOOL) cover -html=./cp.out
 
+test_clean: ## clean test cache
+	$(GOCLEAN) -testcache
+
 modules : ## Update modules in vendor/
 	$(GOMOD) tidy
 	$(GOMOD) vendor
@@ -78,8 +81,7 @@ install : ## Install the tools on system
 	done
 
 clean : ## Remove generated files
-	$(RM) -r $(BIN_DIR)
-	$(GOCLEAN) -testcache
+	@$(RM) -r $(BIN_DIR)
 
 TARGET_MAX_CHAR_NUM=20
 help : ## This help message
