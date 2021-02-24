@@ -1,11 +1,14 @@
 # ChangeLog - rewardcalculator
 
+## 1.2.6 - 2021-02-24
+* Optimize QUERY message handling
+
 ## 1.2.5 - 2021-01-11
 * Add START_BLOCK message (#53)
 * Fix QUERY message handling (#54)
 
 ## 1.2.4 - 2020-12-16
-* fix bug
+* Fix bug
   * store calculatingBH as Header data not request data
     * request.BH is Uint.max and it causes problem when reloading DB(only case when RC dies while processing calculate message)
 
