@@ -13,6 +13,7 @@ type Input struct {
 	Help        bool
 	AccountType string
 	RcDBRoot    string
+	Output      string
 }
 
 const (
@@ -22,6 +23,7 @@ const (
 	IISSDataUsage    = "Data type to query. One of header, gv(governance variables), bp(block produce info), prep and tx. Print all iiss related data if this option has not given"
 	RCDBRootUsage    = "path of RC DB"
 	HelpMsgUsage     = "Print help message"
+	OutputUsage      = "Path of output file"
 )
 
 func InitManageInput(flagSet *flag.FlagSet) *Input {
@@ -121,6 +123,19 @@ func InitCalcDebugResult(flagSet *flag.FlagSet) *Input {
 	flagSet.StringVar(&input.Address, "a", "", AddressUsage)
 	flagSet.Uint64Var(&input.Height, "blockheight", 0, BlockHeightUsage)
 	flagSet.Uint64Var(&input.Height, "b", 0, BlockHeightUsage)
+	flagSet.BoolVar(&input.Help, "help", false, HelpMsgUsage)
+	flagSet.BoolVar(&input.Help, "h", false, HelpMsgUsage)
+	return input
+}
+
+func InitIScoreInput(flagSet *flag.FlagSet) *Input {
+	input := new(Input)
+	flagSet.StringVar(&input.RcDBRoot, "dbroot", "", RCDBRootUsage)
+	flagSet.StringVar(&input.RcDBRoot, "d", "", RCDBRootUsage)
+	flagSet.StringVar(&input.Address, "address", "", AddressUsage)
+	flagSet.StringVar(&input.Address, "a", "", AddressUsage)
+	flagSet.StringVar(&input.Output, "output", "", OutputUsage)
+	flagSet.StringVar(&input.Output, "o", "", OutputUsage)
 	flagSet.BoolVar(&input.Help, "help", false, HelpMsgUsage)
 	flagSet.BoolVar(&input.Help, "h", false, HelpMsgUsage)
 	return input

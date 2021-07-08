@@ -4,8 +4,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/icon-project/rewardcalculator/cmd/common"
 	"os"
+
+	"github.com/icon-project/rewardcalculator/cmd/common"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 	DBNameCalcResult      = "calcResult"
 	DBNameIISS            = "iiss"
 	DBNameCalcDebugResult = "calcDebug"
+	DBNameIScore          = "iscore"
 
 	DataTypeGV     = "gv"
 	DataTypePRep   = "prep"
@@ -32,7 +34,7 @@ const (
 
 func printUsage() {
 	fmt.Printf("Usage: %s [db_name] [[options]]\n", os.Args[0])
-	fmt.Printf("\t db_name     DB Name (%s, %s, %s, %s, %s, %s, %s, %s)\n",
+	fmt.Printf("\t db_name     DB Name (%s, %s, %s, %s, %s, %s, %s, %s, %s)\n",
 		DBNameManagement,
 		DBNameAccount,
 		DBNameClaim,
@@ -41,6 +43,7 @@ func printUsage() {
 		DBNameCalcResult,
 		DBNameIISS,
 		DBNameCalcDebugResult,
+		DBNameIScore,
 	)
 }
 
@@ -78,6 +81,7 @@ func Run() (err error) {
 	calcResultFlagSet := flag.NewFlagSet(DBNameCalcResult, flag.ExitOnError)
 	iissFlagSet := flag.NewFlagSet(DBNameIISS, flag.ExitOnError)
 	calcDebugFlagSet := flag.NewFlagSet(DBNameCalcDebugResult, flag.ExitOnError)
+	iScoreFlagSet := flag.NewFlagSet(DBNameIScore, flag.ExitOnError)
 
 	manageInput := common.InitManageInput(manageFlagSet)
 	accountInput := common.InitAccountInput(accountFlagSet)
@@ -87,6 +91,7 @@ func Run() (err error) {
 	calcResultInput := common.InitCalcResultInput(calcResultFlagSet)
 	iissInput := common.InitIISS(iissFlagSet)
 	calcDebugInput := common.InitCalcDebugResult(calcDebugFlagSet)
+	iScoreInput := common.InitIScoreInput(iScoreFlagSet)
 
 	switch dbName {
 	case DBNameManagement:
@@ -121,6 +126,10 @@ func Run() (err error) {
 		err = calcDebugFlagSet.Parse(os.Args[2:])
 		common.ValidateInput(calcDebugFlagSet, err, calcDebugInput.Help)
 		err = common.QueryCalcDebugDB(*calcDebugInput)
+	case DBNameIScore:
+		err = iScoreFlagSet.Parse(os.Args[2:])
+		common.ValidateInput(iScoreFlagSet, err, iScoreInput.Help)
+		err = getIScore(*iScoreInput)
 	default:
 		printUsage()
 		err = errors.New("invalid dbName")
